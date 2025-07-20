@@ -54,5 +54,30 @@ CONFERENCES = {
         'retry_attempts': 3,
         'timeout': 30,
         'rate_limit_delay': 90
+    }, 
+    'cvpr': {
+        'name': 'CVPR',
+        'base_url': 'https://openaccess.thecvf.com/',
+        'request_delay': 0.1,
+        'retry_attempts': 3,
+        'timeout': 30,
+        'rate_limit_delay': 60
+    }, 
+    'colt': {
+        'name': 'COLT',
+        'base_url': 'https://proceedings.mlr.press/',
+        'request_delay': 0.15,
+        'retry_attempts': 3,
+        'timeout': 45,
+        'rate_limit_delay': 120,
+    }, 
+    'uai': {
+        'name': 'UAI',
+        'base_url': 'https://proceedings.mlr.press/',
+        'request_delay': 0.15,
+        'retry_attempts': 3,
+        'timeout': 45,
+        'rate_limit_delay': 120, 
+        'years': [2019, 2020, 2021, 2022, 2023, 2024, 2025]
     }
 }
