@@ -29,6 +29,11 @@ class CVPRScraper(BaseScraper):
                 f"{self.base_url}CVPR2019?day=2019-06-19", #https://openaccess.thecvf.com/CVPR2019?day=2019-06-19
                 f"{self.base_url}CVPR2019?day=2019-06-20",
             ],
+            2020: [
+                f"{self.base_url}CVPR2020?day=2020-06-16",
+                f"{self.base_url}CVPR2020?day=2020-06-17", 
+                f"{self.base_url}CVPR2020?day=2020-06-18",
+            ]
         }
         paper_urls = []
         try:
