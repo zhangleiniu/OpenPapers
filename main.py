@@ -11,7 +11,10 @@ from scrapers.icml import ICMLScraper
 from scrapers.iclr import ICLRScraper
 from scrapers.iclr_1516 import ICLRScraper1516  # Your new 2015-2016 scraper
 from scrapers.aaai import AAAIScraper
-
+from scrapers.cvpr import CVPRScraper  
+from scrapers.colt import COLTScraper
+from scrapers.uai import UAIScraper 
+from scrapers.uai_1518 import UAIScraper1518
 from config import CONFERENCES
 
 # Configure logging
@@ -36,6 +39,9 @@ class ScraperFactory:
             'icml': ICMLScraper,
             'iclr': ICLRScraper,
             'aaai': AAAIScraper,
+            'cvpr': CVPRScraper, 
+            'colt': COLTScraper,
+            'uai': UAIScraper   
         }
         
         # Year-specific scraper mappings
@@ -43,7 +49,11 @@ class ScraperFactory:
             'iclr': {
                 (2015, 2016): ICLRScraper1516,  # Use new scraper for 2015-2016
                 # Default ICLRScraper will be used for other years
+            },
+            'uai': {
+                (2015, 2018): UAIScraper1518, 
             }
+        
         }
     
     def get_available_conferences(self) -> list:
