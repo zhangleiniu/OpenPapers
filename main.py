@@ -5,11 +5,10 @@ import argparse
 import logging
 from typing import Dict, Type, List
 
-from scrapers.base import BaseScraper
 from scrapers.neurips import NeurIPSScraper
 from scrapers.icml import ICMLScraper
 from scrapers.iclr import ICLRScraper
-from scrapers.iclr_1516 import ICLRScraper1516  # Your new 2015-2016 scraper
+from scrapers.iclr_1516 import ICLRScraper1516 
 from scrapers.aaai import AAAIScraper
 from scrapers.cvpr import CVPRScraper  
 from scrapers.colt import COLTScraper
