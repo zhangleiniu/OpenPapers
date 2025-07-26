@@ -14,6 +14,10 @@ from scrapers.cvpr import CVPRScraper
 from scrapers.colt import COLTScraper
 from scrapers.uai import UAIScraper 
 from scrapers.uai_1518 import UAIScraper1518
+from scrapers.aistats import AISTATSScraper
+from scrapers.jmlr import JMLRScraper  
+from scrapers.acl import ACLScraper
+from scrapers.ijcai import IJCAIScraper
 from config import CONFERENCES
 
 # Configure logging
@@ -40,7 +44,11 @@ class ScraperFactory:
             'aaai': AAAIScraper,
             'cvpr': CVPRScraper, 
             'colt': COLTScraper,
-            'uai': UAIScraper   
+            'uai': UAIScraper, 
+            'aistats': AISTATSScraper, 
+            'jmlr': JMLRScraper, 
+            'acl': ACLScraper, 
+            'ijcai': IJCAIScraper 
         }
         
         # Year-specific scraper mappings

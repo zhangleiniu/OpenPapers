@@ -79,5 +79,37 @@ CONFERENCES = {
         'timeout': 45,
         'rate_limit_delay': 120, 
         'years': [2019, 2020, 2021, 2022, 2023, 2024, 2025]
+    }, 
+    'aistats' : {
+        'name': 'AISTATS',
+        'base_url': 'https://proceedings.mlr.press/',
+        'request_delay': 0.15,
+        'retry_attempts': 3,
+        'timeout': 45,
+        'rate_limit_delay': 120,
+    }, 
+    'jmlr' : {
+        'name': 'JMLR',
+        'base_url': 'https://www.jmlr.org',
+        'request_delay': 0.15,
+        'retry_attempts': 3,
+        'timeout': 45,
+        'rate_limit_delay': 120,
+    }, 
+    'acl' : {
+        'name': 'ACL',
+        'base_url': 'https://aclanthology.org', 
+        'request_delay': 0.15,
+        'retry_attempts': 3,
+        'timeout': 45,
+        'rate_limit_delay': 120,
+    }, 
+    'ijcai' : {
+        'name': 'IJCAI',
+        'base_url': 'https://www.ijcai.org/',
+        'request_delay': 0.15,
+        'retry_attempts': 3,
+        'timeout': 45,
+        'rate_limit_delay': 120,
     }
 }
