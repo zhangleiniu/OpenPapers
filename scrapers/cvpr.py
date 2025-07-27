@@ -107,15 +107,12 @@ class CVPRScraper(BaseScraper):
             return None
     
     def _extract_title(self, soup: BeautifulSoup) -> str:
-        """Extract paper title."""
         title = ""
-        title_id = soup.find(id='papertitle')
-        if title_id:
-            title = title_id.get_text().strip()
-            if title and len(title) > 3:
+        h2_tag = soup.find('h2')
+        if h2_tag: 
+            title = h2_tag.get_text().strip()
+            if title: 
                 return title
-
-        return ""
     
     def _extract_authors(self, soup: BeautifulSoup) -> List[str]:
         """Extract authors."""
