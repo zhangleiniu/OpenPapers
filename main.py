@@ -18,6 +18,7 @@ from scrapers.aistats import AISTATSScraper
 from scrapers.jmlr import JMLRScraper  
 from scrapers.acl import ACLScraper
 from scrapers.ijcai import IJCAIScraper
+from scrapers.emnlp import EMNLPScraper
 from config import CONFERENCES
 
 # Configure logging
@@ -48,7 +49,8 @@ class ScraperFactory:
             'aistats': AISTATSScraper, 
             'jmlr': JMLRScraper, 
             'acl': ACLScraper, 
-            'ijcai': IJCAIScraper 
+            'ijcai': IJCAIScraper , 
+            'emnlp': EMNLPScraper
         }
         
         # Year-specific scraper mappings
