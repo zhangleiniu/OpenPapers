@@ -1,4 +1,3 @@
-# scrapers/aaai.py
 """AAAI scraper implementation."""
 
 import re

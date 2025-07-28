@@ -1,5 +1,3 @@
-# external/filtered_aaai_scraper.py
-
 import os
 import json
 import re

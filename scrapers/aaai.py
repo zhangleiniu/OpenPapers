@@ -1,6 +1,3 @@
-# scrapers/aaai.py
-"""AAAI scraper implementation."""
-
 import re
 from urllib.parse import urljoin
 from bs4 import BeautifulSoup

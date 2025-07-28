@@ -1,4 +1,3 @@
-# scrapers/neurips.py
 """NeurIPS scraper implementation."""
 
 import re

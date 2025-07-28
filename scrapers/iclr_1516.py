@@ -1,4 +1,3 @@
-# scrapers/iclr_1516.py
 """ICLR scraper implementation for 2015-2016."""
 
 import re

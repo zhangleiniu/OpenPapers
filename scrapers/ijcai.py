@@ -1,6 +1,3 @@
-# scrapers/template.py
-"""Template for implementing new conference scrapers."""
-
 from typing import List, Dict, Optional
 import logging
 from bs4 import BeautifulSoup
