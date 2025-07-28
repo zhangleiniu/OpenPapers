@@ -1,4 +1,3 @@
-# scrapers/icml.py
 """ICML scraper implementation."""
 
 import re
