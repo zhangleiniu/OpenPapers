@@ -119,5 +119,13 @@ CONFERENCES = {
         'retry_attempts': 3,
         'timeout': 45,
         'rate_limit_delay': 120,
+    },
+    'naacl': {
+        'name': 'NAACL',
+        'base_url': 'https://aclanthology.org',
+        'request_delay': 0.15,
+        'retry_attempts': 3,
+        'timeout': 45,
+        'rate_limit_delay': 120,
     }
 }
