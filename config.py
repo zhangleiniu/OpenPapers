@@ -135,6 +135,14 @@ CONFERENCES = {
         'retry_attempts': 3,
         'timeout': 30,
         'rate_limit_delay': 60
+    }, 
+    'eccv': {
+        'name': 'ECCV',
+        'base_url': 'https://www.ecva.net/',
+        'request_delay': 0.15,
+        'retry_attempts': 3,
+        'timeout': 45,
+        'rate_limit_delay': 120
     }
     
 }
