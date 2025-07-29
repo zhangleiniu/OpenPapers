@@ -8,37 +8,28 @@ from .base import BaseScraper
 logger = logging.getLogger(__name__)
 
 
-class CVPRScraper(BaseScraper):
-    """CVPR scraper."""
+class ICCVScraper(BaseScraper):
+    """ICCV scraper."""
     
     def __init__(self):
-        super().__init__('cvpr')
+        super().__init__('iccv')
     
     def get_paper_urls(self, year: int) -> List[str]:
         """Get paper URLs for a given year."""
         logger.info(f"Getting {self.config['name']} {year} paper URLs...")
         
         year_specific_urls = {
-            2018: [
-                f"{self.base_url}CVPR2018?day=2018-06-19",
-                f"{self.base_url}CVPR2018?day=2018-06-20",
-                f"{self.base_url}CVPR2018?day=2018-06-21",
-            ],
             2019: [
-                f"{self.base_url}CVPR2019?day=2019-06-18",
-                f"{self.base_url}CVPR2019?day=2019-06-19", #https://openaccess.thecvf.com/CVPR2019?day=2019-06-19
-                f"{self.base_url}CVPR2019?day=2019-06-20",
+                f"{self.base_url}ICCV2019?day=2019-10-29",
+                f"{self.base_url}ICCV2019?day=2019-10-30", #https://openaccess.thecvf.com/CVPR2019?day=2019-06-19
+                f"{self.base_url}ICCV2019?day=2019-10-31",
+                f"{self.base_url}ICCV2019?day=2019-11-01",
             ],
-            2020: [
-                f"{self.base_url}CVPR2020?day=2020-06-16",
-                f"{self.base_url}CVPR2020?day=2020-06-17", 
-                f"{self.base_url}CVPR2020?day=2020-06-18",
-            ]
         }
         paper_urls = []
         try:
-            # Example implementation: // https://openaccess.thecvf.com/CVPR2023?day=all
-            urls_to_scrape = year_specific_urls.get(year, [f"{self.base_url}CVPR{year}?day=all"])
+            # Example implementation: // https://openaccess.thecvf.com/ICCV2023?day=all
+            urls_to_scrape = year_specific_urls.get(year, [f"{self.base_url}ICCV{year}?day=all"])
             for url in urls_to_scrape:
                 response = self.session.get(url)
                 if not response:

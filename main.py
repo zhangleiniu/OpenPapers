@@ -20,6 +20,7 @@ from scrapers.acl import ACLScraper
 from scrapers.ijcai import IJCAIScraper
 from scrapers.emnlp import EMNLPScraper
 from scrapers.naacl import NAACLScraper
+from scrapers.iccv import ICCVScraper
 from config import CONFERENCES
 
 # Configure logging
@@ -52,7 +53,8 @@ class ScraperFactory:
             'acl': ACLScraper, 
             'ijcai': IJCAIScraper , 
             'emnlp': EMNLPScraper, 
-            'naacl': NAACLScraper
+            'naacl': NAACLScraper,
+            'iccv': ICCVScraper
         }
         
         # Year-specific scraper mappings

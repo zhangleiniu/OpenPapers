@@ -127,5 +127,14 @@ CONFERENCES = {
         'retry_attempts': 3,
         'timeout': 45,
         'rate_limit_delay': 120,
+    },
+    'iccv': {
+        'name': 'ICCV',
+        'base_url': 'https://openaccess.thecvf.com/',
+        'request_delay': 0.1,
+        'retry_attempts': 3,
+        'timeout': 30,
+        'rate_limit_delay': 60
     }
+    
 }
