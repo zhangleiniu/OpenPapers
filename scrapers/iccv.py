@@ -144,10 +144,16 @@ class ICCVScraper(BaseScraper):
         # Fallback: use last part of URL
         return url.split('/')[-1].replace('.html', '')
     
+
     def _extract_pdf_url(self, soup: BeautifulSoup, page_url: str) -> str:
         """Extract PDF URL."""
-        return page_url.replace('/html/', '/papers/').replace('.html', '.pdf')
+        pdf_url = page_url.replace('/html/', '/papers/').replace('.html', '.pdf')
         
+        # special case for ICCV 2017
+        if '_iccv_2017' in pdf_url:
+            pdf_url = pdf_url.replace('content_iccv_2017', 'content_ICCV_2017')
+        
+        return pdf_url
     
     def _make_absolute_url(self, url: str) -> str:
         """Convert relative URL to absolute."""

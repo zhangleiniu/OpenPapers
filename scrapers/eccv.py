@@ -1,9 +1,8 @@
 from typing import List, Dict, Optional
 import logging
 from bs4 import BeautifulSoup
-
 from .base import BaseScraper
-
+from urllib.parse import urljoin
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +19,6 @@ class ECCVScraper(BaseScraper):
         logger.info(f"Getting {self.config['name']} {year} paper URLs...")
         
         try:
-            # Example implementation:
             url = f"{self.base_url}/papers.php"
             response = self.session.get(url)
             if not response:
@@ -132,10 +130,9 @@ class ECCVScraper(BaseScraper):
         a_tag = soup.find('a', href= True, string='pdf')
         if a_tag:
             href = a_tag['href']
-            url_portion = href.find('papers')
-            if url_portion != -1:
-                return self.base_url + href[url_portion:]
+            return urljoin(page_url, href)
         return ""
+    
     def _make_absolute_url(self, url: str) -> str:
         """Convert relative URL to absolute."""
         from urllib.parse import urljoin

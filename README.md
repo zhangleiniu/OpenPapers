@@ -17,6 +17,10 @@ Our vision: In recent years, the rapid growth of AI and machine learning researc
 - **AISTATS**(2009-2024)
 - **IJCAI**(2017-2024)
 - **ACL**(2017-2025)
+- **EMNLP**(2017-2024)
+- **NAACL**(2013-2025)
+- **ICCV**(2013-2023) 
+- **ECCV**(2018-2024)
 
 
 ## Features
