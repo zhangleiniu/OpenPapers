@@ -1,8 +1,9 @@
 # AI/ML Conference Paper Scraper
 
-A robust Python scraper for academic papers from major machine learning and AI conferences.
+A robust Python tool for scraping academic papers from top AI and machine learning conferences.  
+It extracts high-quality metadata and full PDFs to support applications like citation analysis and research recommendation.
 
-Our vision: In recent years, the rapid growth of AI and machine learning research has resulted in an overwhelming number of papers published annually, making it increasingly difficult for researchers to stay up to date with developments in their specific subfields. While platforms like Google Scholar, Semantic Scholar, OpenReview, and Paper Copilot attempt to aggregate publication data, our observations suggest that these sources often suffer from incomplete coverage and noisy metadata. To address this gap, we developed a suite of dedicated scrapers targeting the top-tier AI/ML conferences and journals, aiming to build a high-quality, comprehensive dataset of research papers. Our system extracts reliable metadata and downloads full PDFs, which can later be processed using tools like GROBID for structured content analysis. This curated dataset is intended to power downstream applications such as research limitation analysis, citation and reference recommendation, and intelligent paper reading recommendation. Our current focus spans conferences from 2013-ish onward—when deep learning began reshaping the field—though earlier years may also be partially included.
+---
 
 ## Supported Conferences
 
@@ -22,6 +23,7 @@ Our vision: In recent years, the rapid growth of AI and machine learning researc
 - **ICCV**(2013-2023) 
 - **ECCV**(2018-2024)
 
+[Detailed Statistics](./statistics.md)
 
 ## Features
 
@@ -107,3 +109,7 @@ The scraper generates detailed logs saved to `scraper.log` and displays progress
 - The scraper respects rate limits and includes delays between requests
 - PDF downloads are optional and can be skipped for faster metadata collection
 - All scraped data is saved incrementally to prevent data loss
+
+## Motivation
+
+In recent years, the rapid growth of AI and machine learning research has resulted in an overwhelming number of papers published annually, making it increasingly difficult for researchers to stay up to date with developments in their specific subfields. While platforms like Google Scholar, Semantic Scholar, OpenReview, and Paper Copilot attempt to aggregate publication data, our observations suggest that these sources often suffer from incomplete coverage and noisy metadata. To address this gap, we developed a suite of dedicated scrapers targeting the top-tier AI/ML conferences and journals, aiming to build a high-quality, comprehensive dataset of research papers. Our system extracts reliable metadata and downloads full PDFs, which can later be processed using tools like GROBID for structured content analysis. This curated dataset is intended to power downstream applications such as research limitation analysis, citation and reference recommendation, and intelligent paper reading recommendation. Our current focus spans conferences from 2013-ish onward—when deep learning began reshaping the field—though earlier years may also be partially included. 
