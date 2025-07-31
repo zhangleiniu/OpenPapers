@@ -1,7 +1,10 @@
 # AI/ML Conference Paper Scraper
 
-A robust Python tool for scraping academic papers from top AI and machine learning conferences.  
-It extracts high-quality metadata and full PDFs to support applications like citation analysis and research recommendation.
+A robust Python tool for scraping academic papers from top AI and machine learning conferences.
+It extracts high-quality **metadata** and full **PDFs** to support applications like citation analysis and research recommendation.
+
+This tool covers **all** major AI and machine learning conferences, such as NeurIPS, ICML, ICLR, CVPR, ACL, and others, with a focus on papers published since the rise of deep learning.
+It automatically filters out non-archival content like workshop papers, extended abstracts, and demos, ensuring that only peer-reviewed full conference papers are included.
 
 ---
 
@@ -24,6 +27,8 @@ It extracts high-quality metadata and full PDFs to support applications like cit
 - **ECCV**(2018-2024)
 
 [Detailed Statistics](./statistics.md)
+
+> ⚠️ **Note:** Due to access restrictions, the tool currently **does not support** scraping papers from **KDD**, **TPAMI**, and **ICDM**, as their full metadata or PDFs are not publicly available without a subscription or institutional access.
 
 ## Features
 
