@@ -15,7 +15,10 @@ class AISTATSScraper(BaseScraper):
 
     def __init__(self):
         super().__init__('aistats')
-        self._volume_cache = {}  # Cache year->volume mapping
+        # Pre-fill the cache so it doesn't have to search
+        self._volume_cache = {
+            2025: 'v258'
+        }
     
     def _get_volume_for_year(self, year: int) -> Optional[str]:
         """Get ICML volume identifier (e.g., 'v119') for the given year."""

@@ -10,20 +10,20 @@ It automatically filters out non-archival content like workshop papers, extended
 
 ## Supported Conferences
 
-- **NeurIPS**(2000–2025)
+- **NeurIPS**(2000–2024)
 - **ICML**(2013–2025)
 - **ICLR**(2013–2025) 
 - **AAAI**(2010–2025)
 - **CVPR**(2012-2025)
-- **COLT**(2011-2024)
-- **UAI**(2015-2024)
+- **COLT**(2011-2025)
+- **UAI**(2015-2025)
 - **JMLR**(2000-2025)
-- **AISTATS**(2009-2024)
-- **IJCAI**(2017-2024)
+- **AISTATS**(2009-2025)
+- **IJCAI**(2017-2025)
 - **ACL**(2017-2025)
-- **EMNLP**(2017-2024)
+- **EMNLP**(2017-2025)
 - **NAACL**(2013-2025)
-- **ICCV**(2013-2023) 
+- **ICCV**(2013-202) 
 - **ECCV**(2018-2024)
 
 [Detailed Statistics](./statistics.md)
