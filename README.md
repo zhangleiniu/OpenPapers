@@ -23,7 +23,7 @@ It automatically filters out non-archival content like workshop papers, extended
 - **ACL**(2017-2025)
 - **EMNLP**(2017-2025)
 - **NAACL**(2013-2025)
-- **ICCV**(2013-202) 
+- **ICCV**(2013-2025) 
 - **ECCV**(2018-2024)
 
 [Detailed Statistics](./statistics.md)
