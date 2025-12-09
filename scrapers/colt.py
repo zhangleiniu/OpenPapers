@@ -13,7 +13,10 @@ class COLTScraper(BaseScraper):
     
     def __init__(self):
         super().__init__('colt')
-        self._volume_cache = {}  # Cache year->volume mapping
+        # Pre-fill the cache so it doesn't have to search
+        self._volume_cache = {
+            2025: 'v291'
+        }
     
     def _get_volume_for_year(self, year: int) -> Optional[str]:
         """Get COLT volume identifier (e.g., 'v201') for the given year."""
