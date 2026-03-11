@@ -49,6 +49,7 @@ class ICLRScraper1516(BaseScraper):
         """Extract all papers and their metadata from the ICLR page."""
         soup = BeautifulSoup(response.content, 'html.parser')
         papers = []
+        seen_titles = set()
         
         # Find the main page div
         page_div = soup.find('div', class_='page')
@@ -84,8 +85,15 @@ class ICLRScraper1516(BaseScraper):
             
             for item in paper_items:
                 paper_data = self._parse_paper_item(item, track_name, year)
-                if paper_data:
-                    papers.append(paper_data)
+                if not paper_data:
+                    continue
+                
+                title = paper_data.get("title")
+                if title in seen_titles:
+                    logger.debug(f"Duplicate paper skipped: {title}")
+                    continue
+                seen_titles.add(title)
+                papers.append(paper_data)
         
         return papers
     

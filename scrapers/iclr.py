@@ -427,6 +427,7 @@ class ICLRScraper:
     
     def _download_pdf(self, pdf_url: str, pdf_filename: str, pdf_dir: str) -> None:
         """Download PDF with retry logic."""
+        logger.info(f"Downloading {pdf_filename} from {pdf_url}")
         if not pdf_url.startswith('http'):
             # Relative URL, make absolute
             pdf_url = f"https://openreview.net{pdf_url}"
@@ -438,11 +439,11 @@ class ICLRScraper:
             logger.debug(f"PDF already exists: {pdf_filename}")
             return
         
-        max_retries = 3
+        max_retries = 5
         for attempt in range(max_retries):
             try:
                 logger.debug(f"Downloading PDF: {pdf_filename}")
-                response = self.session.get(pdf_url, timeout=60, stream=True)
+                response = self.session.get(pdf_url, timeout=(30, 300), stream=True)
                 
                 if response.status_code == 200:
                     with open(filepath, 'wb') as f:
@@ -458,7 +459,7 @@ class ICLRScraper:
             except Exception as e:
                 logger.warning(f"PDF download error (attempt {attempt+1}/{max_retries}): {e}")
                 if attempt < max_retries - 1:
-                    time.sleep(5)
+                    time.sleep(10)
         
         logger.error(f"Failed to download PDF after {max_retries} attempts: {pdf_url}")
     
