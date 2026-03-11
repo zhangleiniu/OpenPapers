@@ -107,47 +107,35 @@ class NeurIPSScraper(BaseScraper):
             return None
     
     def _extract_title(self, soup: BeautifulSoup) -> str:
-        """Extract paper title."""
-        col_div = soup.find('div', class_='col p-3')
-        if col_div:
-            h4_elem = col_div.find('h4')
-            if h4_elem:
-                title = h4_elem.get_text().strip()
-
-        return title if title else ""
+        """Extract paper title from the new NeurIPS page structure."""
+        title_elem = soup.find('h1', class_='paper-title')
+        if title_elem:
+            return title_elem.get_text().strip()
+        return ""
     
     def _extract_authors(self, soup: BeautifulSoup) -> List[str]:
-        """Extract authors - NeurIPS specific logic."""
+        """Extract authors from new NeurIPS page structure."""
         authors = []
-        
-        authors_h4 = soup.find('h4', string='Authors')
-        if authors_h4:
-            p_elem = authors_h4.find_next_sibling('p')      # Find next <p>
-            if p_elem:
-                i_elem = p_elem.find('i')                    # Find <i> inside <p>
-                if i_elem:
-                    author_text = i_elem.get_text().strip()  # Get author text
-                    if ',' in author_text:
-                        authors = [a.strip() for a in author_text.split(',')]
-                    else:
-                        authors = [author_text] 
+        authors_p = soup.find('p', class_='paper-authors')
+        if authors_p:
+            author_text = authors_p.get_text().strip()
+            authors = [a.strip() for a in author_text.split(',') if a.strip()]
         return authors
     
     
     def _extract_abstract(self, soup: BeautifulSoup) -> str:
-        """Extract paper abstract from NeurIPS specific structure."""
-        # NeurIPS specific pattern: <h4>Abstract</h4> followed by <p>abstract text</p>
-        abstract_h4 = soup.find('h4', string='Abstract')
-        if abstract_h4:
-            # Find the next non-empty <p> element after the <h4>Abstract</h4>
-            current = abstract_h4
-            while current:
-                current = current.find_next_sibling('p')
-                if current:
-                    abstract = current.get_text().strip()
-                    if abstract and len(abstract) > 50:  # Skip empty <p></p> and find substantial content
-                        logger.debug(f"Found abstract under <h4>Abstract</h4>: {len(abstract)} chars")
-                        return abstract
+        """Extract abstract from new NeurIPS page structure."""
+        section = soup.find('section', class_='paper-section')
+        if section:
+            header = section.find('h2', class_='section-label')
+            if header and header.get_text().strip().lower() == 'abstract':
+
+                p_elems = section.find_all('p')
+                for p in p_elems:
+                    text = p.get_text().strip()
+                    if text and len(text) > 20: 
+                        return text
+        return ""
         
     
     def _extract_paper_id(self, url: str) -> str:
