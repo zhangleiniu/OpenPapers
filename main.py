@@ -13,7 +13,6 @@ from scrapers.aaai import AAAIScraper
 from scrapers.cvpr import CVPRScraper  
 from scrapers.colt import COLTScraper
 from scrapers.uai import UAIScraper 
-from scrapers.uai_1518 import UAIScraper1518
 from scrapers.aistats import AISTATSScraper
 from scrapers.jmlr import JMLRScraper  
 from scrapers.acl import ACLScraper
@@ -64,9 +63,6 @@ class ScraperFactory:
             'iclr': {
                 (2015, 2016): ICLRScraper1516,  # Use new scraper for 2015-2016
                 # Default ICLRScraper will be used for other years
-            },
-            'uai': {
-                (2015, 2018): UAIScraper1518, 
             }
         
         }
