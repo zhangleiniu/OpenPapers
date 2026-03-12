@@ -2,7 +2,7 @@
 
 ## Source
 
-All years: `aclanthology.org`
+All years: `https://aclanthology.org/events/acl-[year]/`
 
 ## Coverage
 

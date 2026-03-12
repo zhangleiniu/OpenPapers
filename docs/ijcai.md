@@ -2,7 +2,7 @@
 
 ## Source
 
-All years: `ijcai.org`
+All years: `https://www.ijcai.org/proceedings/[year]/`
 
 ## Coverage
 

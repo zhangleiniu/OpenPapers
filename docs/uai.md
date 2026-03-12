@@ -4,8 +4,8 @@
 
 | Years | Source | Format |
 |-------|--------|--------|
-| 2015–2018 | `auai.org/uai{year}/` | Single accepted-papers page, all papers in one HTML table |
-| 2019–present | `proceedings.mlr.press` | One abstract page per paper |
+| 2015–2018 | `https://www.auai.org/uai[year]/` | Single accepted-papers page, all papers in one HTML table |
+| 2019–present | `https://proceedings.mlr.press/` | One abstract page per paper |
 
 ### Legacy URLs (2015–2018)
 - 2018: `https://www.auai.org/uai2018/accepted.php`

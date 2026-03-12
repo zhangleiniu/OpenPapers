@@ -2,7 +2,7 @@
 
 ## Source
 
-All years: `papers.nips.cc`
+All years: `https://papers.nips.cc/paper_files/paper/[year]`
 
 ## Coverage
 

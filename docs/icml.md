@@ -2,7 +2,7 @@
 
 ## Source
 
-All years: `proceedings.mlr.press`
+All years: `https://proceedings.mlr.press/`
 
 Known volume mappings (others discovered dynamically from the MLR Press main page):
 - 2024: `v235`
