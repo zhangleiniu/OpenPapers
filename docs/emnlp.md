@@ -36,4 +36,4 @@ aborted with instructions to label manually.
 
 ## Known issues
 
-None.
+**2022, `2022.emnlp-main.804`** ("Efficient Large Scale Language Modeling with Mixtures of Experts"): No PDF available on the website. The paper is available on arXiv but no fallback has been implemented; the record is scraped with metadata only and no local PDF.
