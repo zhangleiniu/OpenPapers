@@ -43,7 +43,7 @@ CONFERENCES = {
         'base_url': 'https://iclr.cc/',
         'request_delay': 0.15,
         'retry_attempts': 3,
-        'timeout': 45,
+        'timeout': 5,
         'rate_limit_delay': 120,
         'years': [2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025]
     },

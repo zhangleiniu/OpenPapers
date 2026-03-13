@@ -1,518 +1,412 @@
-# scrapers/iclr.py
-"""ICLR scraper implementation for OpenReview years 2017-2023."""
-
 import json
 import os
-import time
-import requests
 import re
-from typing import List, Dict, Optional
 import logging
+from typing import List, Dict, Optional
+
+import requests
+
+from .base import BaseScraper
 
 logger = logging.getLogger(__name__)
 
+API1 = "https://api.openreview.net"
+API2 = "https://api2.openreview.net"
 
-class ICLRScraper:
-    """ICLR conference scraper for OpenReview years 2017-2023."""
-    
+# Venue strings that indicate acceptance (compared in lowercase)
+_ACCEPTED_VENUES = {"oral", "spotlight", "poster"}
+
+# Cache path: {year: [forum_id, ...]}
+_OWN_CACHE_PATH = "data/cache/iclr_papers.json"
+
+_YEAR_CONFIG = {
+    # ── Group A: venue field in submission note ───────────────────────────────
+    2017: {
+        "api":        API1,
+        "strategy":   "venue",
+        "invitation": "ICLR.cc/2017/conference/-/submission",
+    },
+    2022: {
+        "api":        API1,
+        "strategy":   "venue",
+        "invitation": "ICLR.cc/2022/Conference/-/Blind_Submission",
+    },
+    2023: {
+        "api":        API1,
+        "strategy":   "venue",
+        "invitation": "ICLR.cc/2023/Conference/-/Blind_Submission",
+    },
+
+    # ── Group B: need decision notes ─────────────────────────────────────────
+    2018: {
+        "api":               API1,
+        "strategy":          "bulk_decision",
+        "invitation":        "ICLR.cc/2018/Conference/-/Blind_Submission",
+        "decision_inv":      "ICLR.cc/2018/Conference/-/Acceptance_Decision",
+        "decision_field":    "decision",
+    },
+    2019: {
+        "api":               API1,
+        "strategy":          "per_paper_decision",
+        "invitation":        "ICLR.cc/2019/Conference/-/Blind_Submission",
+        "decision_inv_tmpl": "ICLR.cc/2019/Conference/-/Paper{num}/Meta_Review",
+        "decision_field":    "recommendation",
+    },
+    2020: {
+        "api":               API1,
+        "strategy":          "per_paper_decision",
+        "invitation":        "ICLR.cc/2020/Conference/-/Blind_Submission",
+        "decision_inv_tmpl": "ICLR.cc/2020/Conference/Paper{num}/-/Decision",
+        "decision_field":    "decision",
+    },
+    2021: {
+        "api":               API1,
+        "strategy":          "mixed",
+        "invitation":        "ICLR.cc/2021/Conference/-/Blind_Submission",
+        "decision_inv_tmpl": "ICLR.cc/2021/Conference/Paper{num}/-/Decision",
+        "decision_field":    "decision",
+    },
+
+    # ── Group C: v2 API ───────────────────────────────────────────────────────
+    2024: {
+        "api":      API2,
+        "strategy": "venueid",
+        "venueid":  "ICLR.cc/2024/Conference",
+    },
+    2025: {
+        "api":      API2,
+        "strategy": "venueid",
+        "venueid":  "ICLR.cc/2025/Conference",
+    },
+}
+
+
+class ICLRScraper(BaseScraper):
+    """ICLR conference scraper using OpenReview API (2017-2025).
+
+    Cache lookup order for each year:
+      1. data/cache/iclr_papers.json  — own cache, keyed by year string
+      2. OpenReview API               — result saved to own cache
+    """
+
     def __init__(self):
-        self.api_base = "https://api.openreview.net/notes"
-        self.session = requests.Session()
-        self.session.headers.update({
-            'User-Agent': 'ICLR-Paper-Scraper/1.0'
-        })
-        
-        # Year-specific patterns discovered from our archaeological expedition
-        self.year_patterns = {
-            2017: {
-                'invitation': 'ICLR.cc/2017/conference/-/submission',
-                'decision_pattern': 'ICLR.cc/2017/conference/-/paper{paper_num}/acceptance',
-                'decision_field': 'decision'
-            },
-            2018: {
-                'invitation': 'ICLR.cc/2018/Conference/-/Blind_Submission', 
-                'decision_pattern': 'ICLR.cc/2018/Conference/-/Acceptance_Decision',
-                'decision_field': 'decision'
-            },
-            2019: {
-                'invitation': 'ICLR.cc/2019/Conference/-/Blind_Submission',
-                'decision_pattern': 'ICLR.cc/2019/Conference/-/Paper{paper_num}/Meta_Review',
-                'decision_field': 'recommendation'
-            },
-            2020: {
-                'invitation': 'ICLR.cc/2020/Conference/-/Blind_Submission',
-                'decision_pattern': 'ICLR.cc/2020/Conference/Paper{paper_num}/-/Decision', 
-                'decision_field': 'decision'
-            },
-            2021: {
-                'invitation': 'ICLR.cc/2021/Conference/-/Blind_Submission',
-                'decision_pattern': 'ICLR.cc/2021/Conference/Paper{paper_num}/-/Decision',
-                'decision_field': 'decision'
-            },
-            2022: {
-                'invitation': 'ICLR.cc/2022/Conference/-/Blind_Submission',
-                'decision_pattern': 'ICLR.cc/2022/Conference/Paper{paper_num}/-/Decision',
-                'decision_field': 'decision'
-            },
-            2023: {
-                'invitation': 'ICLR.cc/2023/Conference/-/Blind_Submission',
-                'decision_pattern': 'ICLR.cc/2023/Conference/Paper{paper_num}/-/Decision',
-                'decision_field': 'decision'
-            }
-        }
-    
-    def scrape_year(self, year: int, download_pdfs: bool = True, resume: bool = True) -> List[Dict]:
-        """
-        Scrape a complete year of ICLR papers.
-        
-        Args:
-            year: Year to scrape
-            download_pdfs: Whether to download PDF files
-            resume: Whether to resume from existing data
-            
-        Returns:
-            List of paper metadata dictionaries
-        """
-        output_dir = 'data'  # Fixed output directory
-        logger.info(f"🎯 Starting ICLR {year} scrape...")
-        
-        # Check if already completed and resume is enabled
-        metadata_file = os.path.join(output_dir, 'metadata', 'iclr', f'iclr_{year}.json')
-        if resume and os.path.exists(metadata_file):
-            logger.info(f"Found existing metadata file: {metadata_file}")
-            try:
-                with open(metadata_file, 'r', encoding='utf-8') as f:
-                    existing_papers = json.load(f)
-                if existing_papers:  # Make sure it's not empty
-                    logger.info(f"✅ Resumed: {len(existing_papers)} papers already scraped for {year}")
-                    return existing_papers
-            except Exception as e:
-                logger.warning(f"Failed to load existing metadata: {e}, starting fresh")
-        
-        # Get accepted papers
-        try:
-            accepted_papers = self.get_papers_for_year(year)
-        except Exception as e:
-            logger.error(f"Failed to get papers for {year}: {e}")
-            return []  # Return empty list on error
-        
-        if not accepted_papers:
-            logger.warning(f"❌ No accepted papers found for ICLR {year}")
+        super().__init__('iclr')
+        # In-memory paper cache: paper_id → converted paper dict
+        # Populated by _fetch_accepted_notes so parse_paper avoids redundant API calls
+        self._paper_cache: Dict[str, Dict] = {}
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # Public interface
+    # ──────────────────────────────────────────────────────────────────────────
+
+    def get_paper_urls(self, year: int) -> List[str]:
+        """Return OpenReview forum URLs for all accepted papers in `year`."""
+        if year not in _YEAR_CONFIG:
+            logger.error(f"ICLR {year} not supported. Available: {sorted(_YEAR_CONFIG)}")
             return []
-        
-        # Save papers and optionally download PDFs
-        try:
-            self.save_papers(accepted_papers, year, output_dir, download_pdfs=download_pdfs)
-            logger.info(f"✅ ICLR {year} complete: {len(accepted_papers)} accepted papers saved")
-        except Exception as e:
-            logger.error(f"Failed to save papers for {year}: {e}")
-            return []
-        
-        # Convert to metadata format for return
-        metadata = []
-        try:
-            for paper in accepted_papers:
-                paper_id = paper.get('id', '')
-                content = paper.get('content', {})
-                title = content.get('title', '')
-                
-                clean_title = self._clean_filename(title)
-                pdf_filename = f"{paper_id}_{clean_title}.pdf"
-                pdf_path = os.path.join('data', 'papers', 'iclr', str(year), pdf_filename)
-                
-                # Prepare PDF URL (make absolute if relative)
-                pdf_url = content.get('pdf', '')
-                if pdf_url and not pdf_url.startswith('http'):
-                    pdf_url = f"https://openreview.net{pdf_url}"
-                
-                paper_metadata = {
-                    'id': paper_id,
-                    'title': title,
-                    'authors': content.get('authors', []),
-                    'abstract': content.get('abstract', ''),
-                    'pdf_url': pdf_url,
-                    'openreview_url': f"https://openreview.net/forum?id={paper_id}",
-                    'year': year,
-                    'conference': 'iclr',
-                    'url': paper_id,
-                    'pdf_path': pdf_path
-                }
-                metadata.append(paper_metadata)
-            
-            logger.info(f"Returning {len(metadata)} papers metadata for main.py")
-            return metadata
-            
-        except Exception as e:
-            logger.error(f"Failed to convert papers to metadata format: {e}")
-            return []
-    
-    def scrape_multiple_years(self, years: List[int], download_pdfs: bool = True, resume: bool = True) -> Dict[int, List[Dict]]:
-        """
-        Scrape multiple years of ICLR papers.
-        
-        Args:
-            years: List of years to scrape
-            download_pdfs: Whether to download PDF files
-            resume: Whether to resume from existing data
-            
-        Returns:
-            Dictionary mapping year to list of paper metadata
-        """
-        logger.info(f"🚀 Starting ICLR scrape for years: {years}")
-        
-        results = {}
-        for year in sorted(years):
-            try:
-                papers = self.scrape_year(year, download_pdfs=download_pdfs, resume=resume)
-                results[year] = papers
-                logger.info(f"Completed {year}. Waiting before next year...")
-                time.sleep(10)  # Longer pause between years
-            except Exception as e:
-                logger.error(f"Failed to scrape ICLR {year}: {e}")
-                results[year] = []
-                continue
-        
-        logger.info("🏆 All ICLR years completed!")
-        return results
-    
-    def get_papers_for_year(self, year: int) -> List[Dict]:
-        """Get all accepted papers for a given year."""
-        if year not in self.year_patterns:
-            logger.error(f"Year {year} not supported. Available years: {list(self.year_patterns.keys())}")
-            return []
-        
-        logger.info(f"Getting ICLR {year} papers...")
-        
-        # Step 1: Get all submitted papers
-        submitted_papers = self._get_submitted_papers(year)
-        if not submitted_papers:
-            logger.error(f"No submitted papers found for {year}")
-            return []
-        
-        logger.info(f"Found {len(submitted_papers)} submitted papers for {year}")
-        
-        # Step 2: Filter for accepted papers only
-        accepted_papers = []
-        
-        for i, paper in enumerate(submitted_papers):
-            logger.info(f"Processing paper {i+1}/{len(submitted_papers)}: {paper.get('content', {}).get('title', 'No title')[:50]}...")
-            
-            # Get decision
-            decision = self._get_paper_decision(paper, year)
-            
-            # Check if accepted (using your smart detection logic)
-            if decision and 'accept' in decision.lower():
-                logger.info(f"✅ ACCEPTED: {decision}")
-                
-                # Add decision to paper metadata
-                paper['decision'] = decision
-                accepted_papers.append(paper)
-            else:
-                if decision:
-                    logger.debug(f"❌ Not accepted: {decision}")
-                else:
-                    logger.debug(f"❌ No decision found")
-            
-            # Rate limiting - be nice to OpenReview
-            time.sleep(1.5)
-        
-        logger.info(f"Found {len(accepted_papers)} accepted papers out of {len(submitted_papers)} total ({len(accepted_papers)/len(submitted_papers)*100:.1f}% acceptance rate)")
-        return accepted_papers
-    
-    def _get_submitted_papers(self, year: int) -> List[Dict]:
-        """Get all submitted papers for a year with proper pagination."""
-        pattern = self.year_patterns[year]
-        
-        params = {
-            'invitation': pattern['invitation'],
-            'details': 'replyCount,invitation,original'
-        }
-        
-        papers = []
-        offset = 0
-        limit = 1000  # OpenReview limit per request
-        
-        while True:
-            params['offset'] = offset
-            params['limit'] = limit
-            
-            logger.info(f"Fetching papers {offset+1}-{offset+limit}...")
-            response = self._make_api_request(self.api_base, params)
-            if not response:
-                logger.error(f"Failed to get papers at offset {offset}")
-                break
-            
-            batch_papers = response.get('notes', [])
-            if not batch_papers:
-                logger.info(f"No more papers found at offset {offset}")
-                break
-            
-            papers.extend(batch_papers)
-            logger.info(f"Retrieved {len(batch_papers)} papers (total so far: {len(papers)})")
-            
-            # If we got fewer papers than the limit, we've reached the end
-            if len(batch_papers) < limit:
-                logger.info(f"Reached end of papers (got {len(batch_papers)} < {limit})")
-                break
-            
-            offset += limit
-            time.sleep(2.0)  # Rate limiting between batches - be extra careful
-        
-        logger.info(f"✅ Total papers retrieved for {year}: {len(papers)}")
-        return papers
-    
-    def _get_paper_decision(self, paper: Dict, year: int) -> Optional[str]:
-        """Get decision for a paper."""
-        paper_id = paper.get('id')
-        paper_number = paper.get('number')
-        
-        if not paper_id:
-            return None
-        
-        pattern = self.year_patterns[year]
-        
-        # Get all forum notes for this paper
-        params = {'forum': paper_id}
-        response = self._make_api_request(self.api_base, params)
-        
-        if not response:
-            return None
-        
-        forum_notes = response.get('notes', [])
-        
-        # Look for decision note using year-specific patterns
-        for note in forum_notes:
-            invitation = note.get('invitation', '')
-            content = note.get('content', {})
-            
-            # Check if this is a decision note based on invitation pattern
-            is_decision_note = False
-            
-            if year == 2018:
-                # 2018 uses simple Acceptance_Decision pattern
-                is_decision_note = 'Acceptance_Decision' in invitation
-            elif year == 2017:
-                # 2017 uses paper-specific acceptance pattern
-                is_decision_note = '/acceptance' in invitation
-            else:
-                # 2019-2023 use various patterns with paper numbers
-                if paper_number:
-                    expected_patterns = [
-                        f'Paper{paper_number}/-/Decision',
-                        f'Paper{paper_number}/Meta_Review',
-                        f'Paper{paper_number}/-/Meta_Review'
-                    ]
-                    is_decision_note = any(pattern in invitation for pattern in expected_patterns)
-            
-            if is_decision_note:
-                # Extract decision using the field name for this year
-                decision_field = pattern['decision_field']
-                decision = content.get(decision_field)
-                
-                if decision:
-                    logger.debug(f"Found decision in field '{decision_field}': {decision}")
-                    return decision
-        
-        return None
-    
-    def _make_api_request(self, url: str, params: Dict, max_retries: int = 5) -> Optional[Dict]:
-        """Make API request with retry logic."""
-        for attempt in range(max_retries):
-            try:
-                response = self.session.get(url, params=params, timeout=30)
-                
-                if response.status_code == 429:
-                    # Rate limited
-                    wait_time = min((2 ** attempt) * 10, 120)  # Exponential backoff, max 2 minutes
-                    logger.warning(f"Rate limited. Waiting {wait_time} seconds... (attempt {attempt+1}/{max_retries})")
-                    time.sleep(wait_time)
-                    continue
-                
-                if response.status_code == 200:
-                    return response.json()
-                else:
-                    logger.error(f"API request failed with status {response.status_code}")
-                    return None
-                    
-            except requests.exceptions.Timeout:
-                logger.warning(f"Request timeout (attempt {attempt+1}/{max_retries})")
-                time.sleep(5)
-                continue
-            except Exception as e:
-                logger.error(f"API request error: {e}")
-                if attempt == max_retries - 1:
-                    return None
-                time.sleep(5)
-        
-        logger.error(f"Failed to make API request after {max_retries} attempts")
-        return None
-    
-    def save_papers(self, papers: List[Dict], year: int, output_dir: str, download_pdfs: bool = True) -> None:
-        """Save papers metadata and optionally download PDFs."""
+
+        logger.info(f"Getting ICLR {year} paper URLs...")
+        papers = self._get_papers(year)
         if not papers:
-            logger.warning(f"No papers to save for {year}")
-            return
-        
-        # Create directory structure: data/metadata/iclr/ and data/papers/iclr/YEAR/
-        metadata_dir = os.path.join(output_dir, 'metadata', 'iclr')
-        pdf_dir = os.path.join(output_dir, 'papers', 'iclr', str(year))
-        os.makedirs(metadata_dir, exist_ok=True)
-        if download_pdfs:
-            os.makedirs(pdf_dir, exist_ok=True)
-        
-        # Prepare metadata for JSON
-        metadata = []
-        
-        for paper in papers:
-            paper_id = paper.get('id', '')
-            content = paper.get('content', {})
-            title = content.get('title', '')
-            
-            # Create clean filename for PDF
-            clean_title = self._clean_filename(title)
-            pdf_filename = f"{paper_id}_{clean_title}.pdf"
-            pdf_path = os.path.join('data', 'papers', 'iclr', str(year), pdf_filename)
-            
-            # Create OpenReview forum URL
-            openreview_url = f"https://openreview.net/forum?id={paper_id}"
-            
-            # Prepare PDF URL (make absolute if relative)
-            pdf_url = content.get('pdf', '')
-            if pdf_url and not pdf_url.startswith('http'):
-                pdf_url = f"https://openreview.net{pdf_url}"
-            
-            # Extract metadata in your specified format
-            paper_metadata = {
-                'id': paper_id,
-                'title': title,
-                'authors': content.get('authors', []),
-                'abstract': content.get('abstract', ''),
-                'pdf_url': pdf_url,
-                'openreview_url': openreview_url,
-                'year': year,
-                'conference': 'iclr',
-                'url': paper_id,
-                'pdf_path': pdf_path
-            }
-            
-            metadata.append(paper_metadata)
-            
-            # Download PDF if requested
-            if download_pdfs and pdf_url:
-                self._download_pdf(pdf_url, pdf_filename, pdf_dir)
-            elif download_pdfs:
-                logger.warning(f"No PDF URL found for paper {paper_id}")
-        
-        # Save metadata as JSON: data/metadata/iclr/iclr_YEAR.json
-        metadata_file = os.path.join(metadata_dir, f'iclr_{year}.json')
-        with open(metadata_file, 'w', encoding='utf-8') as f:
-            json.dump(metadata, f, indent=2, ensure_ascii=False)
-        
-        logger.info(f"Saved {len(papers)} papers metadata to {metadata_file}")
-        if download_pdfs:
-            logger.info(f"PDFs saved to {pdf_dir}")
-        else:
-            logger.info(f"PDF download skipped (--no-pdfs flag)")
-    
-    def scrape_all_years(self, output_dir: str = 'data', download_pdfs: bool = True) -> None:
-        """
-        Scrape all available ICLR years (for backwards compatibility).
-        
-        Args:
-            output_dir: Output directory
-            download_pdfs: Whether to download PDFs
-        """
-        years = list(self.year_patterns.keys())
-        self.scrape_multiple_years(years, download_pdfs=download_pdfs, output_dir=output_dir)
-    
-    def _download_pdf(self, pdf_url: str, pdf_filename: str, pdf_dir: str) -> None:
-        """Download PDF with retry logic."""
-        logger.info(f"Downloading {pdf_filename} from {pdf_url}")
-        if not pdf_url.startswith('http'):
-            # Relative URL, make absolute
-            pdf_url = f"https://openreview.net{pdf_url}"
-        
-        filepath = os.path.join(pdf_dir, pdf_filename)
-        
-        # Skip if already downloaded
-        if os.path.exists(filepath):
-            logger.debug(f"PDF already exists: {pdf_filename}")
-            return
-        
-        max_retries = 5
-        for attempt in range(max_retries):
-            try:
-                logger.debug(f"Downloading PDF: {pdf_filename}")
-                response = self.session.get(pdf_url, timeout=(30, 300), stream=True)
-                
-                if response.status_code == 200:
-                    with open(filepath, 'wb') as f:
-                        for chunk in response.iter_content(chunk_size=8192):
-                            f.write(chunk)
-                    
-                    logger.debug(f"✅ Downloaded: {pdf_filename}")
-                    return
-                else:
-                    logger.warning(f"PDF download failed with status {response.status_code}: {pdf_url}")
-                    return
-                    
-            except Exception as e:
-                logger.warning(f"PDF download error (attempt {attempt+1}/{max_retries}): {e}")
-                if attempt < max_retries - 1:
-                    time.sleep(10)
-        
-        logger.error(f"Failed to download PDF after {max_retries} attempts: {pdf_url}")
-    
-    def _clean_filename(self, title: str, max_length: int = 50) -> str:
-        """Clean title for use in filename."""
-        if not title:
-            return "untitled"
-        
-        # Remove problematic characters
-        import re
-        cleaned = re.sub(r'[<>:"/\\|?*]', '', title)
-        cleaned = re.sub(r'\s+', ' ', cleaned).strip()
-        
-        # Truncate if too long
-        if len(cleaned) > max_length:
-            cleaned = cleaned[:max_length].strip()
-        
-        return cleaned
-    
-    def scrape_all_years(self, output_dir: str = 'data', years: Optional[List[int]] = None) -> None:
-        """Scrape all available ICLR years."""
-        if years is None:
-            years = list(self.year_patterns.keys())
-        
-        logger.info(f"🚀 Starting ICLR scrape for years: {years}")
-        
-        for year in sorted(years):
-            try:
-                papers = self.scrape_year(year, download_pdfs=True, resume=True)
-                logger.info(f"Completed {year}: {len(papers)} papers. Waiting before next year...")
-                time.sleep(10)  # Longer pause between years
-            except Exception as e:
-                logger.error(f"Failed to scrape ICLR {year}: {e}")
+            logger.error(f"No accepted papers found for ICLR {year}")
+            return []
+
+        for p in papers:
+            self._paper_cache[p["id"]] = p
+
+        urls = [p["openreview_url"] for p in papers]
+        logger.info(f"ICLR {year}: {len(urls)} accepted papers")
+        return urls
+
+    def parse_paper(self, url: str) -> Optional[Dict]:
+        """Parse a single ICLR paper by its OpenReview forum URL."""
+        paper_id = self._extract_paper_id(url)
+        if not paper_id:
+            logger.warning(f"Could not extract paper ID from {url}")
+            return None
+
+        # Fast path: already in memory from get_paper_urls
+        if paper_id in self._paper_cache:
+            return self._paper_cache[paper_id]
+
+        # Slow path: check disk cache
+        cache = self._load_cache()
+        for year_papers in cache.values():
+            for p in year_papers:
+                if p.get("id") == paper_id:
+                    return p
+
+        # Final fallback: fetch from API
+        for api_base in [API2, API1]:
+            data = self._api_get(api_base, {"id": paper_id})
+            if data and data.get("notes"):
+                return self._note_to_paper(data["notes"][0], url)
+
+        logger.error(f"Could not fetch note for {paper_id}")
+        return None
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # Two-level cache
+    # ──────────────────────────────────────────────────────────────────────────
+
+    def _get_papers(self, year: int) -> List[Dict]:
+        """Return full paper dicts, using own cache when available."""
+
+        # Level 1: own cache
+        cache = self._load_cache()
+        if str(year) in cache:
+            papers = cache[str(year)]
+            logger.info(f"ICLR {year}: loaded {len(papers)} papers from cache")
+            return papers
+
+        # Level 2: fetch from API
+        logger.info(f"ICLR {year}: no cache found, fetching from OpenReview API...")
+        notes  = self._fetch_accepted_notes(year)
+        papers = [
+            self._note_to_paper(n, f"https://openreview.net/forum?id={n['id']}")
+            for n in notes
+        ]
+
+        cache[str(year)] = papers
+        self._save_cache(cache)
+
+        return papers
+
+    def _load_cache(self) -> dict:
+        if os.path.exists(_OWN_CACHE_PATH):
+            with open(_OWN_CACHE_PATH) as f:
+                return json.load(f)
+        return {}
+
+    def _save_cache(self, cache: dict) -> None:
+        os.makedirs(os.path.dirname(_OWN_CACHE_PATH), exist_ok=True)
+        with open(_OWN_CACHE_PATH, "w") as f:
+            json.dump(cache, f, indent=2, ensure_ascii=False)
+        logger.info(f"Saved cache → {_OWN_CACHE_PATH}")
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # API fetching strategies
+    # ──────────────────────────────────────────────────────────────────────────
+
+    def _fetch_accepted_notes(self, year: int) -> List[Dict]:
+        config   = _YEAR_CONFIG[year]
+        strategy = config["strategy"]
+        dispatch = {
+            "venue":              self._strategy_venue,
+            "bulk_decision":      self._strategy_bulk_decision,
+            "per_paper_decision": self._strategy_per_paper_decision,
+            "mixed":              self._strategy_mixed,
+            "venueid":            self._strategy_venueid,
+        }
+        return dispatch[strategy](config)
+
+    def _strategy_venue(self, config: Dict) -> List[Dict]:
+        notes    = self._paginate(config["api"], config["invitation"])
+        accepted = [
+            n for n in notes
+            if any(kw in str(self._val(n["content"].get("venue", ""))).lower()
+                   for kw in _ACCEPTED_VENUES)
+        ]
+        logger.info(f"  venue filter: {len(accepted)}/{len(notes)} accepted")
+        return accepted
+
+    def _strategy_bulk_decision(self, config: Dict) -> List[Dict]:
+        decision_notes = self._paginate(config["api"], config["decision_inv"])
+        field = config["decision_field"]
+        decision_map = {
+            n.get("forum", n.get("id", "")): n["content"].get(field, "")
+            for n in decision_notes
+        }
+        logger.info(f"  loaded {len(decision_map)} decision notes")
+
+        submissions = self._paginate(config["api"], config["invitation"])
+        accepted = [
+            n for n in submissions
+            if "accept" in decision_map.get(
+                n.get("forum", n.get("id", "")), ""
+            ).lower()
+        ]
+        logger.info(f"  bulk decision: {len(accepted)}/{len(submissions)} accepted")
+        return accepted
+
+    def _strategy_per_paper_decision(self, config: Dict) -> List[Dict]:
+        submissions = self._paginate(config["api"], config["invitation"])
+        tmpl  = config["decision_inv_tmpl"]
+        field = config["decision_field"]
+        accepted = []
+
+        for i, note in enumerate(submissions):
+            num      = note.get("number")
+            paper_id = note.get("id", "")
+            if not num:
                 continue
-        
-        logger.info("🏆 All ICLR years completed!")
+            if (i + 1) % 100 == 0:
+                logger.info(f"  [{i+1}/{len(submissions)}] {len(accepted)} accepted so far...")
 
+            decision = self._fetch_forum_decision(
+                config["api"], paper_id, tmpl.format(num=num), field
+            )
+            if decision and "accept" in decision.lower():
+                accepted.append(note)
 
-# Example usage
-if __name__ == "__main__":
-    # Setup logging
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    )
-    
-    # Create scraper
-    scraper = ICLRScraper()
-    
-    # Scrape specific year
-    # scraper.scrape_year(2023)
-    
-    # Or scrape all years - will create:
-    # data/metadata/iclr/iclr_2017.json, iclr_2018.json, etc.
-    # data/papers/iclr/2017/, 2018/, etc.
-    scraper.scrape_all_years(years=[2017, 2018, 2019, 2020, 2021, 2022, 2023])
+        logger.info(f"  per-paper decision: {len(accepted)}/{len(submissions)} accepted")
+        return accepted
+
+    def _strategy_mixed(self, config: Dict) -> List[Dict]:
+        submissions = self._paginate(config["api"], config["invitation"])
+        tmpl  = config["decision_inv_tmpl"]
+        field = config["decision_field"]
+        accepted  = []
+        slow_path = 0
+
+        for i, note in enumerate(submissions):
+            venue = str(self._val(note["content"].get("venue", ""))).lower()
+
+            # Fast path: venue field is populated
+            if venue:
+                if any(kw in venue for kw in _ACCEPTED_VENUES):
+                    accepted.append(note)
+                continue
+
+            # Slow path: fetch forum decision
+            num      = note.get("number")
+            paper_id = note.get("id", "")
+            if not num:
+                continue
+
+            slow_path += 1
+            if slow_path % 100 == 0:
+                logger.info(
+                    f"  slow-path: {slow_path} checked, "
+                    f"{len(accepted)} accepted so far..."
+                )
+
+            decision = self._fetch_forum_decision(
+                config["api"], paper_id, tmpl.format(num=num), field
+            )
+            if decision and "accept" in decision.lower():
+                accepted.append(note)
+
+        logger.info(
+            f"  mixed: {len(accepted)}/{len(submissions)} accepted "
+            f"(slow-path: {slow_path})"
+        )
+        return accepted
+
+    def _strategy_venueid(self, config: Dict) -> List[Dict]:
+        notes = self._paginate_v2(config["api"], config["venueid"])
+        logger.info(f"  venueid: {len(notes)} accepted")
+        return notes
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # Pagination
+    # ──────────────────────────────────────────────────────────────────────────
+
+    def _paginate(self, api_base: str, invitation: str, limit: int = 1000) -> List[Dict]:
+        all_notes: List[Dict] = []
+        offset = 0
+        while True:
+            data = self._api_get(api_base, {
+                "invitation": invitation,
+                "limit":      limit,
+                "offset":     offset,
+            })
+            if not data:
+                break
+            batch = data.get("notes", [])
+            if not batch:
+                break
+            all_notes.extend(batch)
+            logger.info(f"    ... {len(all_notes)} notes fetched")
+            if len(batch) < limit:
+                break
+            offset += limit
+        return all_notes
+
+    def _paginate_v2(self, api_base: str, venueid: str, limit: int = 1000) -> List[Dict]:
+        """count field is unreliable in v2 — paginate until empty batch."""
+        all_notes: List[Dict] = []
+        offset = 0
+        while True:
+            data = self._api_get(api_base, {
+                "content.venueid": venueid,
+                "limit":           limit,
+                "offset":          offset,
+            })
+            if not data:
+                break
+            batch = data.get("notes", [])
+            if not batch:
+                break
+            all_notes.extend(batch)
+            logger.info(f"    ... {len(all_notes)} notes fetched")
+            if len(batch) < limit:
+                break
+            offset += limit
+        return all_notes
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # Decision fetching
+    # ──────────────────────────────────────────────────────────────────────────
+
+    def _fetch_forum_decision(
+        self, api_base: str, paper_id: str, decision_invitation: str, field: str
+    ) -> Optional[str]:
+        data = self._api_get(api_base, {"forum": paper_id})
+        if not data:
+            return None
+        for note in data.get("notes", []):
+            if note.get("invitation") == decision_invitation:
+                return note.get("content", {}).get(field)
+        return None
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # HTTP
+    # ──────────────────────────────────────────────────────────────────────────
+
+    def _api_get(self, base: str, params: Dict) -> Optional[Dict]:
+        """Make an API request via RobustSession (handles retries and 429 internally)."""
+        url  = base + "/notes"
+        resp = self.session.get(url, params=params)
+        if resp is None:
+            logger.error(f"Request failed: {url} params={params}")
+            return None
+        try:
+            return resp.json()
+        except Exception as e:
+            logger.error(f"Failed to parse JSON from {url}: {e}")
+            return None
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # Paper parsing
+    # ──────────────────────────────────────────────────────────────────────────
+
+    def _note_to_paper(self, note: Dict, url: str) -> Dict:
+        content  = note.get("content", {})
+        paper_id = note.get("id", "")
+        pdf = self._val(content.get("pdf", ""))
+        if pdf and not str(pdf).startswith("http"):
+            pdf = f"https://openreview.net{pdf}"
+        return {
+            "id":             paper_id,
+            "title":          self._val(content.get("title",    "")),
+            "authors":        self._val(content.get("authors",  [])),
+            "abstract":       self._val(content.get("abstract", "")),
+            "keywords":       self._val(content.get("keywords", [])),
+            "pdf_url":        pdf,
+            "openreview_url": url,
+        }
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # Utilities
+    # ──────────────────────────────────────────────────────────────────────────
+
+    @staticmethod
+    def _val(x):
+        """Unwrap v2 content values wrapped as {'value': ...}."""
+        return x.get("value", x) if isinstance(x, dict) else x
+
+    @staticmethod
+    def _extract_paper_id(url: str) -> Optional[str]:
+        m = re.search(r"[?&]id=([^&]+)", url)
+        return m.group(1) if m else None
