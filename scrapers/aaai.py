@@ -8,12 +8,9 @@ from bs4 import BeautifulSoup
 from typing import List, Dict, Optional
 from dotenv import load_dotenv
 
-# Google Cloud Vertex AI imports
-import vertexai
-from vertexai.generative_models import GenerativeModel, GenerationConfig
-
 from .base import BaseScraper
 from config import CACHE_DIR
+from utils import create_gemini_model, llm_json_config
 
 load_dotenv()
 
@@ -97,30 +94,8 @@ class AAAIScraper(BaseScraper):
 
     def __init__(self):
         super().__init__('aaai')
-
-        project_id = os.getenv("GCP_PROJECT_ID")
-        location   = os.getenv("GCP_LOCATION", "us-central1")
-        self.model_name = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
-
-        if project_id:
-            try:
-                vertexai.init(project=project_id, location=location)
-                # Two model instances — one per system prompt
-                self.issue_model = GenerativeModel(
-                    model_name=self.model_name,
-                    system_instruction=_ISSUE_SYSTEM_PROMPT,
-                )
-                self.track_model = GenerativeModel(
-                    model_name=self.model_name,
-                    system_instruction=_TRACK_SYSTEM_PROMPT,
-                )
-                logger.info(f"Vertex AI initialised with model {self.model_name}")
-            except Exception as e:
-                logger.error(f"Failed to initialise Vertex AI: {e}")
-                self.issue_model = self.track_model = None
-        else:
-            logger.warning("GCP_PROJECT_ID not set — LLM features disabled.")
-            self.issue_model = self.track_model = None
+        self.issue_model = create_gemini_model(_ISSUE_SYSTEM_PROMPT)
+        self.track_model = create_gemini_model(_TRACK_SYSTEM_PROMPT)
 
     # ──────────────────────────────────────────────────────────────────────────
     # Public interface
@@ -351,8 +326,7 @@ class AAAIScraper(BaseScraper):
             )
         )
         try:
-            config = GenerationConfig(response_mime_type="application/json", temperature=0.1)
-            response = self.issue_model.generate_content(user_message, generation_config=config)
+            response = self.issue_model.generate_content(user_message, generation_config=llm_json_config())
             if not response.text:
                 return None
             parsed = json.loads(response.text.strip())
@@ -425,8 +399,7 @@ class AAAIScraper(BaseScraper):
             "\n".join(f"- {name}" for name in section_names)
         )
         try:
-            config = GenerationConfig(response_mime_type="application/json", temperature=0.1)
-            response = self.track_model.generate_content(user_message, generation_config=config)
+            response = self.track_model.generate_content(user_message, generation_config=llm_json_config())
             if not response.text:
                 return None
             parsed = json.loads(response.text.strip())

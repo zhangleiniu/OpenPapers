@@ -1,6 +1,7 @@
 # utils.py
 """Robust utilities with error handling."""
 
+import os
 import requests
 import time
 import json
@@ -13,6 +14,47 @@ import logging
 from config import DEFAULT_REQUEST_DELAY, DEFAULT_RETRY_ATTEMPTS, DEFAULT_TIMEOUT, USER_AGENT
 
 logger = logging.getLogger(__name__)
+
+
+def create_gemini_model(system_prompt: str):
+    """Initialize Vertex AI and return a GenerativeModel, or None if not configured.
+
+    Reads GCP_PROJECT_ID, GCP_LOCATION, and GEMINI_MODEL from the environment.
+    Safe to call multiple times — vertexai.init() is idempotent.
+    """
+    try:
+        import vertexai
+        from vertexai.generative_models import GenerativeModel
+    except ImportError:
+        logger.error("vertexai package not installed.")
+        return None
+
+    project_id = os.getenv("GCP_PROJECT_ID")
+    if not project_id:
+        logger.warning("GCP_PROJECT_ID not set — LLM features disabled.")
+        return None
+
+    location   = os.getenv("GCP_LOCATION", "us-central1")
+    model_name = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+
+    try:
+        vertexai.init(project=project_id, location=location)
+        model = GenerativeModel(model_name=model_name, system_instruction=system_prompt)
+        logger.info(f"Vertex AI initialized with model {model_name}")
+        return model
+    except Exception as e:
+        logger.error(f"Failed to initialize Vertex AI: {e}")
+        return None
+
+
+def llm_json_config():
+    """Return a GenerationConfig for strict JSON output at low temperature.
+
+    Returned as a function (not a module-level constant) to avoid importing
+    vertexai at module load time for scrapers that don't need it.
+    """
+    from vertexai.generative_models import GenerationConfig
+    return GenerationConfig(response_mime_type="application/json", temperature=0.1)
 
 
 class RobustSession:

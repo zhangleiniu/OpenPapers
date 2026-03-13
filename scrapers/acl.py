@@ -6,12 +6,9 @@ from bs4 import BeautifulSoup
 from typing import List, Dict, Optional
 from dotenv import load_dotenv
 
-# Google Cloud Vertex AI imports
-import vertexai
-from vertexai.generative_models import GenerativeModel, GenerationConfig
-
 from .base import BaseScraper
 from config import CACHE_DIR
+from utils import create_gemini_model, llm_json_config
 
 # Load environment variables from .env
 load_dotenv()
@@ -46,26 +43,7 @@ class ACLScraper(BaseScraper):
 
     def __init__(self):
         super().__init__('acl')
-        
-        # Initialize Vertex AI from environment variables
-        project_id = os.getenv("GCP_PROJECT_ID")
-        location = os.getenv("GCP_LOCATION", "us-central1")
-        self.model_name = os.getenv("GEMINI_MODEL", "gemini-3-flash")
-
-        if project_id:
-            try:
-                vertexai.init(project=project_id, location=location)
-                self.model = GenerativeModel(
-                    model_name=self.model_name,
-                    system_instruction=_SYSTEM_PROMPT
-                )
-                logger.info(f"Vertex AI initialized with model {self.model_name}")
-            except Exception as e:
-                logger.error(f"Failed to initialize Vertex AI: {e}")
-                self.model = None
-        else:
-            logger.warning("GCP_PROJECT_ID not found in environment. LLM features will be disabled.")
-            self.model = None
+        self.model = create_gemini_model(_SYSTEM_PROMPT)
 
     # ------------------------------------------------------------------
     # Public interface
@@ -233,14 +211,9 @@ class ACLScraper(BaseScraper):
 
         try:
             # Generation configuration to ensure strict JSON output
-            config = GenerationConfig(
-                response_mime_type="application/json",
-                temperature=0.1  # Low temperature for more deterministic classification
-            )
-            
             response = self.model.generate_content(
                 user_message,
-                generation_config=config
+                generation_config=llm_json_config()
             )
             
             if not response.text:
@@ -253,7 +226,7 @@ class ACLScraper(BaseScraper):
                 return None
                 
             main = [t["name"] for t in result["tracks"] if t.get("is_full_regular")]
-            logger.info(f"Auto-labeled ACL {year} via {self.model_name}: main tracks = {main}")
+            logger.info(f"Auto-labeled ACL {year}: main tracks = {main}")
             return result
 
         except Exception as e:
