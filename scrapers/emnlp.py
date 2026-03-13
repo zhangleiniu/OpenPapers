@@ -26,12 +26,13 @@ import vertexai
 from vertexai.generative_models import GenerativeModel, GenerationConfig
 
 from .base import BaseScraper
+from config import CACHE_DIR
 
 load_dotenv()
 
 logger = logging.getLogger(__name__)
 
-_LABELED_PATH = "data/cache/emnlp_tracks.json"
+_LABELED_PATH = CACHE_DIR / "emnlp_tracks.json"
 
 _SYSTEM_PROMPT = """\
 You are a helper that classifies academic conference proceedings volumes.
@@ -266,13 +267,13 @@ class EMNLPScraper(BaseScraper):
             return None
 
     def _load_labeled(self) -> dict:
-        if os.path.exists(_LABELED_PATH):
+        if _LABELED_PATH.exists():
             with open(_LABELED_PATH) as f:
                 return json.load(f)
         return {}
 
     def _save_labeled(self, labeled: dict) -> None:
-        os.makedirs(os.path.dirname(_LABELED_PATH), exist_ok=True)
+        _LABELED_PATH.parent.mkdir(parents=True, exist_ok=True)
         with open(_LABELED_PATH, "w") as f:
             json.dump(labeled, f, indent=2)
         logger.info(f"Updated labeled tracks in {_LABELED_PATH}")

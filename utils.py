@@ -12,8 +12,6 @@ import logging
 
 from config import DEFAULT_REQUEST_DELAY, DEFAULT_RETRY_ATTEMPTS, DEFAULT_TIMEOUT, USER_AGENT
 
-# Setup logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 
@@ -150,7 +148,7 @@ def save_papers(papers: List[Dict], conference: str, year: int):
         from config import METADATA_DIR
         
         conf_dir = METADATA_DIR / conference
-        conf_dir.mkdir(exist_ok=True)
+        conf_dir.mkdir(parents=True, exist_ok=True)
         
         filepath = conf_dir / f"{conference}_{year}.json"
         

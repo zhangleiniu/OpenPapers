@@ -13,14 +13,15 @@ import vertexai
 from vertexai.generative_models import GenerativeModel, GenerationConfig
 
 from .base import BaseScraper
+from config import CACHE_DIR
 
 load_dotenv()
 
 logger = logging.getLogger(__name__)
 
 # ── Cache file paths ──────────────────────────────────────────────────────────
-_PAGES_CACHE  = "data/cache/aaai_pages.json"   # all issues + is_main_aaai label
-_TRACKS_CACHE = "data/cache/aaai_tracks.json"  # per-issue section labels
+_PAGES_CACHE  = CACHE_DIR / "aaai_pages.json"   # all issues + is_main_aaai label
+_TRACKS_CACHE = CACHE_DIR / "aaai_tracks.json"  # per-issue section labels
 
 # ── Archive base URL ──────────────────────────────────────────────────────────
 _ARCHIVE_BASE = "https://ojs.aaai.org/index.php/AAAI/issue/archive"
@@ -510,25 +511,25 @@ class AAAIScraper(BaseScraper):
     # ──────────────────────────────────────────────────────────────────────────
 
     def _load_pages_cache(self) -> dict:
-        if os.path.exists(_PAGES_CACHE):
+        if _PAGES_CACHE.exists():
             with open(_PAGES_CACHE) as f:
                 return json.load(f)
         return {}
 
     def _save_pages_cache(self, data: dict) -> None:
-        os.makedirs(os.path.dirname(_PAGES_CACHE), exist_ok=True)
+        _PAGES_CACHE.parent.mkdir(parents=True, exist_ok=True)
         with open(_PAGES_CACHE, "w") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
         logger.info(f"Saved {_PAGES_CACHE} ({len(data.get('issues', []))} issues)")
 
     def _load_tracks_cache(self) -> dict:
-        if os.path.exists(_TRACKS_CACHE):
+        if _TRACKS_CACHE.exists():
             with open(_TRACKS_CACHE) as f:
                 return json.load(f)
         return {}
 
     def _save_tracks_cache(self, data: dict) -> None:
-        os.makedirs(os.path.dirname(_TRACKS_CACHE), exist_ok=True)
+        _TRACKS_CACHE.parent.mkdir(parents=True, exist_ok=True)
         with open(_TRACKS_CACHE, "w") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
         logger.info(f"Saved {_TRACKS_CACHE} ({len(data)} issues labelled)")

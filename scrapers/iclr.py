@@ -21,6 +21,7 @@ from bs4 import BeautifulSoup
 from typing import List, Dict, Optional
 
 from .base import BaseScraper
+from config import CACHE_DIR
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +35,7 @@ _ARCHIVE_2015  = "https://iclr.cc/archive/www/doku.php%3Fid=iclr2015:accepted-ma
 _ARCHIVE_2016  = "https://iclr.cc/archive/www/doku.php%3Fid=iclr2016:accepted-main.html"
 
 # -- Shared cache --------------------------------------------------------------
-_CACHE_PATH = "data/cache/iclr_papers.json"
+_CACHE_PATH = CACHE_DIR / "iclr_papers.json"
 
 # -- Regex ---------------------------------------------------------------------
 _FORUM_RE    = re.compile(r'openreview\.net/forum\?id=([^"&\s]+)')
@@ -219,13 +220,13 @@ class ICLRScraper(BaseScraper):
         return papers
 
     def _load_cache(self) -> dict:
-        if os.path.exists(_CACHE_PATH):
+        if _CACHE_PATH.exists():
             with open(_CACHE_PATH) as f:
                 return json.load(f)
         return {}
 
     def _save_cache(self, cache: dict) -> None:
-        os.makedirs(os.path.dirname(_CACHE_PATH), exist_ok=True)
+        _CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
         with open(_CACHE_PATH, "w") as f:
             json.dump(cache, f, indent=2, ensure_ascii=False)
         logger.info(f"Saved cache → {_CACHE_PATH}")

@@ -9,10 +9,7 @@ from pathlib import Path
 DATA_ROOT = Path(os.getenv("SCRAPER_DATA_ROOT", "./data"))
 METADATA_DIR = DATA_ROOT / "metadata"
 PAPERS_DIR = DATA_ROOT / "papers"
-
-# Create directories
-METADATA_DIR.mkdir(parents=True, exist_ok=True)
-PAPERS_DIR.mkdir(parents=True, exist_ok=True)
+CACHE_DIR = DATA_ROOT / "cache"
 
 # Default HTTP settings
 DEFAULT_REQUEST_DELAY = 1.0
