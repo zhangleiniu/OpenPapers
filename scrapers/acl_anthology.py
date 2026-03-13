@@ -1,0 +1,285 @@
+"""Shared base class for conferences hosted on ACL Anthology.
+
+Covers ACL, EMNLP, and NAACL, which all share the same site structure
+(aclanthology.org) and the same LLM-assisted track filtering logic.
+
+Subclasses only need to declare their conference key via super().__init__():
+
+    class ACLScraper(ACLAnthologyScraper):
+        def __init__(self):
+            super().__init__('acl')
+"""
+
+import re
+import json
+import logging
+from bs4 import BeautifulSoup
+from typing import List, Dict, Optional
+from dotenv import load_dotenv
+
+from .base import BaseScraper
+from config import CACHE_DIR
+from utils import create_gemini_model, llm_json_config
+
+load_dotenv()
+
+logger = logging.getLogger(__name__)
+
+_SYSTEM_PROMPT = """\
+You are a helper that classifies academic conference proceedings volumes.
+Given a conference name, year, and a list of volume titles, decide which
+volumes are the main conference proceedings — the primary full-paper track(s)
+of the named conference itself.
+
+Mark is_full_regular as false for: workshops, tutorials, tutorial abstracts,
+student research workshops, system demonstrations, industry tracks, shared
+tasks, and co-located events not part of the named conference.
+
+Respond with a JSON object only, no explanation, no markdown fences.
+Schema:
+{
+  "tracks": [
+    {"name": "<exact name as given>", "is_full_regular": true | false},
+    ...
+  ]
+}
+"""
+
+
+class ACLAnthologyScraper(BaseScraper):
+    """Shared scraper for ACL Anthology conferences (ACL, EMNLP, NAACL)."""
+
+    def __init__(self, conference: str):
+        super().__init__(conference)
+        self._cache_path = CACHE_DIR / f"{conference}_tracks.json"
+        self.model = create_gemini_model(_SYSTEM_PROMPT)
+
+    # ------------------------------------------------------------------
+    # Public interface
+    # ------------------------------------------------------------------
+
+    def get_paper_urls(self, year: int) -> List[str]:
+        """Return paper URLs for the given year.
+
+        On first run, calls Gemini to identify main-conference tracks and
+        caches the result. Subsequent runs load from cache.
+        """
+        conf = self.conference.upper()
+        logger.info(f"Getting {conf} {year} paper URLs...")
+
+        all_tracks = self._get_track_names(year)
+        if not all_tracks:
+            logger.error(f"No tracks found for {conf} {year}")
+            return []
+
+        relevant_tracks = self._get_relevant_tracks(year, all_tracks)
+        if not relevant_tracks:
+            return []
+
+        logger.info(f"Relevant tracks for {year}: {relevant_tracks}")
+
+        paper_urls = []
+        for url in self._get_conference_urls(year, relevant_tracks):
+            logger.info(f"Fetching track: {url}")
+            response = self.session.get(url)
+            if not response:
+                continue
+            soup = BeautifulSoup(response.content, 'html.parser')
+            for strong_tag in soup.find_all('strong')[1:]:
+                a = strong_tag.find('a', href=True, class_='align-middle')
+                if a:
+                    paper_urls.append(self.base_url + a['href'])
+
+        logger.info(f"Found {len(paper_urls)} papers for {conf} {year}")
+        return paper_urls
+
+    def parse_paper(self, url: str) -> Optional[Dict]:
+        """Parse a single paper from its ACL Anthology page."""
+        try:
+            response = self.session.get(url)
+            if not response:
+                return None
+
+            soup = BeautifulSoup(response.content, 'html.parser')
+
+            title = self._extract_title(soup)
+            if not title:
+                logger.warning(f"No title found: {url}")
+                return None
+
+            paper = {
+                'id':       self._extract_paper_id(url),
+                'title':    title,
+                'authors':  self._extract_authors(soup),
+                'abstract': self._extract_abstract(soup),
+                'pdf_url':  self._extract_pdf_url(soup),
+            }
+
+            logger.debug(f"Parsed: {title!r} ({len(paper['authors'])} authors)")
+            return paper
+
+        except Exception as e:
+            logger.error(f"Failed to parse {url}: {e}")
+            return None
+
+    # ------------------------------------------------------------------
+    # Track helpers
+    # ------------------------------------------------------------------
+
+    def _get_track_names(self, year: int) -> list:
+        """Return all track names listed on the Anthology event page."""
+        url = f"{self.base_url}/events/{self.conference}-{year}/"
+        response = self.session.get(url)
+        if not response:
+            logger.error(f"Failed to fetch {url}")
+            return []
+        soup = BeautifulSoup(response.content, 'html.parser')
+        a_tags = [a for a in soup.find_all('a', href=True) if a.get('class') == ['align-middle']]
+        return [
+            a.get_text(strip=True).lower()
+            for a in a_tags
+            if a.find_parent('h4', class_="d-sm-flex pb-2 border-bottom")
+        ]
+
+    def _get_conference_urls(self, year: int, relevant_tracks: list) -> list:
+        """Return volume URLs for tracks that match relevant_tracks."""
+        try:
+            url = f"{self.base_url}/events/{self.conference}-{year}/"
+            response = self.session.get(url)
+            if not response:
+                return []
+            soup = BeautifulSoup(response.content, 'html.parser')
+            a_tags = [a for a in soup.find_all('a', href=True) if a.get('class') == ['align-middle']]
+            return [
+                self.base_url + a['href']
+                for a in a_tags
+                if a.find_parent('h4', class_="d-sm-flex pb-2 border-bottom")
+                and a.get_text(strip=True).lower() in relevant_tracks
+            ]
+        except Exception as e:
+            logger.error(f"Failed to get conference URLs: {e}")
+            return []
+
+    # ------------------------------------------------------------------
+    # Track labeling (LLM-assisted, with cache)
+    # ------------------------------------------------------------------
+
+    def _get_relevant_tracks(self, year: int, all_track_names: list) -> list:
+        """Return track names identified as main-conference proceedings.
+
+        Loads from cache if the year is already labeled. Otherwise calls
+        Gemini to label. If the API fails, writes a skeleton for manual
+        editing and returns [].
+        """
+        conf = self.conference.upper()
+        year_str = str(year)
+        labeled = self._load_labeled()
+
+        if year_str not in labeled:
+            logger.info(f"No labeled data for {conf} {year}. Attempting auto-labeling...")
+            year_data = self._auto_label(year, all_track_names)
+
+            if not year_data:
+                logger.warning(f"Auto-labeling could not be completed for {conf} {year}.")
+                year_data = {
+                    "tracks": [{"name": name, "is_full_regular": False} for name in all_track_names]
+                }
+                labeled[year_str] = year_data
+                self._save_labeled(labeled)
+                logger.error(
+                    f"Auto-labeling failed for {conf} {year}. "
+                    f"Please manually edit {self._cache_path} and set "
+                    f"'is_full_regular': true for main tracks, then rerun."
+                )
+                return []
+
+            labeled[year_str] = year_data
+            self._save_labeled(labeled)
+
+        return [
+            t["name"]
+            for t in labeled[year_str]["tracks"]
+            if t.get("is_full_regular")
+        ]
+
+    def _auto_label(self, year: int, track_names: list) -> Optional[dict]:
+        """Call Gemini to label tracks. Returns dict or None on failure."""
+        if not self.model:
+            logger.error("Gemini model not initialized. Skipping API call.")
+            return None
+
+        conf = self.conference.upper()
+        user_message = (
+            f"Conference: {conf}\n"
+            f"Year: {year}\n\n"
+            f"Volumes:\n" +
+            "\n".join(f"- {name}" for name in track_names)
+        )
+
+        try:
+            response = self.model.generate_content(
+                user_message,
+                generation_config=llm_json_config()
+            )
+            if not response.text:
+                return None
+
+            result = json.loads(response.text.strip())
+            if "tracks" not in result or not isinstance(result["tracks"], list):
+                logger.error(f"Unexpected JSON structure from Gemini for {conf} {year}")
+                return None
+
+            main = [t["name"] for t in result["tracks"] if t.get("is_full_regular")]
+            logger.info(f"Auto-labeled {conf} {year}: main tracks = {main}")
+            return result
+
+        except Exception as e:
+            logger.error(f"Gemini API call or parsing failed: {e}")
+            return None
+
+    def _load_labeled(self) -> dict:
+        if self._cache_path.exists():
+            with open(self._cache_path) as f:
+                return json.load(f)
+        return {}
+
+    def _save_labeled(self, labeled: dict) -> None:
+        self._cache_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(self._cache_path, "w") as f:
+            json.dump(labeled, f, indent=2)
+        logger.info(f"Updated labeled tracks in {self._cache_path}")
+
+    # ------------------------------------------------------------------
+    # HTML extraction helpers
+    # ------------------------------------------------------------------
+
+    def _extract_title(self, soup: BeautifulSoup) -> str:
+        h2 = soup.find('h2', id='title')
+        return h2.get_text(strip=True) if h2 else ""
+
+    def _extract_authors(self, soup: BeautifulSoup) -> List[str]:
+        p_tag = soup.find('p', class_='lead')
+        if not p_tag:
+            return []
+        return [a.get_text(strip=True) for a in p_tag.find_all('a', href=True)]
+
+    def _extract_abstract(self, soup: BeautifulSoup) -> str:
+        h5_tag = soup.find('h5', class_='card-title')
+        if h5_tag:
+            sibling = h5_tag.find_next_sibling('span')
+            if sibling:
+                return sibling.get_text(strip=True)
+        return ""
+
+    def _extract_paper_id(self, url: str) -> str:
+        match = re.search(r'https://aclanthology\.org/(.*)', url)
+        return match.group(1).rstrip('/') if match else ""
+
+    def _extract_pdf_url(self, soup: BeautifulSoup) -> str:
+        dt_tag = soup.find('dt', string='PDF:')
+        if not dt_tag:
+            return ""
+        dd_tag = dt_tag.find_next_sibling('dd')
+        if dd_tag and dd_tag.a:
+            return dd_tag.a['href']
+        return ""
