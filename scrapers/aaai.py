@@ -92,6 +92,10 @@ Schema:
 class AAAIScraper(BaseScraper):
     """AAAI conference scraper with dynamic issue discovery and LLM-based filtering."""
 
+    NAME = "AAAI"
+    BASE_URL = "https://aaai.org/"
+    REQUEST_DELAY = 0.2
+
     def __init__(self):
         super().__init__('aaai')
         self.issue_model = create_gemini_model(_ISSUE_SYSTEM_PROMPT)

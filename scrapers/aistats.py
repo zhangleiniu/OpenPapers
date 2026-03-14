@@ -26,6 +26,12 @@ class AISTATSScraper(BaseScraper):
     Each paper requires exactly one HTTP request in parse_paper.
     """
 
+    NAME = "AISTATS"
+    BASE_URL = "https://proceedings.mlr.press/"
+    REQUEST_DELAY = 0.15
+    TIMEOUT = 45
+
+
     def __init__(self):
         super().__init__('aistats')
         self._volume_cache: Dict[int, str] = {

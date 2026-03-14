@@ -2,7 +2,7 @@ from .acl_anthology import ACLAnthologyScraper
 
 
 class NAACLScraper(ACLAnthologyScraper):
-    """NAACL conference scraper (aclanthology.org)."""
+    NAME = "NAACL"
 
     def __init__(self):
         super().__init__('naacl')

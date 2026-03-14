@@ -34,6 +34,12 @@ logger = logging.getLogger(__name__)
 class ECCVScraper(BaseScraper):
     """ECCV conference scraper using ecva.net."""
 
+    NAME = "ECCV"
+    BASE_URL = "https://www.ecva.net/"
+    REQUEST_DELAY = 0.15
+    TIMEOUT = 45
+
+
     def __init__(self):
         super().__init__('eccv')
 

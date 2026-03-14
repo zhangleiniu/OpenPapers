@@ -48,6 +48,12 @@ class ICMLScraper(BaseScraper):
     Each paper requires exactly one HTTP request in parse_paper.
     """
 
+    NAME = "ICML"
+    BASE_URL = "https://proceedings.mlr.press/"
+    REQUEST_DELAY = 0.15
+    TIMEOUT = 45
+
+
     def __init__(self):
         super().__init__('icml')
         self._volume_cache: Dict[int, str] = {}  # year -> volume id, e.g. 2024 -> "v235"

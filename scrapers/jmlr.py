@@ -33,6 +33,12 @@ logger = logging.getLogger(__name__)
 class JMLRScraper(BaseScraper):
     """JMLR scraper."""
 
+    NAME = "JMLR"
+    BASE_URL = "https://www.jmlr.org"
+    REQUEST_DELAY = 0.15
+    TIMEOUT = 45
+
+
     def __init__(self):
         super().__init__('jmlr')
 

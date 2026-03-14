@@ -75,6 +75,11 @@ Schema:
 class IJCAIScraper(BaseScraper):
     """IJCAI conference scraper."""
 
+    NAME = "IJCAI"
+    BASE_URL = "https://www.ijcai.org/"
+    REQUEST_DELAY = 0.15
+    TIMEOUT = 45
+
     def __init__(self):
         super().__init__('ijcai')
         self.model = create_gemini_model(_SYSTEM_PROMPT)

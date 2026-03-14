@@ -8,7 +8,6 @@ from typing import Dict, Type, List
 from scrapers.neurips import NeurIPSScraper
 from scrapers.icml import ICMLScraper
 from scrapers.iclr import ICLRScraper
-from scrapers.iclr_1516 import ICLRScraper1516 
 from scrapers.aaai import AAAIScraper
 from scrapers.cvpr import CVPRScraper  
 from scrapers.colt import COLTScraper
@@ -21,9 +20,8 @@ from scrapers.emnlp import EMNLPScraper
 from scrapers.naacl import NAACLScraper
 from scrapers.iccv import ICCVScraper
 from scrapers.eccv import ECCVScraper
-from scrapers.iclr_web import ICLRWebScraper
 
-from config import CONFERENCES
+
 
 # Configure logging
 logging.basicConfig(
@@ -57,19 +55,10 @@ class ScraperFactory:
             'emnlp': EMNLPScraper, 
             'naacl': NAACLScraper,
             'iccv': ICCVScraper,
-            'eccv': ECCVScraper,
-            'iclr_web': ICLRWebScraper,
+            'eccv': ECCVScraper
         }
         
-        # Year-specific scraper mappings
-        self.year_specific_scrapers = {
-            'iclr': {
-                (2015, 2016): ICLRScraper1516,  # Use new scraper for 2015-2016
-                # Default ICLRScraper will be used for other years
-            }
-        
-        }
-    
+
     def get_available_conferences(self) -> list:
         """Get list of available conference scrapers."""
         return list(self.scrapers.keys())
@@ -82,25 +71,6 @@ class ScraperFactory:
             available = self.get_available_conferences()
             raise ValueError(f"Unknown conference: {conference}. Available: {available}")
         
-        # Check for year-specific scrapers
-        if years and conference in self.year_specific_scrapers:
-            year_mappings = self.year_specific_scrapers[conference]
-            
-            # Find the appropriate scraper based on years
-            for year_range, scraper_class in year_mappings.items():
-                if isinstance(year_range, tuple):
-                    start, end = year_range
-                    if all(start <= year <= end for year in years):
-                        logger.info(f"Using year-specific scraper for {conference} {years}: {scraper_class.__name__}")
-                        return scraper_class()
-                elif isinstance(year_range, list):
-                    if all(year in year_range for year in years):
-                        logger.info(f"Using year-specific scraper for {conference} {years}: {scraper_class.__name__}")
-                        return scraper_class()
-                elif isinstance(year_range, int):
-                    if all(year == year_range for year in years):
-                        logger.info(f"Using year-specific scraper for {conference} {years}: {scraper_class.__name__}")
-                        return scraper_class()
         
         # Use default scraper
         logger.info(f"Using default scraper for {conference}: {self.scrapers[conference].__name__}")
@@ -136,7 +106,7 @@ Examples:
     parser.add_argument('--verbose', '-v', action='store_true', help='Enable debug logging')
     
     args = parser.parse_args()
-    
+    print('hello')
     # Set log level
     if args.verbose:
         logging.getLogger().setLevel(logging.DEBUG)
@@ -147,10 +117,8 @@ Examples:
     # Handle list conferences
     if args.list_conferences:
         print("Available conferences:")
-        for conf in factory.get_available_conferences():
-            conf_info = CONFERENCES.get(conf, {})
-            name = conf_info.get('name', conf.upper())
-            print(f"  {conf}: {name}")
+        for conf, cls in factory.scrapers.items():
+            print(f"  {conf}: {cls.NAME or conf.upper()}")
         return
     
     # Validate arguments

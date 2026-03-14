@@ -40,6 +40,12 @@ class UAIScraper(BaseScraper):
     - 2019+:     proceedings.mlr.press (one abstract page per paper)
     """
 
+    NAME = "UAI"
+    BASE_URL = "https://proceedings.mlr.press/"
+    REQUEST_DELAY = 0.15
+    TIMEOUT = 45
+
+
     def __init__(self):
         super().__init__('uai')
         self._volume_cache: Dict[int, str] = {

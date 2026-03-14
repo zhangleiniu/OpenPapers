@@ -49,6 +49,10 @@ Schema:
 class ACLAnthologyScraper(BaseScraper):
     """Shared scraper for ACL Anthology conferences (ACL, EMNLP, NAACL)."""
 
+    BASE_URL = "https://aclanthology.org"
+    REQUEST_DELAY = 0.15
+    TIMEOUT = 45
+
     def __init__(self, conference: str):
         super().__init__(conference)
         self._cache_path = CACHE_DIR / f"{conference}_tracks.json"

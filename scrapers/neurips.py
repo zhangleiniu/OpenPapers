@@ -44,6 +44,11 @@ class NeurIPSScraper(BaseScraper):
     Handles both the pre-2022 (no track suffix) and 2022+ (track suffix) URL formats.
     """
 
+    NAME = "NeurIPS"
+    BASE_URL = "https://papers.nips.cc/"
+    REQUEST_DELAY = 0.1
+
+
     def __init__(self):
         super().__init__('neurips')
 

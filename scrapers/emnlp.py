@@ -2,7 +2,7 @@ from .acl_anthology import ACLAnthologyScraper
 
 
 class EMNLPScraper(ACLAnthologyScraper):
-    """EMNLP conference scraper (aclanthology.org)."""
+    NAME = "EMNLP"
 
     def __init__(self):
         super().__init__('emnlp')

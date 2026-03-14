@@ -123,6 +123,11 @@ class ICLRScraper(BaseScraper):
       others    → OpenReview API strategies (see _YEAR_CONFIG)
     """
 
+    NAME = "ICLR"
+    BASE_URL = "https://iclr.cc/"
+    REQUEST_DELAY = 0.15
+    TIMEOUT = 5
+
     def __init__(self):
         super().__init__('iclr')
         # In-memory paper cache: paper_id → paper dict

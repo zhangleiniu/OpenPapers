@@ -50,6 +50,11 @@ _YEAR_SPECIFIC_URLS = {
 class CVPRScraper(BaseScraper):
     """CVPR conference scraper using CVF Open Access."""
 
+    NAME = "CVPR"
+    BASE_URL = "https://openaccess.thecvf.com/"
+    REQUEST_DELAY = 0.1
+
+
     def __init__(self):
         super().__init__('cvpr')
 
