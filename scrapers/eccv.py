@@ -74,7 +74,7 @@ class ECCVScraper(BaseScraper):
                 for dt in panel.find_all('dt', class_='ptitle'):
                     a_tag = dt.find('a', href=True)
                     if a_tag:
-                        paper_urls.append(self.base_url + a_tag['href'])
+                        paper_urls.append(urljoin(self.base_url, a_tag['href']))
 
             logger.info(f"Found {len(paper_urls)} papers for ECCV {year}")
             return paper_urls

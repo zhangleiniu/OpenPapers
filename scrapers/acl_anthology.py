@@ -15,13 +15,10 @@ import json
 import logging
 from bs4 import BeautifulSoup
 from typing import List, Dict, Optional
-from dotenv import load_dotenv
 
 from .base import BaseScraper
 from config import CACHE_DIR
 from utils import create_gemini_model, llm_json_config
-
-load_dotenv()
 
 logger = logging.getLogger(__name__)
 

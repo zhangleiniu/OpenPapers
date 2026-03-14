@@ -13,7 +13,6 @@ All strategies populate the same cache format so results are interchangeable.
 """
 
 import json
-import os
 import re
 import logging
 from urllib.parse import urljoin
@@ -126,7 +125,7 @@ class ICLRScraper(BaseScraper):
     NAME = "ICLR"
     BASE_URL = "https://iclr.cc/"
     REQUEST_DELAY = 0.15
-    TIMEOUT = 5
+    TIMEOUT = 30
 
     def __init__(self):
         super().__init__('iclr')

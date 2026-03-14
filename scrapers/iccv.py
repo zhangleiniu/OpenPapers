@@ -25,7 +25,7 @@ import re
 import logging
 from bs4 import BeautifulSoup
 from typing import List, Dict, Optional
-
+from urllib.parse import urljoin
 from .base import BaseScraper
 
 logger = logging.getLogger(__name__)
@@ -73,7 +73,7 @@ class ICCVScraper(BaseScraper):
                 for dt in soup.find_all('dt'):
                     a_tag = dt.find('a', href=True)
                     if a_tag and a_tag['href']:
-                        paper_urls.append(self.base_url + a_tag['href'])
+                        paper_urls.append(urljoin(self.base_url, a_tag['href']))
 
             logger.info(f"Found {len(paper_urls)} papers for ICCV {year}")
             return paper_urls

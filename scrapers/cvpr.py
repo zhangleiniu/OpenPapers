@@ -79,7 +79,7 @@ class CVPRScraper(BaseScraper):
                 for dt in soup.find_all('dt'):
                     a_tag = dt.find('a', href=True)
                     if a_tag and a_tag['href']:
-                        paper_urls.append(self.base_url + a_tag['href'])
+                        paper_urls.append(urljoin(self.base_url, a_tag['href']))
 
             logger.info(f"Found {len(paper_urls)} papers for CVPR {year}")
             return paper_urls

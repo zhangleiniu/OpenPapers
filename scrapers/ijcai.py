@@ -34,18 +34,15 @@ Track filtering:
 """
 
 import re
-import os
 import json
 import logging
 from bs4 import BeautifulSoup
 from typing import List, Dict, Optional
-from dotenv import load_dotenv
+from urllib.parse import urljoin
 
 from .base import BaseScraper
 from config import CACHE_DIR
 from utils import create_gemini_model, llm_json_config
-
-load_dotenv()
 
 logger = logging.getLogger(__name__)
 
@@ -126,7 +123,7 @@ class IJCAIScraper(BaseScraper):
             for div in section.find_all('div', class_='details'):
                 a_tags = div.find_all('a', href=True)
                 if len(a_tags) >= 2:
-                    paper_urls.append(self.base_url + a_tags[1]['href'])
+                    paper_urls.append(urljoin(self.base_url, a_tags[1]['href']))
 
         logger.info(f"Found {len(paper_urls)} papers for IJCAI {year}")
         return paper_urls
