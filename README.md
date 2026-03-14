@@ -12,7 +12,7 @@ It automatically filters out non-archival content like workshop papers, extended
 
 - **NeurIPS**(1987–2024)
 - **ICML**(2013–2025)
-- **ICLR**(2017–2025) 
+- **ICLR**(2015–2025) 
 - **AAAI**(2010–2025)
 - **CVPR**(2012-2025)
 - **COLT**(2011-2025)
@@ -47,10 +47,20 @@ It automatically filters out non-archival content like workshop papers, extended
 pip install -r requirements.txt
 ```
 
-3. Create a `.env` file (optional) to configure data directory:
+3. Create a `.env` file (optional) to configure paths and Google Cloud credentials:
 ```bash
+# Data storage root (default: ./data)
 SCRAPER_DATA_ROOT=./data
+
+# Log file path (default: scraper.log in project root)
+SCRAPER_LOG_FILE=scraper.log
+
+# Required for AAAI, ACL, EMNLP, NAACL, and IJCAI scrapers (LLM track filtering)
+GCP_PROJECT_ID=your-project-id
+GCP_LOCATION=us-central1
+GEMINI_MODEL=gemini-2.5-flash
 ```
+See [Google Cloud Setup](./docs/GOOGLE_CLOUD_SETUP.md) for Vertex AI configuration.
 
 ## Usage
 
