@@ -3,25 +3,23 @@
 
 import argparse
 import logging
-from typing import Dict, Type, List
+from typing import List
 
 from scrapers.neurips import NeurIPSScraper
 from scrapers.icml import ICMLScraper
 from scrapers.iclr import ICLRScraper
 from scrapers.aaai import AAAIScraper
-from scrapers.cvpr import CVPRScraper  
+from scrapers.cvpr import CVPRScraper
 from scrapers.colt import COLTScraper
-from scrapers.uai import UAIScraper 
+from scrapers.uai import UAIScraper
 from scrapers.aistats import AISTATSScraper
-from scrapers.jmlr import JMLRScraper  
+from scrapers.jmlr import JMLRScraper
 from scrapers.acl import ACLScraper
 from scrapers.ijcai import IJCAIScraper
 from scrapers.emnlp import EMNLPScraper
 from scrapers.naacl import NAACLScraper
 from scrapers.iccv import ICCVScraper
 from scrapers.eccv import ECCVScraper
-
-
 
 # Configure logging
 logging.basicConfig(
@@ -35,46 +33,31 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
+SCRAPERS = {
+    'neurips': NeurIPSScraper,
+    'icml':    ICMLScraper,
+    'iclr':    ICLRScraper,
+    'aaai':    AAAIScraper,
+    'cvpr':    CVPRScraper,
+    'iccv':    ICCVScraper,
+    'colt':    COLTScraper,
+    'uai':     UAIScraper,
+    'aistats': AISTATSScraper,
+    'jmlr':    JMLRScraper,
+    'eccv':    ECCVScraper,
+    'acl':     ACLScraper,
+    'emnlp':   EMNLPScraper,
+    'naacl':   NAACLScraper,
+    'ijcai':   IJCAIScraper,
+}
 
-class ScraperFactory:
-    """Factory to create conference scrapers with year-specific handling."""
-    
-    def __init__(self):
-        self.scrapers: Dict[str, Type] = {
-            'neurips': NeurIPSScraper,
-            'icml': ICMLScraper,
-            'iclr': ICLRScraper,
-            'aaai': AAAIScraper,
-            'cvpr': CVPRScraper, 
-            'colt': COLTScraper,
-            'uai': UAIScraper, 
-            'aistats': AISTATSScraper, 
-            'jmlr': JMLRScraper, 
-            'acl': ACLScraper, 
-            'ijcai': IJCAIScraper , 
-            'emnlp': EMNLPScraper, 
-            'naacl': NAACLScraper,
-            'iccv': ICCVScraper,
-            'eccv': ECCVScraper
-        }
-        
 
-    def get_available_conferences(self) -> list:
-        """Get list of available conference scrapers."""
-        return list(self.scrapers.keys())
-    
-    def create_scraper(self, conference: str, years: List[int] = None):
-        """Create a scraper for the given conference and years."""
-        conference = conference.lower()
-        
-        if conference not in self.scrapers:
-            available = self.get_available_conferences()
-            raise ValueError(f"Unknown conference: {conference}. Available: {available}")
-        
-        
-        # Use default scraper
-        logger.info(f"Using default scraper for {conference}: {self.scrapers[conference].__name__}")
-        return self.scrapers[conference]()
+def create_scraper(conference: str):
+    """Instantiate and return a scraper for the given conference key."""
+    conference = conference.lower()
+    if conference not in SCRAPERS:
+        raise ValueError(f"Unknown conference: {conference}. Available: {list(SCRAPERS)}")
+    return SCRAPERS[conference]()
 
 
 def main():
@@ -84,85 +67,66 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Scrape NeurIPS 2022 with PDFs
   python main.py neurips 2022
-  
-  # Scrape ICLR 2015-2016 (uses specialized scraper)
-  python main.py iclr 2015 2016
-  
-  # Scrape multiple years, no PDFs
+  python main.py iclr 2017 2018 2019
   python main.py neurips 2020 2021 2022 --no-pdfs
-  
-  # List available conferences
   python main.py --list-conferences
         """
     )
-    
+
     parser.add_argument('conference', nargs='?', help='Conference to scrape')
     parser.add_argument('years', nargs='*', type=int, help='Years to scrape')
     parser.add_argument('--no-pdfs', action='store_true', help='Skip PDF downloads')
     parser.add_argument('--no-resume', action='store_true', help='Start fresh (ignore existing data)')
     parser.add_argument('--list-conferences', action='store_true', help='List available conferences')
     parser.add_argument('--verbose', '-v', action='store_true', help='Enable debug logging')
-    
+
     args = parser.parse_args()
-    print('hello')
-    # Set log level
+
     if args.verbose:
         logging.getLogger().setLevel(logging.DEBUG)
-    
-    # Create factory
-    factory = ScraperFactory()
-    
-    # Handle list conferences
+
     if args.list_conferences:
         print("Available conferences:")
-        for conf, cls in factory.scrapers.items():
-            print(f"  {conf}: {cls.NAME or conf.upper()}")
+        for key, cls in SCRAPERS.items():
+            print(f"  {key}: {cls.NAME or key.upper()}")
         return
-    
-    # Validate arguments
+
     if not args.conference:
         parser.print_help()
         return
-    
+
     if not args.years:
         print("Error: Please specify at least one year to scrape")
         return
-    
+
     try:
-        # Create scraper with year awareness
         logger.info(f"Creating scraper for {args.conference} {args.years}")
-        scraper = factory.create_scraper(args.conference, args.years)
-        
-        # Scrape papers
+        scraper = create_scraper(args.conference)
+
         if len(args.years) == 1:
-            # Single year
             papers = scraper.scrape_year(
                 args.years[0],
                 download_pdfs=not args.no_pdfs,
-                resume=not args.no_resume
+                resume=not args.no_resume,
             )
             print(f"\n✅ Completed! Scraped {len(papers)} papers for {args.years[0]}")
-        
         else:
-            # Multiple years
             results = scraper.scrape_multiple_years(
                 args.years,
                 download_pdfs=not args.no_pdfs,
-                resume=not args.no_resume
+                resume=not args.no_resume,
             )
-            
-            total_papers = sum(len(papers) for papers in results.values())
-            print(f"\n✅ Completed! Scraped {total_papers} papers total:")
+            total = sum(len(p) for p in results.values())
+            print(f"\n✅ Completed! Scraped {total} papers total:")
             for year, papers in results.items():
                 print(f"  {year}: {len(papers)} papers")
-    
+
     except Exception as e:
         logger.error(f"Scraping failed: {e}")
         print(f"❌ Error: {e}")
         return 1
-    
+
     return 0
 
 
