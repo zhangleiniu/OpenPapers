@@ -9,7 +9,7 @@ Known volume mappings (others discovered dynamically from the MLR Press main pag
 
 ## Coverage
 
-Currently scraped through **[YEAR]**.
+2013–2025
 
 ## Data fields
 

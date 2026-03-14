@@ -8,7 +8,7 @@ Note: ICCV is held in odd years only.
 
 ## Coverage
 
-Currently scraped through **[YEAR]**. Tested back to **[YEAR]**.
+2013-2025
 
 ## URL structure
 
