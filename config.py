@@ -11,6 +11,9 @@ METADATA_DIR = DATA_ROOT / "metadata"
 PAPERS_DIR = DATA_ROOT / "papers"
 CACHE_DIR = DATA_ROOT / "cache"
 
+# Log file - defaults to project root; override via SCRAPER_LOG_FILE env var
+LOG_FILE = Path(os.getenv("SCRAPER_LOG_FILE", "scraper.log"))
+
 # Default HTTP settings
 DEFAULT_REQUEST_DELAY = 1.0
 DEFAULT_RETRY_ATTEMPTS = 3

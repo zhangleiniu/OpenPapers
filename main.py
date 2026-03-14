@@ -3,6 +3,7 @@
 
 import argparse
 import logging
+import sys
 from typing import List
 
 from scrapers.neurips import NeurIPSScraper
@@ -20,6 +21,7 @@ from scrapers.emnlp import EMNLPScraper
 from scrapers.naacl import NAACLScraper
 from scrapers.iccv import ICCVScraper
 from scrapers.eccv import ECCVScraper
+from config import LOG_FILE
 
 # Configure logging
 logging.basicConfig(
@@ -27,7 +29,7 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.StreamHandler(),
-        logging.FileHandler('scraper.log')
+        logging.FileHandler(LOG_FILE),
     ]
 )
 
@@ -131,4 +133,4 @@ Examples:
 
 
 if __name__ == '__main__':
-    exit(main())
+    sys.exit(main())
