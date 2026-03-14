@@ -52,18 +52,30 @@ GEMINI_MODEL=gemini-2.5-flash
 
 ## 4. How Track Labeling Works
 
-On first run for a given conference year, the scraper:
+Five scrapers use Gemini to filter conference proceedings down to main-track
+papers only: **AAAI**, **ACL**, **EMNLP**, **NAACL**, and **IJCAI**.
 
-1. Fetches the full track listing from the ACL Anthology event page.
-2. Sends the list to Gemini, which returns a JSON identifying which tracks
-   are main-conference proceedings.
-3. Caches the result in `data/cache/{conference}_tracks.json`.
+On first run for a given conference year, each scraper:
+
+1. Fetches the list of issues or track sections from the conference's
+   proceedings page.
+2. Sends the list to Gemini, which returns a JSON object identifying which
+   entries are main-conference proceedings.
+3. Caches the result in `data/cache/{conference}_tracks.json` (AAAI also uses
+   a separate `data/cache/aaai_pages.json` for issue-level filtering).
 
 On subsequent runs, the cached result is used directly — no API call is made.
 
-**Manual overrides**: if Gemini misclassifies a track, edit the cache file
-directly (`"is_full_regular": false` → `true`) and rerun. The scraper will
-use your correction without calling the API again.
+**Manual overrides**: if Gemini misclassifies a track or issue, edit the
+relevant cache file directly (set `"is_full_regular": false` → `true`, or
+`"is_main_aaai": false` → `true` for AAAI) and rerun. The scraper will use
+your correction without calling the API again.
+
+**AAAI two-level filtering**: AAAI requires an extra level of classification.
+`aaai_pages.json` labels whole issues (e.g. "is this a main AAAI issue for
+year X?"), then `aaai_tracks.json` labels sections within each issue (e.g.
+"is this section IAAI/EAAI or main AAAI?"). Both caches are incremental —
+only new entries are sent to the API on each run.
 
 ---
 
