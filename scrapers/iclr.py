@@ -417,7 +417,7 @@ class ICLRScraper(BaseScraper):
         token = token_match.group(1)
 
         logger.info(f"POST {url} (Download Data)")
-        raw_resp = self.session.session.post(
+        raw_resp = self.session.post(
             url,
             data={
                 "csrfmiddlewaretoken": token,
@@ -428,8 +428,8 @@ class ICLRScraper(BaseScraper):
             headers={"Referer": url},
             timeout=60,
         )
-        if raw_resp.status_code != 200:
-            logger.error(f"POST failed: {raw_resp.status_code}")
+        if not raw_resp:
+            logger.error("POST request failed")
             return []
 
         try:

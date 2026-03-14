@@ -72,8 +72,15 @@ class RobustSession:
         self.rate_limited_until = 0
     
     def get(self, url: str, **kwargs) -> Optional[requests.Response]:
-        """Make GET request with comprehensive error handling."""
-        
+        """Make GET request with retry and rate-limit handling."""
+        return self._request("GET", url, **kwargs)
+
+    def post(self, url: str, **kwargs) -> Optional[requests.Response]:
+        """Make POST request with retry and rate-limit handling."""
+        return self._request("POST", url, **kwargs)
+
+    def _request(self, method: str, url: str, **kwargs) -> Optional[requests.Response]:
+        """Internal: execute an HTTP request with retries and rate limiting."""
         for attempt in range(self.retry_attempts + 1):
             try:
                 # Check if we're rate limited
@@ -81,32 +88,26 @@ class RobustSession:
                     wait_time = self.rate_limited_until - time.time()
                     logger.warning(f"Rate limited, waiting {wait_time:.1f}s")
                     time.sleep(wait_time)
-                
+
                 # Normal rate limiting
                 elapsed = time.time() - self.last_request
                 if elapsed < self.delay:
-                    sleep_time = self.delay - elapsed
-                    # Add small random jitter to avoid thundering herd
-                    sleep_time += random.uniform(0, 0.1)
+                    sleep_time = self.delay - elapsed + random.uniform(0, 0.1)
                     time.sleep(sleep_time)
-                
+
                 self.last_request = time.time()
-                
-                # Make request
-                response = self.session.get(url, timeout=self.timeout, **kwargs)
-                
-                # Handle different status codes
+
+                response = self.session.request(method, url, timeout=self.timeout, **kwargs)
+
                 if response.status_code == 200:
                     return response
                 elif response.status_code == 429:
-                    # Rate limited
                     retry_after = response.headers.get('Retry-After', 60)
                     self._handle_rate_limit(int(retry_after))
                     continue
                 elif response.status_code in [500, 502, 503, 504]:
-                    # Server errors - retry
                     logger.warning(f"Server error {response.status_code} for {url}, attempt {attempt + 1}")
-                    time.sleep(2 ** attempt)  # Exponential backoff
+                    time.sleep(2 ** attempt)
                     continue
                 elif response.status_code == 404:
                     logger.warning(f"Not found: {url}")
@@ -116,21 +117,21 @@ class RobustSession:
                     return None
                 else:
                     response.raise_for_status()
-                    
+
             except requests.exceptions.Timeout:
                 logger.warning(f"Timeout for {url}, attempt {attempt + 1}")
                 time.sleep(2 ** attempt)
-                
+
             except requests.exceptions.ConnectionError:
                 logger.warning(f"Connection error for {url}, attempt {attempt + 1}")
                 time.sleep(2 ** attempt)
-                
+
             except requests.exceptions.RequestException as e:
                 logger.error(f"Request failed for {url}: {e}")
                 if attempt == self.retry_attempts:
                     return None
                 time.sleep(2 ** attempt)
-        
+
         logger.error(f"All retry attempts failed for {url}")
         return None
     
