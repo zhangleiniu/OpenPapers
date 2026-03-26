@@ -64,7 +64,14 @@ class RobustSession:
                  retry_attempts: int = DEFAULT_RETRY_ATTEMPTS,
                  timeout: int = DEFAULT_TIMEOUT):
         self.session = requests.Session()
-        self.session.headers.update({'User-Agent': USER_AGENT})
+        self.session.headers.update({
+            'User-Agent': USER_AGENT,
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,application/pdf,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1',
+        })
         self.delay = delay
         self.retry_attempts = retry_attempts
         self.timeout = timeout

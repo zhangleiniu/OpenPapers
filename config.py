@@ -18,4 +18,4 @@ LOG_FILE = Path(os.getenv("SCRAPER_LOG_FILE", "scraper.log"))
 DEFAULT_REQUEST_DELAY = 1.0
 DEFAULT_RETRY_ATTEMPTS = 3
 DEFAULT_TIMEOUT = 30
-USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"

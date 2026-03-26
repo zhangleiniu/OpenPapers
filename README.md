@@ -12,7 +12,7 @@ It automatically filters out non-archival content like workshop papers, extended
 
 - **NeurIPS**(1987–2024)
 - **ICML**(2013–2025)
-- **ICLR**(2015–2025) 
+- **ICLR**(2015–2026) 
 - **AAAI**(2010–2025)
 - **CVPR**(2012-2025)
 - **COLT**(2011-2025)

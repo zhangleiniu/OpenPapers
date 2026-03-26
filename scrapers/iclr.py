@@ -1,12 +1,15 @@
 """ICLR scraper implementation.
 
-Covers all years from 2015 onwards via three internal strategies,
+Covers all years from 2015 onwards via four internal strategies,
 selected automatically by year:
 
   2015–2016  iclr.cc static archive pages + arXiv for abstracts
   2017–2025  OpenReview API (api.openreview.net / api2.openreview.net)
   2019       iclr.cc/Downloads JSON + virtualsite pages
              (faster than per-paper API for 2019: ~1 500 requests vs ~5 000)
+  2026+      papercopilot JSON (GitHub) — no "pdf" field in their data,
+             but the "site" field (openreview.net/forum?id=X) is converted
+             to a PDF URL by replacing "forum" with "pdf".
 
 Cache: data/cache/iclr_papers.json  (keyed by year string)
 All strategies populate the same cache format so results are interchangeable.
@@ -15,7 +18,7 @@ All strategies populate the same cache format so results are interchangeable.
 import json
 import re
 import logging
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse, parse_qs
 from bs4 import BeautifulSoup
 from typing import List, Dict, Optional
 
@@ -112,14 +115,27 @@ _ARCHIVE_URLS  = {
     2016: _ARCHIVE_2016,
 }
 
+# 2026+ use papercopilot JSON (OpenReview API lacks "pdf" field for these years)
+_PAPERCOPILOT_YEARS = {2026}
+_PAPERCOPILOT_URL_TMPL = (
+    "https://raw.githubusercontent.com/papercopilot/paperlists/main/iclr/iclr{year}.json"
+)
+_PAPERCOPILOT_URL_ALT_TMPL = (
+    "https://github.com/papercopilot/paperlists/raw/refs/heads/main/iclr/iclr{year}.json"
+)
+# Status keywords in papercopilot data that count as accepted main-track
+_PAPERCOPILOT_ACCEPTED = {"oral", "spotlight", "poster", "accept"}
+_PAPERCOPILOT_EXCLUDED_TRACKS = {"tiny", "workshop", "demo"}
+
 
 class ICLRScraper(BaseScraper):
-    """ICLR conference scraper (2015-2025).
+    """ICLR conference scraper (2015-2026+).
 
     Routing:
       2015-2016 → _strategy_archive (iclr.cc static pages + arXiv abstracts)
       2019      → _strategy_downloads (iclr.cc Downloads JSON + virtualsite)
-      others    → OpenReview API strategies (see _YEAR_CONFIG)
+      2017-2025 → OpenReview API strategies (see _YEAR_CONFIG)
+      2026+     → _strategy_papercopilot (papercopilot GitHub JSON)
     """
 
     NAME = "ICLR"
@@ -141,7 +157,7 @@ class ICLRScraper(BaseScraper):
 
     def get_paper_urls(self, year: int) -> List[str]:
         """Return paper URLs for all accepted ICLR papers in `year`."""
-        supported = _ARCHIVE_YEARS | _DOWNLOADS_YEARS | set(_YEAR_CONFIG)
+        supported = _ARCHIVE_YEARS | _DOWNLOADS_YEARS | set(_YEAR_CONFIG) | _PAPERCOPILOT_YEARS
         if year not in supported:
             logger.error(f"ICLR {year} not supported. Available: {sorted(supported)}")
             return []
@@ -210,6 +226,8 @@ class ICLRScraper(BaseScraper):
             papers = self._strategy_archive(year)
         elif year in _DOWNLOADS_YEARS:
             papers = self._strategy_downloads(year)
+        elif year in _PAPERCOPILOT_YEARS:
+            papers = self._strategy_papercopilot(year)
         else:
             notes  = self._fetch_accepted_notes(year)
             papers = [
@@ -474,6 +492,115 @@ class ICLRScraper(BaseScraper):
             return None
         m = _FORUM_RE.search(resp.text)
         return m.group(1) if m else None
+
+    # --------------------------------------------------------------------------
+    # Strategy: 2026+ (papercopilot GitHub JSON)
+    # --------------------------------------------------------------------------
+
+    def _strategy_papercopilot(self, year: int) -> List[Dict]:
+        """Fetch accepted papers from the papercopilot JSON on GitHub.
+
+        The papercopilot JSON has a "site" field (openreview.net/forum?id=X)
+        instead of a direct "pdf" field. We convert forum→pdf in the URL.
+        """
+        raw_entries = self._fetch_papercopilot_json(year)
+        if not raw_entries:
+            return []
+
+        logger.info(f"papercopilot: {len(raw_entries)} total entries for ICLR {year}")
+
+        papers = []
+        skipped = 0
+        for entry in raw_entries:
+            if not self._is_papercopilot_accepted(entry):
+                continue
+            paper = self._papercopilot_entry_to_paper(entry)
+            if paper:
+                papers.append(paper)
+            else:
+                skipped += 1
+
+        logger.info(
+            f"papercopilot: {len(papers)} accepted main-track papers "
+            f"({skipped} skipped — no valid site URL)"
+        )
+        return papers
+
+    def _fetch_papercopilot_json(self, year: int) -> List[Dict]:
+        """Download the papercopilot JSON from GitHub."""
+        urls = [
+            _PAPERCOPILOT_URL_TMPL.format(year=year),
+            _PAPERCOPILOT_URL_ALT_TMPL.format(year=year),
+        ]
+        for url in urls:
+            logger.info(f"Downloading papercopilot JSON: {url}")
+            resp = self.session.get(url)
+            if resp is None:
+                continue
+            try:
+                data = resp.json()
+                if isinstance(data, list):
+                    logger.info(f"Downloaded {len(data)} entries from papercopilot")
+                    return data
+            except Exception as e:
+                logger.warning(f"Failed to parse papercopilot JSON from {url}: {e}")
+                continue
+
+        logger.error(f"Could not download papercopilot JSON for ICLR {year}")
+        return []
+
+    @staticmethod
+    def _is_papercopilot_accepted(entry: Dict) -> bool:
+        """Check if a papercopilot entry is an accepted main-track paper."""
+        status = str(entry.get("status", "")).lower()
+        if not any(kw in status for kw in _PAPERCOPILOT_ACCEPTED):
+            return False
+        track = str(entry.get("track", "")).lower()
+        if track and any(excl in track for excl in _PAPERCOPILOT_EXCLUDED_TRACKS):
+            return False
+        return True
+
+    @staticmethod
+    def _map_papercopilot_status(raw_status: str) -> str:
+        """Normalise papercopilot status to our format (Oral/Spotlight/Poster)."""
+        low = raw_status.lower()
+        if "oral" in low:
+            return "Oral"
+        if "spotlight" in low:
+            return "Spotlight"
+        return "Poster"
+
+    def _papercopilot_entry_to_paper(self, entry: Dict) -> Optional[Dict]:
+        """Convert one papercopilot entry to our internal paper dict."""
+        site_url = entry.get("site", "") or entry.get("url", "")
+        if not site_url or "openreview.net" not in site_url:
+            return None
+
+        paper_id = self._extract_paper_id(site_url)
+        if not paper_id:
+            return None
+
+        # forum?id=X → pdf?id=X
+        pdf_url = site_url.replace("/forum?", "/pdf?")
+
+        # Authors: may be a list or a comma-separated string
+        authors_raw = entry.get("authors", [])
+        if isinstance(authors_raw, str):
+            authors = [a.strip() for a in authors_raw.split(",") if a.strip()]
+        elif isinstance(authors_raw, list):
+            authors = authors_raw
+        else:
+            authors = []
+
+        return {
+            "id":             paper_id,
+            "title":          entry.get("title", ""),
+            "authors":        authors,
+            "abstract":       entry.get("abstract", ""),
+            "keywords":       entry.get("keywords", []) if isinstance(entry.get("keywords"), list) else [],
+            "pdf_url":        pdf_url,
+            "openreview_url": site_url,
+        }
 
     # --------------------------------------------------------------------------
     # Strategy: OpenReview API (2017-2025 except 2019)

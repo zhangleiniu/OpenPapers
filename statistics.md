@@ -47,8 +47,8 @@
 | 2022 | 1,233 |
 | 2023 | 1,828 |
 | 2024 | 2,610 |
-| 2025 | 3,260 |
-| **Total** | **14,211** |
+| 2025 | 3,330 |
+| **Total** | **14,281** |
 
 ### ICLR (International Conference on Learning Representations)
 | Year | Papers |
