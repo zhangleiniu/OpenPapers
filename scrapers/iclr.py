@@ -13,6 +13,7 @@ All strategies populate the same cache format so results are interchangeable.
 """
 
 import json
+import os
 import re
 import logging
 from urllib.parse import urljoin
@@ -125,15 +126,46 @@ class ICLRScraper(BaseScraper):
     NAME = "ICLR"
     BASE_URL = "https://iclr.cc/"
     REQUEST_DELAY = 0.15
-    TIMEOUT = 30
+    TIMEOUT = 5
 
     def __init__(self):
         super().__init__('iclr')
-        # In-memory paper cache: paper_id → paper dict
-        # Populated by get_paper_urls so parse_paper needs zero extra requests
         self._paper_cache: Dict[str, Dict] = {}
-        # 2015-2016: keyed by arXiv URL
         self._archive_cache: Dict[str, Dict] = {}
+        self._openreview_token: Optional[str] = self._login_openreview()
+
+    def _login_openreview(self) -> Optional[str]:
+        """Login to OpenReview and return a bearer token.
+
+        Reads OPENREVIEW_USERNAME and OPENREVIEW_PASSWORD from the environment.
+        Required for accessing older conference data (pre-2024).
+        """
+        from dotenv import load_dotenv
+        load_dotenv()
+
+        username = os.getenv("OPENREVIEW_USERNAME")
+        password = os.getenv("OPENREVIEW_PASSWORD")
+        if not username or not password:
+            logger.warning("OPENREVIEW_USERNAME/PASSWORD not set — API access may be limited.")
+            return None
+
+        for api_base in [_API2, _API1]:
+            try:
+                resp = self.session.session.post(
+                    f"{api_base}/login",
+                    json={"id": username, "password": password},
+                    timeout=30,
+                )
+                if resp.status_code == 200:
+                    token = resp.json().get("token")
+                    if token:
+                        logger.info(f"Logged in to OpenReview via {api_base}")
+                        return token
+            except Exception as e:
+                logger.warning(f"Login failed via {api_base}: {e}")
+
+        logger.error("Could not log in to OpenReview — API requests may be forbidden.")
+        return None
 
     # --------------------------------------------------------------------------
     # Public interface
@@ -640,8 +672,9 @@ class ICLRScraper(BaseScraper):
     # --------------------------------------------------------------------------
 
     def _api_get(self, base: str, params: Dict) -> Optional[Dict]:
-        url  = base + "/notes"
-        resp = self.session.get(url, params=params)
+        url     = base + "/notes"
+        headers = {"Authorization": f"Bearer {self._openreview_token}"} if self._openreview_token else {}
+        resp    = self.session.get(url, params=params, headers=headers)
         if resp is None:
             logger.error(f"Request failed: {url} params={params}")
             return None
@@ -658,16 +691,13 @@ class ICLRScraper(BaseScraper):
     def _note_to_paper(self, note: Dict, url: str) -> Dict:
         content  = note.get("content", {})
         paper_id = note.get("id", "")
-        pdf = self._val(content.get("pdf", ""))
-        if pdf and not str(pdf).startswith("http"):
-            pdf = f"https://openreview.net{pdf}"
         return {
             "id":             paper_id,
             "title":          self._val(content.get("title",    "")),
             "authors":        self._val(content.get("authors",  [])),
             "abstract":       self._val(content.get("abstract", "")),
             "keywords":       self._val(content.get("keywords", [])),
-            "pdf_url":        pdf,
+            "pdf_url":        f"https://openreview.net/pdf?id={paper_id}",
             "openreview_url": url,
         }
 
