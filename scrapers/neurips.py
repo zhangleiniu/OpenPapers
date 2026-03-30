@@ -356,11 +356,13 @@ class NeurIPSScraper(BaseScraper):
     @staticmethod
     def _map_papercopilot_status(raw_status: str) -> str:
         """Normalise papercopilot status to Oral/Spotlight/Poster."""
-        low = raw_status.lower()
-        if "oral" in low:
+        low = raw_status.lower().replace(" ", "")
+        if "oral" in low or "conditionaloral" in low:
             return "Oral"
         if "spotlight" in low:
             return "Spotlight"
+        if "poster" in low or "conditionalposter" in low:
+            return "Poster"
         return "Poster"
 
     def _papercopilot_entry_to_paper(self, entry: Dict) -> Optional[Dict]:
@@ -376,7 +378,8 @@ class NeurIPSScraper(BaseScraper):
         # forum?id=X → pdf?id=X
         pdf_url = site_url.replace("/forum?", "/pdf?")
 
-        authors_raw = entry.get("authors", [])
+        # Authors: papercopilot uses "author" (singular), may be list or string
+        authors_raw = entry.get("author", entry.get("authors", []))
         if isinstance(authors_raw, str):
             authors = [a.strip() for a in authors_raw.split(",") if a.strip()]
         elif isinstance(authors_raw, list):
@@ -392,6 +395,8 @@ class NeurIPSScraper(BaseScraper):
             "keywords":       entry.get("keywords", []) if isinstance(entry.get("keywords"), list) else [],
             "pdf_url":        pdf_url,
             "openreview_url": site_url,
+            "pdf_downloaded": False,
+            "status":         self._map_papercopilot_status(entry.get("status", "")),
         }
 
     @staticmethod

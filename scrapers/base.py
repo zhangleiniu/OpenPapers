@@ -51,6 +51,7 @@ class BaseScraper(ABC):
         """Download PDF for a paper."""
         if not paper.get('pdf_url'):
             logger.warning(f"No PDF URL for paper {paper.get('id', 'unknown')}")
+            paper['pdf_downloaded'] = False
             return False
 
         try:
@@ -59,10 +60,14 @@ class BaseScraper(ABC):
             success = self.session.download_file(paper['pdf_url'], pdf_path)
             if success:
                 paper['pdf_path'] = str(pdf_path)
+                paper['pdf_downloaded'] = True
+            else:
+                paper['pdf_downloaded'] = False
             return success
 
         except Exception as e:
             logger.error(f"Failed to download PDF for {paper.get('id', 'unknown')}: {e}")
+            paper['pdf_downloaded'] = False
             return False
 
     def scrape_year(self, year: int, download_pdfs: bool = True,
@@ -91,7 +96,13 @@ class BaseScraper(ABC):
                     logger.info(f"Processing {i+1}/{len(paper_urls)}: {url.split('/')[-1]}")
 
                     if resume and url in existing_urls:
-                        logger.debug(f"Skipping existing paper: {url}")
+                        # Check if PDF was missing — retry download if so
+                        if download_pdfs:
+                            for ep in existing_papers:
+                                if ep.get('url') == url and not ep.get('pdf_path'):
+                                    logger.info(f"Retrying PDF for: {ep.get('id', 'unknown')}")
+                                    self.download_pdf(ep, year)
+                                    break
                         continue
 
                     paper = self.parse_paper(url)

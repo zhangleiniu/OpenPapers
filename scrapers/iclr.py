@@ -583,8 +583,8 @@ class ICLRScraper(BaseScraper):
         # forum?id=X → pdf?id=X
         pdf_url = site_url.replace("/forum?", "/pdf?")
 
-        # Authors: may be a list or a comma-separated string
-        authors_raw = entry.get("authors", [])
+        # Authors: papercopilot uses "author" (singular), may be list or string
+        authors_raw = entry.get("author", entry.get("authors", []))
         if isinstance(authors_raw, str):
             authors = [a.strip() for a in authors_raw.split(",") if a.strip()]
         elif isinstance(authors_raw, list):
@@ -600,6 +600,10 @@ class ICLRScraper(BaseScraper):
             "keywords":       entry.get("keywords", []) if isinstance(entry.get("keywords"), list) else [],
             "pdf_url":        pdf_url,
             "openreview_url": site_url,
+            "pdf_downloaded": False,
+            "status":         self._map_papercopilot_status(entry.get("status", "")),
+            "track":          "main",
+            "filter_mode":    "accepted_only",
         }
 
     # --------------------------------------------------------------------------
