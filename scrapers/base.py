@@ -59,7 +59,9 @@ class BaseScraper(ABC):
             pdf_path = PAPERS_DIR / self.conference / str(year) / filename
             success = self.session.download_file(paper['pdf_url'], pdf_path)
             if success:
-                paper['pdf_path'] = str(pdf_path)
+                # Store relative path
+                relative_path = f"data/papers/{self.conference}/{year}/{filename}"
+                paper['pdf_path'] = relative_path
                 paper['pdf_downloaded'] = True
             else:
                 paper['pdf_downloaded'] = False
@@ -80,6 +82,17 @@ class BaseScraper(ABC):
             existing_papers = load_papers(self.conference, year) if resume else []
             existing_urls = {p.get('url', '') for p in existing_papers}
 
+            # Retry downloading PDFs for papers with missing pdf_path
+            if resume and download_pdfs:
+                missing_pdf_count = 0
+                for paper in existing_papers:
+                    if not paper.get('pdf_path') and paper.get('pdf_url'):
+                        logger.info(f"Retrying PDF for: {paper.get('id', 'unknown')}")
+                        self.download_pdf(paper, year)
+                        missing_pdf_count += 1
+                if missing_pdf_count > 0:
+                    logger.info(f"Retried {missing_pdf_count} papers with missing PDFs")
+
             paper_urls = self.get_paper_urls(year)
             if not paper_urls:
                 logger.warning(f"No paper URLs found for {year}")
@@ -96,13 +109,6 @@ class BaseScraper(ABC):
                     logger.info(f"Processing {i+1}/{len(paper_urls)}: {url.split('/')[-1]}")
 
                     if resume and url in existing_urls:
-                        # Check if PDF was missing — retry download if so
-                        if download_pdfs:
-                            for ep in existing_papers:
-                                if ep.get('url') == url and not ep.get('pdf_path'):
-                                    logger.info(f"Retrying PDF for: {ep.get('id', 'unknown')}")
-                                    self.download_pdf(ep, year)
-                                    break
                         continue
 
                     paper = self.parse_paper(url)
