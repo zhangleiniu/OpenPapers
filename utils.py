@@ -104,7 +104,8 @@ class RobustSession:
 
                 self.last_request = time.time()
 
-                response = self.session.request(method, url, timeout=self.timeout, **kwargs)
+                timeout = kwargs.pop('timeout', self.timeout)
+                response = self.session.request(method, url, timeout=timeout, **kwargs)
 
                 if response.status_code == 200:
                     return response
