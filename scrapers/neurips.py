@@ -381,9 +381,10 @@ class NeurIPSScraper(BaseScraper):
         # Authors: papercopilot uses "author" (singular), may be list or string
         authors_raw = entry.get("author", entry.get("authors", []))
         if isinstance(authors_raw, str):
-            authors = [a.strip() for a in authors_raw.split(",") if a.strip()]
+            parts = re.split(r"[;,]", authors_raw)
+            authors = [a.strip() for a in parts if a.strip()]
         elif isinstance(authors_raw, list):
-            authors = authors_raw
+            authors = [a.strip() for a in authors_raw if isinstance(a, str) and a.strip()]
         else:
             authors = []
 
