@@ -2,6 +2,7 @@
 requests>=2.28.0
 beautifulsoup4>=4.11.0
 python-dotenv>=1.0.0
+brotli>=1.1.0
 
 # Google Cloud / Vertex AI (required for AAAI, ACL, EMNLP, NAACL, IJCAI scrapers)
 # Provides the `vertexai` package used in utils.create_gemini_model()
