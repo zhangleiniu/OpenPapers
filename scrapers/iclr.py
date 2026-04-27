@@ -1,8 +1,10 @@
 """ICLR scraper implementation.
 
-Covers all years from 2015 onwards via four internal strategies,
+Covers all years from 2013 onwards via several internal strategies,
 selected automatically by year:
 
+  2013       OpenReview API (decision field in content)
+  2014       iclr.cc archive page + OpenReview title matching
   2015–2016  iclr.cc static archive pages + arXiv for abstracts
   2017–2026  OpenReview API (api.openreview.net / api2.openreview.net)
   2019       iclr.cc/Downloads JSON + virtualsite pages
@@ -46,6 +48,21 @@ _ACCEPTED_VENUES = {"oral", "spotlight", "poster"}
 
 # -- Per-year API config (2017-2025) ------------------------------------------
 _YEAR_CONFIG = {
+    # Group Z: early years with decision in content field
+    2013: {
+        "strategy":   "decision_content",
+        "api":        _API1,
+        "invitation": "ICLR.cc/2013/conference/-/submission",
+        "accept_prefixes": ["conferenceOral-iclr2013-conference",
+                            "conferencePoster-iclr2013-conference"],
+    },
+    2014: {
+        "strategy":        "archive_match",
+        "api":             _API1,
+        "invitation":      "ICLR.cc/2014/conference/-/submission",
+        "archive_url":     "https://iclr.cc/archive/2014/conference-proceedings/",
+    },
+
     # Group A: venue field in submission note
     2017: {
         "strategy":   "venue",
@@ -120,9 +137,11 @@ _ARCHIVE_URLS  = {
 
 
 class ICLRScraper(BaseScraper):
-    """ICLR conference scraper (2015-2026+).
+    """ICLR conference scraper (2013-2026+).
 
     Routing:
+      2013      → _strategy_decision_content (OpenReview decision field)
+      2014      → _strategy_archive_match (iclr.cc archive + OpenReview)
       2015-2016 → _strategy_archive (iclr.cc static pages + arXiv abstracts)
       2019      → _strategy_downloads (iclr.cc Downloads JSON + virtualsite)
       2017-2026 → OpenReview API strategies (see _YEAR_CONFIG)
@@ -533,6 +552,8 @@ class ICLRScraper(BaseScraper):
         config   = _YEAR_CONFIG[year]
         strategy = config["strategy"]
         dispatch = {
+            "decision_content":  self._strategy_decision_content,
+            "archive_match":     self._strategy_archive_match,
             "venue":              self._strategy_venue,
             "bulk_decision":      self._strategy_bulk_decision,
             "per_paper_decision": self._strategy_per_paper_decision,
@@ -540,6 +561,64 @@ class ICLRScraper(BaseScraper):
             "venueid":            self._strategy_venueid,
         }
         return dispatch[strategy](config)
+
+    def _strategy_decision_content(self, config: Dict) -> List[Dict]:
+        """2013: filter by decision field in note content."""
+        notes = self._paginate(config["api"], config["invitation"])
+        prefixes = config["accept_prefixes"]
+        accepted = [
+            n for n in notes
+            if any(n.get("content", {}).get("decision", "").startswith(p)
+                   for p in prefixes)
+        ]
+        logger.info(f"decision_content: {len(accepted)}/{len(notes)} accepted")
+        return accepted
+
+    def _strategy_archive_match(self, config: Dict) -> List[Dict]:
+        """2014: match iclr.cc archive page titles against OpenReview submissions."""
+        # Fetch accepted titles from iclr.cc archive
+        resp = self.session.get(config["archive_url"])
+        if not resp:
+            logger.error(f"Failed to fetch {config['archive_url']}")
+            return []
+
+        soup = BeautifulSoup(resp.content, 'html.parser')
+        body_text = soup.get_text()
+        start = body_text.find("Listed below")
+        if start < 0:
+            logger.error("Could not find paper list in archive page")
+            return []
+
+        # Extract titles: each line has "Title    Authors" separated by whitespace
+        raw = body_text[start:]
+        # Split on known author-separator pattern (multiple spaces before author names)
+        entries = re.split(r'\s{4,}', raw)
+        accepted_titles = set()
+        for entry in entries:
+            entry = entry.strip()
+            if not entry or entry.startswith("Listed below") or len(entry) < 10:
+                continue
+            # Titles contain no semicolons; author lists do
+            if ';' not in entry:
+                accepted_titles.add(self._normalize_title(entry))
+
+        logger.info(f"Found {len(accepted_titles)} accepted titles from archive page")
+
+        # Fetch all submissions from OpenReview and match
+        notes = self._paginate(config["api"], config["invitation"])
+        accepted = [
+            n for n in notes
+            if self._normalize_title(n.get("content", {}).get("title", ""))
+            in accepted_titles
+        ]
+        logger.info(f"archive_match: {len(accepted)}/{len(notes)} matched")
+        return accepted
+
+    @staticmethod
+    def _normalize_title(title: str) -> str:
+        """Lowercase, collapse whitespace, strip punctuation for fuzzy matching."""
+        title = re.sub(r'[^\w\s]', '', title.lower())
+        return re.sub(r'\s+', ' ', title).strip()
 
     def _strategy_venue(self, config: Dict) -> List[Dict]:
         notes    = self._paginate(config["api"], config["invitation"])
