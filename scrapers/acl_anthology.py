@@ -28,8 +28,11 @@ Given a conference name, year, and a list of volume titles, decide which
 volumes are the main conference proceedings — the primary full-paper track(s)
 of the named conference itself.
 
+Mark is_full_regular as true for: main conference long papers, short papers,
+and industry track papers published as part of the named conference.
+
 Mark is_full_regular as false for: workshops, tutorials, tutorial abstracts,
-student research workshops, system demonstrations, industry tracks, shared
+student research workshops, system demonstrations, shared
 tasks, and co-located events not part of the named conference.
 
 Respond with a JSON object only, no explanation, no markdown fences.
