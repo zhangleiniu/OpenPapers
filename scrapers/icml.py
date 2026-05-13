@@ -132,14 +132,30 @@ class ICMLScraper(BaseScraper):
 
         soup = BeautifulSoup(response.content, 'html.parser')
 
-        # Pattern matches: "Proceedings of ICML 2024" or "ICML 2024 Proceedings"
-        icml_pattern = re.compile(
-            rf'\b(?:Proceedings\s+of\s+ICML\s+{year}|ICML\s+{year}\s+Proceedings)\b',
+        # Match any listing that mentions ICML and the target year
+        icml_pattern = re.compile(rf'\bICML\s+{year}\b', re.IGNORECASE)
+
+        # The main proceedings title is always:
+        #   "Proceedings of ICML YYYY" or
+        #   "Proceedings of the Nth International Conference on Machine Learning"
+        # Satellite events have titles like:
+        #   "Proceedings of GRaM at ICML 2024"
+        #   "TerraBytes at ICML 2025"
+        #   "Proceedings of ICML 2022 Workshop on ..."
+        # Key pattern: main proceedings say "Proceedings of ICML YYYY" with
+        # nothing between "of" and "ICML", or "International Conference on ML"
+        main_pattern = re.compile(
+            rf'Proceedings\s+of\s+(?:the\s+\d+\w*\s+)?'
+            rf'(?:International\s+Conference\s+on\s+Machine\s+Learning|ICML)\s*'
+            rf'(?:,\s*)?{year}\s*$',
             re.IGNORECASE
         )
 
+        candidates = []  # list of (volume_id, link_text, is_main)
+
         for li in soup.find_all('li'):
-            if not icml_pattern.search(li.get_text()):
+            text = li.get_text()
+            if not icml_pattern.search(text):
                 continue
             link = li.find('a', href=True)
             if not link:
@@ -147,12 +163,32 @@ class ICMLScraper(BaseScraper):
             href = link['href'].strip('/')
             if _VOLUME_HREF_RE.match(href):
                 volume = href if href.startswith('v') else f"v{href}"
-                self._volume_cache[year] = volume
-                logger.info(f"Found ICML {year} -> {volume}")
-                return volume
+                is_main = bool(main_pattern.search(text))
+                candidates.append((volume, text.strip(), is_main))
 
-        logger.warning(f"No ICML volume found for year {year}")
-        return None
+        if not candidates:
+            logger.warning(f"No ICML volume found for year {year}")
+            return None
+
+        # Prefer main proceedings volumes over satellite/workshop volumes
+        main_candidates = [(vol, txt) for vol, txt, main in candidates if main]
+
+        if main_candidates:
+            chosen, txt = main_candidates[0]
+        else:
+            # No clear main proceedings — take the first candidate
+            chosen, txt = candidates[0][0], candidates[0][1]
+
+        if len(candidates) > 1:
+            logger.info(
+                f"Found {len(candidates)} ICML {year} volumes, "
+                f"selected {chosen} ({txt!r})"
+            )
+        else:
+            logger.info(f"Found ICML {year} -> {chosen}")
+
+        self._volume_cache[year] = chosen
+        return chosen
 
     def _extract_paper_links(self, html: bytes, volume: str) -> List[str]:
         """Extract abstract-page URLs from a volume page."""
