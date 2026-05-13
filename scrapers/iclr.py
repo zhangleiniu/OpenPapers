@@ -311,6 +311,12 @@ class ICLRScraper(BaseScraper):
 
         for header in page_div.find_all('h3'):
             track_name = header.get_text(strip=True)
+
+            # Skip workshop tracks — only include main conference papers
+            if 'workshop' in track_name.lower():
+                logger.info(f"Skipping workshop track: {track_name}")
+                continue
+
             level3_div = None
             current = header
             while current:
