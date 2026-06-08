@@ -265,6 +265,15 @@ class ICLRScraper(BaseScraper):
                 self._note_to_paper(n, f"https://openreview.net/forum?id={n['id']}")
                 for n in notes
             ]
+            if year == 2013:
+                # 2013 papers are arXiv submissions; the OpenReview pdf link
+                # redirects to the arXiv abstract page, so point pdf_url at the
+                # real arXiv PDF instead.
+                for p in papers:
+                    r = self.session.get(p["pdf_url"])
+                    arxiv_id = self._extract_arxiv_id(r.url) if r else None
+                    if arxiv_id:
+                        p["pdf_url"] = f"https://arxiv.org/pdf/{arxiv_id}.pdf"
 
         if papers:
             cache[str(year)] = papers
@@ -492,6 +501,8 @@ class ICLRScraper(BaseScraper):
 
         if not paper.get('abstract'):
             paper['abstract'] = self._fetch_arxiv_abstract(paper.get('id', ''))
+        if not paper.get('authors'):
+            paper['authors'] = self._fetch_arxiv_authors(paper.get('id', ''))
 
         logger.debug(f"Parsed: {paper['title']!r} ({len(paper['authors'])} authors)")
         return paper
@@ -511,6 +522,19 @@ class ICLRScraper(BaseScraper):
         except Exception as e:
             logger.error(f"Error fetching arXiv abstract for {arxiv_id}: {e}")
         return ""
+    
+    def _fetch_arxiv_authors(self, arxiv_id: str) -> list:
+        try:
+            resp = self.session.get(f"https://arxiv.org/abs/{arxiv_id}")
+            if not resp:
+                return []
+            soup = BeautifulSoup(resp.content, 'html.parser')
+            authdiv = soup.find('div', class_='authors')
+            if authdiv:
+                return [a.get_text(strip=True) for a in authdiv.find_all('a')]
+        except Exception as e:
+            logger.error(f"Error fetching arXiv authors for {arxiv_id}: {e}")
+        return []
 
     # --------------------------------------------------------------------------
     # Strategy: 2019 (iclr.cc Downloads JSON + virtualsite pages)
@@ -568,6 +592,12 @@ class ICLRScraper(BaseScraper):
             if not forum_id:
                 failed += 1
                 logger.warning(f"No forum ID for: {raw.get('name', '?')[:60]}")
+                continue
+
+            abstract = raw.get("abstract", "")
+            if not abstract.strip():
+                failed += 1
+                logger.warning(f"Skipping non-paper entry: {raw.get('name', '?')[:60]}")
                 continue
 
             authors_str = raw.get("speakers/authors", "")
