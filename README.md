@@ -13,11 +13,11 @@ It automatically filters out non-archival content like workshop papers, extended
 - **NeurIPS**(1987–2024)
 - **ICML**(2013–2025)
 - **ICLR**(2015–2026) 
-- **AAAI**(2010–2025)
+- **AAAI**(2010–2026)
 - **CVPR**(2012-2025)
 - **COLT**(2011-2025)
 - **UAI**(2015-2025)
-- **JMLR**(2000-2025)
+- **JMLR**(2000-2026)
 - **AISTATS**(2009-2025)
 - **IJCAI**(2017-2025)
 - **ACL**(2017-2025)
@@ -127,4 +127,10 @@ The scraper generates detailed logs saved to `scraper.log` and displays progress
 
 ## Motivation
 
-In recent years, the rapid growth of AI and machine learning research has resulted in an overwhelming number of papers published annually, making it increasingly difficult for researchers to stay up to date with developments in their specific subfields. While platforms like Google Scholar, Semantic Scholar, OpenReview, and Paper Copilot attempt to aggregate publication data, our observations suggest that these sources often suffer from incomplete coverage and noisy metadata. To address this gap, we developed a suite of dedicated scrapers targeting the top-tier AI/ML conferences and journals, aiming to build a high-quality, comprehensive dataset of research papers. Our system extracts reliable metadata and downloads full PDFs, which can later be processed using tools like GROBID for structured content analysis. This curated dataset is intended to power downstream applications such as research limitation analysis, citation and reference recommendation, and intelligent paper reading recommendation. Our current focus spans conferences from 2013-ish onward—when deep learning began reshaping the field—though earlier years may also be partially included. 
+In recent years, the rapid growth of AI and machine learning research has resulted in an overwhelming number of papers published annually, making it increasingly difficult for researchers to stay up to date with developments in their specific subfields. While platforms like Google Scholar, Semantic Scholar, OpenReview, and Paper Copilot attempt to aggregate publication data, our observations suggest that these sources often suffer from incomplete coverage and noisy metadata. To address this gap, we developed a suite of dedicated scrapers targeting the top-tier AI/ML conferences and journals, aiming to build a high-quality, comprehensive dataset of research papers. Our system extracts reliable metadata and downloads full PDFs, which can later be processed using tools like GROBID for structured content analysis. This curated dataset is intended to power downstream applications such as research limitation analysis, citation and reference recommendation, and intelligent paper reading recommendation. Our current focus spans conferences from 2013-ish onward—when deep learning began reshaping the field—though earlier years may also be partially included.
+
+
+## Limitations
+ 
+- **Missing abstracts for some papers.** A number of entries have an empty `abstract` field. This is **not a scraping bug** — those abstracts are absent from the source pages themselves, so there is nothing for the scraper to extract at collection time. The most affected are the older ACL Anthology proceedings, namely **NAACL 2013, 2015, and 2016**, for which the Anthology did not record abstracts; a handful of other older entries (for example, some early JMLR) are affected for the same reason. The scraper stores whatever the source provides and leaves `abstract` empty otherwise, so anyone reproducing the dataset with this tool will see the same gaps.
+  If you need complete abstracts, you can backfill them from the downloaded PDFs — the PDFs for these papers are already included, so no re-downloading is required. Extracting the abstract text from each PDF (for example, by parsing the first page with GROBID or Nougat) and writing it back into the `abstract` field is sufficient.
