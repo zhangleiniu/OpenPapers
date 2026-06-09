@@ -13,11 +13,11 @@ It automatically filters out non-archival content like workshop papers, extended
 - **NeurIPS**(1987–2024)
 - **ICML**(2013–2025)
 - **ICLR**(2015–2026) 
-- **AAAI**(2010–2026)
+- **AAAI**(2010–2025)
 - **CVPR**(2012-2025)
 - **COLT**(2011-2025)
 - **UAI**(2015-2025)
-- **JMLR**(2000-2026)
+- **JMLR**(2000-2025)
 - **AISTATS**(2009-2025)
 - **IJCAI**(2017-2025)
 - **ACL**(2017-2025)
@@ -33,6 +33,7 @@ It automatically filters out non-archival content like workshop papers, extended
 ## Features
 
 - Scrapes paper metadata (title, authors, abstract)
+- Generates a BibTeX citation (`bibtex` field) for each paper automatically
 - Downloads PDFs automatically
 - Resume capability for interrupted scraping
 - Year-specific scrapers for different conference formats
@@ -131,6 +132,7 @@ In recent years, the rapid growth of AI and machine learning research has result
 
 
 ## Limitations
- 
-- **Missing abstracts for some papers.** A number of entries have an empty `abstract` field. This is **not a scraping bug** — those abstracts are absent from the source pages themselves, so there is nothing for the scraper to extract at collection time. The most affected are the older ACL Anthology proceedings, namely **NAACL 2013, 2015, and 2016**, for which the Anthology did not record abstracts; a handful of other older entries (for example, some early JMLR) are affected for the same reason. The scraper stores whatever the source provides and leaves `abstract` empty otherwise, so anyone reproducing the dataset with this tool will see the same gaps.
+
+- **Missing abstracts for some papers.** A number of entries have an empty `abstract` field. This is **not a scraping bug** — those abstracts are absent from the source pages themselves, so there is nothing for the scraper to extract at collection time. The most affected are the older ACL Anthology proceedings, namely **NAACL 2013, 2015, and 2016**, for which the Anthology did not record abstracts; a handful of other older entries (for example, some early JMLR and AAAI papers) are affected for the same reason. The scraper stores whatever the source provides and leaves `abstract` empty otherwise, so anyone reproducing the dataset with this tool will see the same gaps.
+
   If you need complete abstracts, you can backfill them from the downloaded PDFs — the PDFs for these papers are already included, so no re-downloading is required. Extracting the abstract text from each PDF (for example, by parsing the first page with GROBID or Nougat) and writing it back into the `abstract` field is sufficient.

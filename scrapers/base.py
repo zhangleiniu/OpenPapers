@@ -6,7 +6,7 @@ from abc import ABC, abstractmethod
 from typing import List, Dict, Optional
 import logging
 
-from utils import RobustSession, save_papers, load_papers, get_paper_filename
+from utils import RobustSession, save_papers, load_papers, get_paper_filename, assign_bibtex
 from config import DEFAULT_REQUEST_DELAY, DEFAULT_RETRY_ATTEMPTS, DEFAULT_TIMEOUT, PAPERS_DIR
 
 logger = logging.getLogger(__name__)
@@ -135,6 +135,7 @@ class BaseScraper(ABC):
                     new_count += 1
 
                     if new_count % 10 == 0:
+                        assign_bibtex(papers)
                         save_papers(papers, self.conference, year)
                         logger.info(f"Saved progress: {len(papers)} papers")
 
@@ -143,6 +144,7 @@ class BaseScraper(ABC):
                     logger.error(f"Error processing {url}: {e}")
                     continue
 
+            assign_bibtex(papers)
             save_papers(papers, self.conference, year)
             logger.info(f"Scraping completed for {name} {year}")
             logger.info(f"Total papers: {len(papers)} (new: {new_count}, failed: {failed_count})")
