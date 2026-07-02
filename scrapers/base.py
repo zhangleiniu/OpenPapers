@@ -6,7 +6,7 @@ from abc import ABC, abstractmethod
 from typing import List, Dict, Optional
 import logging
 
-from utils import RobustSession, save_papers, load_papers, get_paper_filename
+from utils import RobustSession, save_papers, load_papers, get_paper_filename, assign_bibtex
 from config import DEFAULT_REQUEST_DELAY, DEFAULT_RETRY_ATTEMPTS, DEFAULT_TIMEOUT, PAPERS_DIR
 
 logger = logging.getLogger(__name__)
@@ -51,6 +51,7 @@ class BaseScraper(ABC):
         """Download PDF for a paper."""
         if not paper.get('pdf_url'):
             logger.warning(f"No PDF URL for paper {paper.get('id', 'unknown')}")
+            paper['pdf_downloaded'] = False
             return False
 
         try:
@@ -58,11 +59,17 @@ class BaseScraper(ABC):
             pdf_path = PAPERS_DIR / self.conference / str(year) / filename
             success = self.session.download_file(paper['pdf_url'], pdf_path)
             if success:
-                paper['pdf_path'] = str(pdf_path)
+                # Store relative path
+                relative_path = f"data/papers/{self.conference}/{year}/{filename}"
+                paper['pdf_path'] = relative_path
+                paper['pdf_downloaded'] = True
+            else:
+                paper['pdf_downloaded'] = False
             return success
 
         except Exception as e:
             logger.error(f"Failed to download PDF for {paper.get('id', 'unknown')}: {e}")
+            paper['pdf_downloaded'] = False
             return False
 
     def scrape_year(self, year: int, download_pdfs: bool = True,
@@ -74,6 +81,17 @@ class BaseScraper(ABC):
         try:
             existing_papers = load_papers(self.conference, year) if resume else []
             existing_urls = {p.get('url', '') for p in existing_papers}
+
+            # Retry downloading PDFs for papers with missing pdf_path
+            if resume and download_pdfs:
+                missing_pdf_count = 0
+                for paper in existing_papers:
+                    if not paper.get('pdf_path') and paper.get('pdf_url'):
+                        logger.info(f"Retrying PDF for: {paper.get('id', 'unknown')}")
+                        self.download_pdf(paper, year)
+                        missing_pdf_count += 1
+                if missing_pdf_count > 0:
+                    logger.info(f"Retried {missing_pdf_count} papers with missing PDFs")
 
             paper_urls = self.get_paper_urls(year)
             if not paper_urls:
@@ -91,7 +109,6 @@ class BaseScraper(ABC):
                     logger.info(f"Processing {i+1}/{len(paper_urls)}: {url.split('/')[-1]}")
 
                     if resume and url in existing_urls:
-                        logger.debug(f"Skipping existing paper: {url}")
                         continue
 
                     paper = self.parse_paper(url)
@@ -118,6 +135,7 @@ class BaseScraper(ABC):
                     new_count += 1
 
                     if new_count % 10 == 0:
+                        assign_bibtex(papers)
                         save_papers(papers, self.conference, year)
                         logger.info(f"Saved progress: {len(papers)} papers")
 
@@ -126,6 +144,7 @@ class BaseScraper(ABC):
                     logger.error(f"Error processing {url}: {e}")
                     continue
 
+            assign_bibtex(papers)
             save_papers(papers, self.conference, year)
             logger.info(f"Scraping completed for {name} {year}")
             logger.info(f"Total papers: {len(papers)} (new: {new_count}, failed: {failed_count})")

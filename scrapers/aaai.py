@@ -528,10 +528,28 @@ class AAAIScraper(BaseScraper):
     def _extract_abstract(self, soup: BeautifulSoup) -> str:
         section = soup.find("section", class_="item abstract")
         if section:
-            p = section.find("p")
-            if p:
-                return p.get_text(strip=True)
+            # Old volumes: <p>-wrapped. Join all paragraphs.
+            # if any abstract that's split across multiple <p> tags
+            paras = [p.get_text(strip=True) for p in section.find_all("p")]
+            paras = [p for p in paras if p]
+            if paras:
+                return " ".join(paras)
+            
+            # 2021+ volumes: bare text, no <p>. Strip the "Abstract" label and take the rest.
+            label = section.find(class_="label")
+            label_text = label.get_text(strip=True) if label else ""
+            text = section.get_text(" ", strip=True)
+            if label_text and text.startswith(label_text):
+                text = text[len(label_text):].strip()
+            if text:
+                return text
+            
+        # Final fallback: Dublin Core meta (reliable across all years)
+        meta = soup.find("meta", attrs={"name": "DC.Description"})
+        if meta and meta.get("content"):
+            return meta["content"].strip()
         return ""
+
 
     def _extract_issue_info(self, soup: BeautifulSoup) -> str:
         issue_div = soup.find("div", class_="item issue")
