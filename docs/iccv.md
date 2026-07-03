@@ -8,7 +8,7 @@ Note: ICCV is held in odd years only.
 
 ## Coverage
 
-2013-2025
+2013–2025
 
 ## URL structure
 
@@ -16,6 +16,7 @@ Note: ICCV is held in odd years only.
 |-------|-----------|
 | 2021–present | `https://openaccess.thecvf.com/ICCV{year}?day=all` |
 | 2019 | Split across `?day=2019-10-29`, `2019-10-30`, `2019-10-31`, `2019-11-01` |
+| 2013–2017 | `https://openaccess.thecvf.com/ICCV{year}?day=all` |
 
 ## Data fields
 

@@ -4,12 +4,21 @@
 
 All years: `https://proceedings.mlr.press/`
 
-Known volume mappings (others discovered dynamically from the MLR Press main page):
-- 2024: `v235`
+Volume discovery is fully dynamic — no hardcoded mappings. The scraper
+searches the MLR Press main page for a volume matching "ICML {year}" and
+selects the main proceedings over workshop/satellite volumes.
 
 ## Coverage
 
 2013–2025
+
+## Volume disambiguation
+
+Multiple PMLR volumes can match "ICML {year}" (e.g. main proceedings +
+workshop proceedings). The scraper identifies the main proceedings by
+matching titles that end with "ICML {year}" (nothing after the year),
+excluding satellite events whose titles contain extra text after the year
+(e.g. "Workshop on ...", "GRaM at ICML 2024").
 
 ## Data fields
 

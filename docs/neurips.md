@@ -4,12 +4,12 @@
 
 | Years     | Source |
 |-----------|--------|
-| 1987–2024 | `https://papers.nips.cc/paper_files/paper/[year]` |
+| 2000–2024 | `https://papers.nips.cc/paper_files/paper/[year]` |
 | 2025+     | `papercopilot/paperlists` GitHub JSON (automatic fallback when papers.nips.cc returns 404) |
 
 ## Coverage
 
-1987-2025
+2000–2025
 
 ## Data fields
 

@@ -8,7 +8,7 @@ Volume number is derived from year: `volume = year - 1999` (v1 = 2000, v2 = 2001
 
 ## Coverage
 
-2000-2025
+2000–2026
 
 ## Data fields
 
