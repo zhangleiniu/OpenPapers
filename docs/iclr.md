@@ -8,11 +8,11 @@
 | 2014–2016 | `iclr.cc` static archive pages + `arxiv.org` for abstracts and PDFs |
 | 2017–2023 | `api.openreview.net` (various strategies per year) |
 | 2019      | `iclr.cc/Downloads` JSON + OpenReview virtualsite pages |
-| 2024–2026 | `api2.openreview.net` (v2 API, filter by `venueid`) |
+| 2026+     | `papercopilot/paperlists` GitHub JSON |
 
 ## Coverage
 
-2013–2026
+2015-2026
 
 ## Strategy routing
 
@@ -30,7 +30,8 @@ The scraper selects a strategy automatically:
 | 2020 | `per_paper_decision` | One API request per submission to fetch decision |
 | 2021 | `mixed` | `venue` field when populated, per-paper decision otherwise |
 | 2022–2023 | `venue` | `venue` field in submission note |
-| 2024–2026 | `venueid` | OpenReview v2 API, filter by `content.venueid` directly |
+| 2024–2025 | `venueid` | OpenReview v2 API, filter by `content.venueid` directly |
+| 2026+ | `papercopilot` | papercopilot GitHub JSON; `site` field converted to PDF URL (`forum`→`pdf`) |
 
 ## Cache
 
