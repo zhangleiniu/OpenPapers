@@ -10,30 +10,13 @@ to the metadata JSON files.
 import argparse
 import json
 import re
+import sys
 import unicodedata
 from collections import Counter, defaultdict
 from pathlib import Path
 
-ROOT_DIR = Path("/home/ratul/masterset-recommendation/")
-METADATA_ROOT = ROOT_DIR / "data/metadata"
-
-CONFERENCES = {
-    "aaai":     (2010, 2026, False, False),
-    "acl":      (2017, 2025, False, False),
-    "aistats":  (2009, 2025, False, False),
-    "colt":     (2011, 2025, False, False),
-    "cvpr":     (2013, 2025, False, False),
-    "eccv":     (2018, 2024, True,  False),
-    "emnlp":    (2017, 2025, False, False),
-    "iccv":     (2013, 2025, False, True),
-    "iclr":     (2013, 2026, False, False),
-    "icml":     (2013, 2025, False, False),
-    "ijcai":    (2017, 2025, False, False),
-    "jmlr":     (2000, 2026, False, False),
-    "naacl":    (2013, 2025, False, False),
-    "neurips":  (2000, 2025, False, False),
-    "uai":      (2015, 2025, False, False),
-}
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from config import METADATA_DIR  # noqa: E402
 
 # conference -> (entry_type, venue_field, venue_value, organization_or_None)
 VENUE = {
@@ -87,15 +70,6 @@ SPECIAL = {
     "{": "\\{", "}": "\\}",
     "~": "\\textasciitilde{}", "^": "\\textasciicircum{}", "\\": "\\textbackslash{}",
 }
-
-
-def get_years(start, end, only_even, only_odd):
-    years = list(range(start, end + 1))
-    if only_even:
-        years = [y for y in years if y % 2 == 0]
-    if only_odd:
-        years = [y for y in years if y % 2 == 1]
-    return years
 
 
 def ascii_fold(s):
@@ -191,50 +165,50 @@ def build_bibtex(conf, year, title, authors, key):
     return "\n".join(lines)
 
 
-def main(write):
+def main(write, metadata_root):
     # Pass 1: load everything, validate, compute base keys -------------------
     file_papers = {}                  # path -> papers list (kept for writing)
     records = []                      # dicts describing each eligible entry
     skipped = defaultdict(list)       # reason -> [ "conf/year id" ]
     per_conf = Counter()
 
-    for conf, (start, end, only_even, only_odd) in sorted(CONFERENCES.items()):
-        for year in get_years(start, end, only_even, only_odd):
-            path = METADATA_ROOT / conf / f"{conf}_{year}.json"
-            if not path.is_file():
-                continue
-            try:
-                papers = json.load(open(path, encoding="utf-8"))
-            except Exception as e:
-                print(f"[load error] {path}: {e}")
-                continue
-            file_papers[path] = papers
+    for path in sorted(metadata_root.glob("*/*.json")):
+        if path.name.endswith(".bak"):
+            continue
+        conf = path.parent.name
+        year = path.stem.rsplit("_", 1)[-1]
+        try:
+            papers = json.load(open(path, encoding="utf-8"))
+        except Exception as e:
+            print(f"[load error] {path}: {e}")
+            continue
+        file_papers[path] = papers
 
-            for paper in papers:
-                pid = paper.get("id", "<no-id>")
-                where = f"{conf}/{year} {pid}"
+        for paper in papers:
+            pid = paper.get("id", "<no-id>")
+            where = f"{conf}/{year} {pid}"
 
-                if conf not in VENUE:
-                    skipped["unknown conference"].append(where); continue
-                title = paper.get("title")
-                authors = paper.get("authors")
-                yr = paper.get("year", year)
-                if not isinstance(title, str) or not title.strip():
-                    skipped["no title"].append(where); continue
-                if not isinstance(authors, list) or not authors or not all(
-                        isinstance(a, str) and a.strip() for a in authors):
-                    skipped["no/!list authors"].append(where); continue
-                if not (isinstance(yr, int) or (isinstance(yr, str) and yr.isdigit())):
-                    skipped["bad year"].append(where); continue
+            if conf not in VENUE:
+                skipped["unknown conference"].append(where); continue
+            title = paper.get("title")
+            authors = paper.get("authors")
+            yr = paper.get("year", year)
+            if not isinstance(title, str) or not title.strip():
+                skipped["no title"].append(where); continue
+            if not isinstance(authors, list) or not authors or not all(
+                    isinstance(a, str) and a.strip() for a in authors):
+                skipped["no/!list authors"].append(where); continue
+            if not (isinstance(yr, int) or (isinstance(yr, str) and yr.isdigit())):
+                skipped["bad year"].append(where); continue
 
-                bk = base_cite_key(conf, int(yr), title, authors)
-                records.append({
-                    "paper": paper, "conf": conf, "year": int(yr),
-                    "title": title, "authors": authors, "id": str(pid),
-                    "base_key": bk,
-                    "sort": (conf, int(yr), str(pid), title),
-                })
-                per_conf[conf] += 1
+            bk = base_cite_key(conf, int(yr), title, authors)
+            records.append({
+                "paper": paper, "conf": conf, "year": int(yr),
+                "title": title, "authors": authors, "id": str(pid),
+                "base_key": bk,
+                "sort": (conf, int(yr), str(pid), title),
+            })
+            per_conf[conf] += 1
 
     # Pass 2: resolve collisions deterministically ---------------------------
     groups = defaultdict(list)
@@ -300,5 +274,7 @@ if __name__ == "__main__":
     parser.add_argument("--write", action="store_true",
                         help="Actually write the `bibtex` field into the metadata "
                              "JSONs. Without this flag, performs a dry run.")
+    parser.add_argument("--metadata-root", type=Path, default=METADATA_DIR,
+                        help=f"Metadata directory (default: {METADATA_DIR})")
     args = parser.parse_args()
-    main(write=args.write)
+    main(write=args.write, metadata_root=args.metadata_root)

@@ -8,11 +8,11 @@
 | 2014–2016 | `iclr.cc` static archive pages + `arxiv.org` for abstracts and PDFs |
 | 2017–2023 | `api.openreview.net` (various strategies per year) |
 | 2019      | `iclr.cc/Downloads` JSON + OpenReview virtualsite pages |
-| 2026+     | `papercopilot/paperlists` GitHub JSON |
+| 2024–2026 | `api2.openreview.net` (v2 API, `content.venueid`) |
 
 ## Coverage
 
-2015-2026
+2013-2026
 
 ## Strategy routing
 
@@ -30,8 +30,7 @@ The scraper selects a strategy automatically:
 | 2020 | `per_paper_decision` | One API request per submission to fetch decision |
 | 2021 | `mixed` | `venue` field when populated, per-paper decision otherwise |
 | 2022–2023 | `venue` | `venue` field in submission note |
-| 2024–2025 | `venueid` | OpenReview v2 API, filter by `content.venueid` directly |
-| 2026+ | `papercopilot` | papercopilot GitHub JSON; `site` field converted to PDF URL (`forum`→`pdf`) |
+| 2024–2026 | `venueid` | OpenReview v2 API, filter by `content.venueid` directly |
 
 ## Cache
 
@@ -55,6 +54,11 @@ on subsequent runs.
 
 ## Known issues
 
+- **2023 venue labels**: ICLR 2023 used "notable top 5%" / "notable top 25%"
+  instead of Oral / Spotlight. The venue filter accepts these (keyword
+  "notable") and maps them to `status` Oral / Spotlight respectively.
+  Data scraped before 2026-07 misses these ~370 papers — re-scrape 2023
+  after deleting the `"2023"` key from `data/cache/iclr_papers.json`.
 - **2014**: The 2014 archive page is a Google Sites page with a different HTML
   structure from the 2015–2016 DokuWiki pages. A dedicated parser handles it.
 - **2015–2016 abstracts**: Fetched individually from arXiv on first parse;
