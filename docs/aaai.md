@@ -6,7 +6,7 @@ All years: `https://ojs.aaai.org/index.php/AAAI/issue/archive/`
 
 ## Coverage
 
-2010–2025
+2010–2026
 
 ## Architecture
 
@@ -42,4 +42,5 @@ directly and rerun — cached entries are used as-is.
 
 ## Known issues
 
-None.
+- **LLM non-determinism**: Because Gemini classifies issues and sections, results can vary between runs. If paper counts differ from a previous download, check the cache files for classification differences.
+- **Large issue pages (504 timeouts)**: `ojs.aaai.org` can return 504 Gateway Timeout for large issue pages (e.g. 260+ papers). When this happens, entire sections of papers are lost from that run. Re-running typically recovers them.
