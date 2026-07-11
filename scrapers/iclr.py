@@ -44,7 +44,9 @@ _FORUM_RE    = re.compile(r'openreview\.net/forum\?id=([^"&\s]+)')
 _ARXIV_ID_RE = re.compile(r'arxiv\.org/abs/(\d+\.\d+)')
 
 # -- Accepted venue keywords ---------------------------------------------------
-_ACCEPTED_VENUES = {"oral", "spotlight", "poster"}
+# "notable" covers ICLR 2023, which labeled orals/spotlights
+# "notable top 5%" / "notable top 25%" instead of oral/spotlight.
+_ACCEPTED_VENUES = {"oral", "spotlight", "poster", "notable"}
 
 # -- Per-year API config (2017-2025) ------------------------------------------
 _YEAR_CONFIG = {
@@ -628,6 +630,11 @@ class ICLRScraper(BaseScraper):
     @staticmethod
     def _status_from_venue(venue) -> Optional[str]:
         low = str(venue or "").lower()
+        # ICLR 2023: "notable top 5%" replaced Oral, "notable top 25%" Spotlight
+        if "notable top 5%" in low:
+            return "Oral"
+        if "notable top 25%" in low:
+            return "Spotlight"
         if "oral" in low:
             return "Oral"
         if "spotlight" in low:
