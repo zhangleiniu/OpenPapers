@@ -32,9 +32,11 @@ class OpenReviewClient:
     @property
     def headers(self) -> Dict[str, str]:
         self._login()
+        headers = {"Accept": "application/json"}
         if not self._token:
-            return {}
-        return {"Authorization": f"Bearer {self._token}"}
+            return headers
+        headers["Authorization"] = f"Bearer {self._token}"
+        return headers
 
     def _login(self) -> None:
         with self._login_lock:

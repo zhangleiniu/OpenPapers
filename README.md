@@ -148,6 +148,10 @@ Runtime hashes, counts, and status are stored separately under
 scheduler, notification system, or agent repair workflow. See the
 [automation design](./docs/automation.md).
 
+Prefect, container, and cloud deployment support is an optional component kept
+under [`automation/deployment`](./automation/deployment/README.md). The core
+scrapers do not require those dependencies.
+
 
 ## Data Structure
 

@@ -1,0 +1,8 @@
+# Lightweight control-plane image; conference scraping remains on the data host.
+requests>=2.28.0
+beautifulsoup4>=4.11.0
+python-dotenv>=1.0.0
+brotli>=1.1.0
+prefect>=3.7,<4
+prefect-email==0.4.2
+google-cloud-storage>=3.0.0

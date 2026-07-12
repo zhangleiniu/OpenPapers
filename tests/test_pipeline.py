@@ -4,7 +4,7 @@ import tempfile
 import time
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import main
 from automation.monitor import StateStore, load_registry, save_snapshot
@@ -150,6 +150,20 @@ class CompletenessTests(unittest.TestCase):
 
 
 class SourceLifecycleTests(unittest.TestCase):
+    def test_openreview_client_requests_json(self):
+        session = Mock()
+        response = Mock()
+        response.json.return_value = {"notes": []}
+        session.get.return_value = response
+        client = OpenReviewClient(session)
+        client._login_attempted = True
+
+        client.get_notes("invitation", "venue")
+
+        self.assertEqual(
+            session.get.call_args.kwargs["headers"]["Accept"],
+            "application/json")
+
     def test_archival_source_merges_without_changing_stable_id(self):
         existing = {
             "id": "openreview-id", "title": "A Useful Paper",

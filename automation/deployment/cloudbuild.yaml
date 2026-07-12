@@ -1,0 +1,13 @@
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --file
+      - automation/deployment/Dockerfile
+      - --tag
+      - us-central1-docker.pkg.dev/$PROJECT_ID/openpapers/monitor:latest
+      - .
+images:
+  - us-central1-docker.pkg.dev/$PROJECT_ID/openpapers/monitor:latest
+options:
+  logging: CLOUD_LOGGING_ONLY
