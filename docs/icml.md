@@ -2,7 +2,12 @@
 
 ## Source
 
-All years: `https://proceedings.mlr.press/`
+Archival source: `https://proceedings.mlr.press/`
+
+For 2026, before the PMLR volume is published, the scraper falls back to the
+official OpenReview invitation `ICML.cc/2026/Conference/-/Submission`. These
+records and PDFs are marked provisional and will be reconciled with PMLR by
+OpenReview ID plus normalized title/first-author identity.
 
 Volume discovery is fully dynamic — no hardcoded mappings. The scraper
 searches the MLR Press main page for a volume matching "ICML {year}" and

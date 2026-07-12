@@ -7,6 +7,7 @@ import time
 import json
 import re
 import random
+import threading
 from pathlib import Path
 from typing import List, Dict, Optional
 import logging
@@ -129,6 +130,7 @@ class RobustSession:
         self.timeout = timeout
         self.last_request = 0
         self.rate_limited_until = 0
+        self._rate_lock = threading.Lock()
     
     def get(self, url: str, **kwargs) -> Optional[requests.Response]:
         """Make GET request with retry and rate-limit handling."""
@@ -140,21 +142,23 @@ class RobustSession:
 
     def _request(self, method: str, url: str, **kwargs) -> Optional[requests.Response]:
         """Internal: execute an HTTP request with retries and rate limiting."""
+        quiet_404 = kwargs.pop("quiet_404", False)
         for attempt in range(self.retry_attempts + 1):
             try:
-                # Check if we're rate limited
-                if time.time() < self.rate_limited_until:
-                    wait_time = self.rate_limited_until - time.time()
-                    logger.warning(f"Rate limited, waiting {wait_time:.1f}s")
-                    time.sleep(wait_time)
+                # Serialize request starts so concurrent transfers still obey
+                # the configured aggregate request rate.
+                with self._rate_lock:
+                    if time.time() < self.rate_limited_until:
+                        wait_time = self.rate_limited_until - time.time()
+                        logger.warning(f"Rate limited, waiting {wait_time:.1f}s")
+                        time.sleep(wait_time)
 
-                # Normal rate limiting
-                elapsed = time.time() - self.last_request
-                if elapsed < self.delay:
-                    sleep_time = self.delay - elapsed + random.uniform(0, 0.1)
-                    time.sleep(sleep_time)
+                    elapsed = time.time() - self.last_request
+                    if elapsed < self.delay:
+                        sleep_time = self.delay - elapsed + random.uniform(0, 0.1)
+                        time.sleep(sleep_time)
 
-                self.last_request = time.time()
+                    self.last_request = time.time()
 
                 timeout = kwargs.pop('timeout', self.timeout)
                 response = self.session.request(method, url, timeout=timeout, **kwargs)
@@ -170,7 +174,8 @@ class RobustSession:
                     time.sleep(2 ** attempt)
                     continue
                 elif response.status_code == 404:
-                    logger.warning(f"Not found: {url}")
+                    if not quiet_404:
+                        logger.warning(f"Not found: {url}")
                     return None
                 elif response.status_code == 403:
                     logger.error(f"Access forbidden: {url}")
@@ -201,15 +206,24 @@ class RobustSession:
         self.rate_limited_until = time.time() + retry_after
         logger.warning(f"Rate limited for {retry_after}s")
     
-    def download_file(self, url: str, filepath: Path) -> bool:
+    def download_file(self, url: str, filepath: Path, **request_kwargs) -> bool:
         """Download file with error handling."""
         try:
             # Skip if file already exists
             if filepath.exists():
-                logger.info(f"File already exists: {filepath.name}")
-                return True
+                try:
+                    with filepath.open("rb") as handle:
+                        is_valid = (filepath.stat().st_size >= 1024 and
+                                    handle.read(5) == b"%PDF-")
+                except OSError:
+                    is_valid = False
+                if is_valid:
+                    logger.debug(f"File already exists: {filepath.name}")
+                    return True
+                logger.warning("Removing invalid existing PDF: %s", filepath)
+                filepath.unlink(missing_ok=True)
             
-            response = self.get(url, stream=True)
+            response = self.get(url, stream=True, **request_kwargs)
             if not response:
                 return False
             
@@ -231,7 +245,7 @@ class RobustSession:
                             progress = (downloaded / total_size) * 100
                             logger.debug(f"Download progress: {progress:.1f}%")
             
-            logger.info(f"Downloaded: {filepath.name} ({downloaded:,} bytes)")
+            logger.debug(f"Downloaded: {filepath.name} ({downloaded:,} bytes)")
             return True
             
         except Exception as e:

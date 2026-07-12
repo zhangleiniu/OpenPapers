@@ -2,19 +2,23 @@
 
 The pipeline has independent, resumable stages:
 
-1. Discover accepted papers using the venue-specific scraper and inclusion policy.
-2. Parse source metadata and download PDFs incrementally.
-3. Generate BibTeX before each metadata checkpoint.
-4. Optionally enrich missing abstracts/authors from existing GROBID output,
+1. Discover accepted papers using the best currently available authoritative source.
+2. Mark early OpenReview/accepted-list results provisional; use formal
+   proceedings as the archival source when available.
+3. Parse source metadata and download available PDFs incrementally.
+4. Reconcile cross-source IDs without duplicating papers.
+5. Generate BibTeX before each metadata checkpoint.
+6. Optionally enrich missing abstracts/authors from existing GROBID output,
    falling back to Nougat output.
-5. Validate required metadata and real PDF files.
-6. Regenerate the tracked coverage report and README coverage list.
-7. Update the venue page only when the new year adds a source/volume mapping,
+7. Validate against the announced, metadata, or archival readiness target.
+8. Regenerate the tracked coverage report and README coverage list.
+9. Update the venue page only when the new year adds a source/volume mapping,
    changes scraping policy, or has known missing/withdrawn-paper exceptions.
 
 ```bash
 python main.py acl 2026
 python main.py acl 2026 --enrich-missing --require-complete
+python main.py aistats 2026 --no-pdfs --require-complete --completeness-level metadata
 python postprocessing/generate_statistics.py --write
 python postprocessing/generate_statistics.py --check
 ```

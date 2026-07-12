@@ -85,15 +85,27 @@ def enrich_and_save(papers, conference: str, year: int):
     return report
 
 
-def completeness_issues(papers, require_pdfs: bool = True):
-    """Return field/file issue counts for strict pipeline validation."""
-    required = ("id", "title", "authors", "abstract", "year", "conference",
-                "url", "pdf_url", "bibtex")
+def completeness_issues(papers, require_pdfs: bool = True,
+                        level: str = "archival"):
+    """Return issue counts for announced, metadata, or archival readiness."""
+    if level not in {"announced", "metadata", "archival"}:
+        raise ValueError(f"Unknown completeness level: {level}")
+    required = ["id", "title", "authors", "year", "conference", "url", "bibtex"]
+    if level in {"metadata", "archival"}:
+        required.append("abstract")
+    if level == "archival":
+        required.append("pdf_url")
     issues = {
         field: sum(1 for paper in papers if not paper.get(field))
         for field in required
     }
-    if require_pdfs:
+    if level == "archival":
+        provisional = sum(
+            1 for paper in papers
+            if paper.get("publication_status") == "provisional")
+        if provisional:
+            issues["provisional"] = provisional
+    if require_pdfs and level == "archival":
         missing_path = 0
         missing_file = 0
         invalid_pdf = 0
@@ -144,6 +156,10 @@ Examples:
     parser.add_argument(
         '--require-complete', action='store_true',
         help='Exit non-zero if metadata or downloaded PDFs remain incomplete')
+    parser.add_argument(
+        '--completeness-level', choices=('announced', 'metadata', 'archival'),
+        default='archival',
+        help='Validation target used with --require-complete (default: archival)')
 
     args = parser.parse_args()
 
@@ -177,7 +193,9 @@ Examples:
             if args.enrich_missing:
                 enrich_and_save(papers, args.conference.lower(), args.years[0])
             if args.require_complete:
-                issues = completeness_issues(papers, require_pdfs=not args.no_pdfs)
+                issues = completeness_issues(
+                    papers, require_pdfs=not args.no_pdfs,
+                    level=args.completeness_level)
                 if issues:
                     print(f"❌ Incomplete dataset: {issues}")
                     return 2
@@ -195,7 +213,8 @@ Examples:
                     enrich_and_save(papers, args.conference.lower(), year)
                 if args.require_complete:
                     issues = completeness_issues(
-                        papers, require_pdfs=not args.no_pdfs)
+                        papers, require_pdfs=not args.no_pdfs,
+                        level=args.completeness_level)
                     if issues:
                         all_issues[year] = issues
             if all_issues:

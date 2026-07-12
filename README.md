@@ -13,15 +13,15 @@ demos, tutorials, and other secondary material.
 
 <!-- BEGIN GENERATED COVERAGE -->
 - **NeurIPS** (2000–2025)
-- **ICML** (2013–2025)
+- **ICML** (2013–2025; provisional: 2026)
 - **ICLR** (2013–2026)
 - **AAAI** (2010–2026)
 - **CVPR** (2013–2026)
 - **COLT** (2011–2026)
 - **UAI** (2015–2025)
 - **JMLR** (2000–2026)
-- **AISTATS** (2009–2025)
-- **IJCAI** (2017–2025)
+- **AISTATS** (2009–2025; provisional: 2026)
+- **IJCAI** (2017–2025; provisional: 2026)
 - **ACL** (2017–2026)
 - **EMNLP** (2017–2025)
 - **NAACL** (2013, 2015–2016, 2018–2019, 2021–2022, 2024–2025)
@@ -43,6 +43,7 @@ coverage by hand.
 - Downloads PDFs automatically
 - Resume capability for interrupted scraping
 - Year-specific scrapers for different conference formats
+- Timely provisional sources before formal proceedings are published
 - Robust error handling and rate limiting
 - Configurable delays and retry mechanisms
 
@@ -70,7 +71,7 @@ GCP_PROJECT_ID=your-project-id
 GCP_LOCATION=us-central1
 GEMINI_MODEL=gemini-2.5-flash
 
-# Required for authenticated access to older ICLR OpenReview data
+# Required for authenticated OpenReview API access and protected PDFs
 OPENREVIEW_USERNAME=you@example.com
 OPENREVIEW_PASSWORD=your-password
 ```
@@ -111,6 +112,18 @@ Fail the command if required metadata or downloaded PDF files are incomplete:
 python main.py acl 2026 --enrich-missing --require-complete
 ```
 
+For a newly announced year whose proceedings are not yet available, validate
+the public metadata without treating archival publication as complete:
+```bash
+python main.py aistats 2026 --no-pdfs --require-complete \
+  --completeness-level metadata
+```
+
+Completeness levels are `announced` (identity, title, and authors), `metadata`
+(also abstract), and `archival` (the default strict metadata/PDF contract).
+Years sourced from OpenReview or an official accepted-paper page are marked
+`provisional` until reconciled with formal proceedings.
+
 `--enrich-missing` consumes the processed files under
 `$SCRAPER_DATA_ROOT/{grobid_output,nougat_output}`; it does not launch the
 external, resource-intensive GROBID or Nougat pipelines itself. It is safe to
@@ -120,6 +133,20 @@ Start fresh (ignore existing data):
 ```bash
 python main.py aaai 2024 --no-resume
 ```
+
+### Source monitoring
+
+The versioned registry in `automation/conferences.json` describes conference
+years and candidate sources. A cheap deterministic monitor checks OpenReview,
+official HTML lists, and PMLR without invoking an LLM:
+```bash
+python automation/monitor.py --venue icml --year 2026
+```
+
+Runtime hashes, counts, and status are stored separately under
+`$SCRAPER_DATA_ROOT/monitor/state.sqlite3`. The JSON-line output can feed a
+scheduler, notification system, or agent repair workflow. See the
+[automation design](./docs/automation.md).
 
 
 ## Data Structure
@@ -162,7 +189,8 @@ The scraper generates detailed logs saved to `scraper.log` and displays progress
   independent bulk repair; `--enrich-missing` exposes the same fallback in the
   main CLI.
 - See the [documentation index](./docs/index.md), [data schema](./docs/data-schema.md),
-  [pipeline](./docs/pipeline.md), and [validation guide](./docs/validation.md).
+  [pipeline](./docs/pipeline.md), [automation design](./docs/automation.md), and
+  [validation guide](./docs/validation.md).
 
 ## Citation
 

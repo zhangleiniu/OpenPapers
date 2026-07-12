@@ -2,7 +2,13 @@
 
 ## Source
 
-All years: `https://proceedings.mlr.press/`
+Archival source: `https://proceedings.mlr.press/`
+
+For 2026, before the PMLR volume is published, the scraper falls back to the
+official OpenReview invitation
+`aistats.org/AISTATS/2026/Conference/-/Submission`. OpenReview currently exposes
+complete public metadata but generally not a PDF URL, so the year remains
+provisional until PMLR publication.
 
 Known volume mappings (others discovered dynamically from the MLR Press main page):
 - 2025: `v258`

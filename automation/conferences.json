@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "conference_years": [
+    {
+      "venue": "icml",
+      "year": 2026,
+      "sources": [
+        {
+          "type": "pmlr_volume",
+          "url": "https://proceedings.mlr.press/",
+          "label": "ICML 2026"
+        },
+        {
+          "type": "openreview_api",
+          "invitation": "ICML.cc/2026/Conference/-/Submission",
+          "venue_id": "ICML.cc/2026/Conference",
+          "minimum_count": 6300
+        }
+      ]
+    },
+    {
+      "venue": "aistats",
+      "year": 2026,
+      "sources": [
+        {
+          "type": "pmlr_volume",
+          "url": "https://proceedings.mlr.press/",
+          "label": "AISTATS 2026"
+        },
+        {
+          "type": "openreview_api",
+          "invitation": "aistats.org/AISTATS/2026/Conference/-/Submission",
+          "venue_id": "aistats.org/AISTATS/2026/Conference",
+          "minimum_count": 580
+        }
+      ]
+    },
+    {
+      "venue": "ijcai",
+      "year": 2026,
+      "sources": [
+        {
+          "type": "official_html",
+          "url": "https://2026.ijcai.org/accepted-papers/?ijtrack=main-track",
+          "item_selector": "li.ij-paper",
+          "minimum_count": 700
+        },
+        {
+          "type": "official_html",
+          "url": "https://www.ijcai.org/proceedings/2026/",
+          "item_selector": "div.details",
+          "minimum_count": 1,
+          "optional_until_available": true
+        }
+      ]
+    }
+  ]
+}

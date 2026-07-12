@@ -3,6 +3,7 @@
 - [Installation and configuration](../README.md#installation)
 - [Data schema](./data-schema.md)
 - [Processing pipeline](./pipeline.md)
+- [Automation and monitoring](./automation.md)
 - [Validation and generated statistics](./validation.md)
 - [Google Cloud / Vertex AI setup](./GOOGLE_CLOUD_SETUP.md)
 - [Current dataset coverage and quality](../statistics.md)
