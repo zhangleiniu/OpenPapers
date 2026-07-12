@@ -164,6 +164,32 @@ The scraper generates detailed logs saved to `scraper.log` and displays progress
 - See the [documentation index](./docs/index.md), [data schema](./docs/data-schema.md),
   [pipeline](./docs/pipeline.md), and [validation guide](./docs/validation.md).
 
+## Citation
+
+If you use this project in your research, please cite our paper, accepted at
+the 2026 SIAM International Conference on Data Mining (SDM26). The proceedings
+DOI and page numbers are not available yet; this entry links to the current
+preprint and will be updated after publication.
+
+```bibtex
+@inproceedings{ratul2026masterset,
+  title     = {{MasterSet}: A Large-Scale Benchmark for Must-Cite Citation Recommendation in the {AI/ML} Literature},
+  author    = {Ratul, Md Toyaha Rahman and Chen, Zhiqian and Fu, Kaiqun and Ji, Taoran and Zhang, Lei},
+  booktitle = {Proceedings of the 2026 SIAM International Conference on Data Mining (SDM26)},
+  year      = {2026},
+  url       = {https://arxiv.org/abs/2604.17680}
+}
+```
+
+## License
+
+The source code in this repository is licensed under the [MIT License](./LICENSE).
+
+The scraper output is not covered by the software license. This project does
+not claim ownership of paper metadata, abstracts, or PDFs retrieved from public
+conference and publisher websites. Those materials remain subject to the
+rights and terms of their respective authors, publishers, and source websites.
+
 ## Motivation
 
 In recent years, the rapid growth of AI and machine learning research has resulted in an overwhelming number of papers published annually, making it increasingly difficult for researchers to stay up to date with developments in their specific subfields. While platforms like Google Scholar, Semantic Scholar, OpenReview, and Paper Copilot attempt to aggregate publication data, our observations suggest that these sources often suffer from incomplete coverage and noisy metadata. To address this gap, we developed a suite of dedicated scrapers targeting the top-tier AI/ML conferences and journals, aiming to build a high-quality, comprehensive dataset of research papers. Our system extracts reliable metadata and downloads full PDFs, which can later be processed using tools like GROBID for structured content analysis. This curated dataset is intended to power downstream applications such as research limitation analysis, citation and reference recommendation, and intelligent paper reading recommendation. Our current focus spans conferences from 2013-ish onward—when deep learning began reshaping the field—though earlier years may also be partially included.
