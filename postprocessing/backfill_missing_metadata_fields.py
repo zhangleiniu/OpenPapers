@@ -138,7 +138,7 @@ _AFFIL_RE = re.compile(
 
 
 def _read_text(path):
-    return open(path, encoding="utf-8", errors="ignore").read()
+    return Path(path).read_text(encoding="utf-8", errors="ignore")
 
 
 def _is_heading(line):
@@ -233,6 +233,61 @@ def backfill_value(stem, grobid_root, nougat_root, grobid_fn, nougat_fn):
     if not gp.is_file() and not np_.is_file():
         return None, None, "no grobid or nougat output"
     return None, None, "processed file present but nothing extracted"
+
+
+def enrich_papers(papers, grobid_root=None, nougat_root=None,
+                  do_abstract=True, do_authors=True):
+    """Fill missing fields in an in-memory paper list.
+
+    This is the reusable entry point for the scraper CLI.  It deliberately
+    consumes existing GROBID/Nougat outputs rather than launching those heavy
+    pipelines itself.  The list is mutated in place and a small report is
+    returned so callers can decide whether missing data is fatal.
+    """
+    grobid_root = Path(grobid_root or DATA_ROOT / "grobid_output")
+    nougat_root = Path(nougat_root or DATA_ROOT / "nougat_output")
+    report = {
+        "with_pdf": 0,
+        "missing": Counter(),
+        "filled": defaultdict(Counter),
+        "unfilled": defaultdict(list),
+    }
+
+    for paper in papers:
+        pdf_path = paper.get("pdf_path", "")
+        if not pdf_path:
+            continue
+        report["with_pdf"] += 1
+        stem = stem_from_pdf_path(pdf_path)
+        if stem is None:
+            continue
+
+        pid = paper.get("id", "<no-id>")
+        if do_abstract and is_empty(paper.get("abstract")):
+            report["missing"]["abstract"] += 1
+            val, src, reason = backfill_value(
+                stem, grobid_root, nougat_root,
+                extract_abstract_grobid, extract_abstract_nougat)
+            if val:
+                paper["abstract"] = val
+                paper[ABSTRACT_SOURCE_FIELD] = src
+                report["filled"]["abstract"][src] += 1
+            else:
+                report["unfilled"]["abstract"].append((pid, reason))
+
+        if do_authors and is_empty(paper.get("authors")):
+            report["missing"]["authors"] += 1
+            val, src, reason = backfill_value(
+                stem, grobid_root, nougat_root,
+                extract_authors_grobid, extract_authors_nougat)
+            if val:
+                paper["authors"] = val
+                paper[AUTHORS_SOURCE_FIELD] = src
+                report["filled"]["authors"][src] += 1
+            else:
+                report["unfilled"]["authors"].append((pid, reason))
+
+    return report
 
 
 def iter_metadata_files(metadata_root):

@@ -405,7 +405,7 @@ def _eligible(paper):
     authors = paper.get("authors")
     year = paper.get("year")
     conf = paper.get("conference")
-    if conf not in VENUE:
+    if not isinstance(conf, str) or conf.lower() not in VENUE:
         return False
     if not isinstance(title, str) or not title.strip():
         return False
@@ -427,7 +427,8 @@ def assign_bibtex(papers):
     # group by base key, then suffix collisions deterministically
     groups = defaultdict(list)
     for p in eligible:
-        bk = _base_cite_key(p["conference"], int(p["year"]), p["title"], p["authors"])
+        conf = p["conference"].lower()
+        bk = _base_cite_key(conf, int(p["year"]), p["title"], p["authors"])
         groups[bk].append(p)
 
     for bk, group in groups.items():
@@ -438,7 +439,7 @@ def assign_bibtex(papers):
             keyed = [(p, bk + _suffix(i)) for i, p in enumerate(ordered)]
         for paper, key in keyed:
             paper["bibtex"] = _build_bibtex(
-                paper["conference"], int(paper["year"]),
+                paper["conference"].lower(), int(paper["year"]),
                 paper["title"], paper["authors"], key)
 
     return papers

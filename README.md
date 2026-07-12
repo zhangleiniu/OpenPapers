@@ -89,6 +89,22 @@ Skip PDF downloads (metadata only):
 python main.py icml 2023 --no-pdfs
 ```
 
+Fill missing abstracts/authors from already-produced GROBID output, falling
+back to Nougat output:
+```bash
+python main.py acl 2026 --enrich-missing
+```
+
+Fail the command if required metadata or downloaded PDF files are incomplete:
+```bash
+python main.py acl 2026 --enrich-missing --require-complete
+```
+
+`--enrich-missing` consumes the processed files under
+`$SCRAPER_DATA_ROOT/{grobid_output,nougat_output}`; it does not launch the
+external, resource-intensive GROBID or Nougat pipelines itself. It is safe to
+rerun and only fills empty fields.
+
 Start fresh (ignore existing data):
 ```bash
 python main.py aaai 2024 --no-resume
@@ -127,6 +143,12 @@ The scraper generates detailed logs saved to `scraper.log` and displays progress
 - The scraper respects rate limits and includes delays between requests
 - PDF downloads are optional and can be skipped for faster metadata collection
 - All scraped data is saved incrementally to prevent data loss
+- BibTeX is generated during scraping. The script
+  `postprocessing/rebuild_bibtex.py` is retained only for rebuilding
+  historical metadata and uses the same generator as the live scraper.
+- `postprocessing/backfill_missing_metadata_fields.py` remains available for
+  independent bulk repair; `--enrich-missing` exposes the same fallback in the
+  main CLI.
 
 ## Motivation
 
