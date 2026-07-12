@@ -10,23 +10,25 @@ It automatically filters out non-archival content like workshop papers, extended
 
 ## Supported Conferences
 
-- **NeurIPS**(1987–2024)
+- **NeurIPS**(2000–2025)
 - **ICML**(2013–2025)
-- **ICLR**(2015–2026) 
-- **AAAI**(2010–2025)
-- **CVPR**(2012-2025)
-- **COLT**(2011-2025)
-- **UAI**(2015-2025)
-- **JMLR**(2000-2025)
-- **AISTATS**(2009-2025)
-- **IJCAI**(2017-2025)
-- **ACL**(2017-2025)
-- **EMNLP**(2017-2025)
-- **NAACL**(2013-2025)
-- **ICCV**(2013-2025) 
-- **ECCV**(2018-2024)
+- **ICLR**(2013–2026)
+- **AAAI**(2010–2026)
+- **CVPR**(2013–2026)
+- **COLT**(2011–2025)
+- **UAI**(2015–2025)
+- **JMLR**(2000–2026)
+- **AISTATS**(2009–2025)
+- **IJCAI**(2017–2025)
+- **ACL**(2017–2025)
+- **EMNLP**(2017–2025)
+- **NAACL**(2013–2025)
+- **ICCV**(2013–2025)
+- **ECCV**(2018–2024)
 
-[Detailed Statistics](./statistics.md)
+[Detailed Statistics](./statistics.md) — regenerate with
+`python postprocessing/generate_statistics.py --write` after scraping;
+do not edit the numbers by hand.
 
 > ⚠️ **Note:** Due to access restrictions, the tool currently **does not support** scraping papers from **KDD**, **TPAMI**, and **ICDM**, as their full metadata or PDFs are not publicly available without a subscription or institutional access.
 
@@ -133,6 +135,13 @@ In recent years, the rapid growth of AI and machine learning research has result
 
 ## Limitations
 
-- **Missing abstracts for some papers.** A number of entries have an empty `abstract` field. This is **not a scraping bug** — those abstracts are absent from the source pages themselves, so there is nothing for the scraper to extract at collection time. The most affected are the older ACL Anthology proceedings, namely **NAACL 2013, 2015, and 2016**, for which the Anthology did not record abstracts; a handful of other older entries (for example, some early JMLR and AAAI papers) are affected for the same reason. The scraper stores whatever the source provides and leaves `abstract` empty otherwise, so anyone reproducing the dataset with this tool will see the same gaps.
-
-  If you need complete abstracts, you can backfill them from the downloaded PDFs — the PDFs for these papers are already included, so no re-downloading is required. Extracting the abstract text from each PDF (for example, by parsing the first page with GROBID or Nougat) and writing it back into the `abstract` field is sufficient.
+- **Some abstracts are absent from the source pages.** Older proceedings pages
+  (notably NAACL 2013/2015/2016 on the ACL Anthology, plus a handful of early
+  JMLR and AAAI entries) never recorded abstracts, so a fresh scrape leaves
+  those `abstract` fields empty — this is not a scraping bug. These gaps can be
+  backfilled from the downloaded PDFs with
+  `python postprocessing/backfill_missing_metadata_fields.py --abstract`,
+  which extracts the abstract from GROBID TEI output (primary) or Nougat
+  markdown (fallback) and records the origin in an `abstract_source` field.
+  The canonical dataset has been backfilled this way and has no missing
+  abstracts; only a fresh re-scrape starts with the gaps.
