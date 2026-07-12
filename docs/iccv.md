@@ -6,9 +6,9 @@ All years: `https://openaccess.thecvf.com/ICCV[year]/`
 
 Note: ICCV is held in odd years only.
 
-## Coverage
+## Dataset coverage
 
-2013–2025
+See the generated [coverage and quality report](../statistics.md).
 
 ## URL structure
 

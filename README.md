@@ -1,10 +1,11 @@
 # AI/ML Conference Paper Scraper
 
-A robust Python tool for scraping academic papers from top AI and machine learning conferences.
+A Python tool for scraping papers from 15 selected AI/ML conferences and journals.
 It extracts high-quality **metadata** and full **PDFs** to support applications like citation analysis and research recommendation.
 
-This tool covers **all** major AI and machine learning conferences, such as NeurIPS, ICML, ICLR, CVPR, ACL, and others, with a focus on papers published since the rise of deep learning.
-It automatically filters out non-archival content like workshop papers, extended abstracts, and demos, ensuring that only peer-reviewed full conference papers are included.
+It applies venue-specific inclusion rules to retain archival main-program content
+(including configured long, short, and industry tracks) while excluding workshops,
+demos, tutorials, and other secondary material.
 
 ---
 
@@ -20,13 +21,13 @@ It automatically filters out non-archival content like workshop papers, extended
 - **JMLR**(2000–2026)
 - **AISTATS**(2009–2025)
 - **IJCAI**(2017–2025)
-- **ACL**(2017–2025)
+- **ACL**(2017–2026)
 - **EMNLP**(2017–2025)
 - **NAACL**(2013–2025)
 - **ICCV**(2013–2025)
 - **ECCV**(2018–2024)
 
-[Detailed Statistics](./statistics.md) — regenerate with
+[Generated coverage and quality report](./statistics.md) — regenerate with
 `python postprocessing/generate_statistics.py --write` after scraping;
 do not edit the numbers by hand.
 
@@ -45,12 +46,15 @@ do not edit the numbers by hand.
 ## Installation
 
 1. Clone the repository
-2. Install dependencies:
+2. Create a virtual environment and install dependencies:
 ```bash
-pip install -r requirements.txt
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
 ```
 
-3. Create a `.env` file (optional) to configure paths and Google Cloud credentials:
+3. Create a `.env` file to configure optional paths and credentials required by
+the scrapers you use:
 ```bash
 # Data storage root (default: ./data)
 SCRAPER_DATA_ROOT=./data
@@ -62,6 +66,10 @@ SCRAPER_LOG_FILE=scraper.log
 GCP_PROJECT_ID=your-project-id
 GCP_LOCATION=us-central1
 GEMINI_MODEL=gemini-2.5-flash
+
+# Required for authenticated access to older ICLR OpenReview data
+OPENREVIEW_USERNAME=you@example.com
+OPENREVIEW_PASSWORD=your-password
 ```
 See [Google Cloud Setup](./docs/GOOGLE_CLOUD_SETUP.md) for Vertex AI configuration.
 
@@ -127,7 +135,8 @@ data/
 
 ## Configuration
 
-Conference-specific settings are defined in `config.py`:
+Shared settings are defined in `config.py`; venue URLs and venue-specific
+delays live in each scraper class:
 - Request delays and timeouts
 - Retry attempts
 - Rate limiting parameters
@@ -149,6 +158,8 @@ The scraper generates detailed logs saved to `scraper.log` and displays progress
 - `postprocessing/backfill_missing_metadata_fields.py` remains available for
   independent bulk repair; `--enrich-missing` exposes the same fallback in the
   main CLI.
+- See the [documentation index](./docs/index.md), [data schema](./docs/data-schema.md),
+  [pipeline](./docs/pipeline.md), and [validation guide](./docs/validation.md).
 
 ## Motivation
 
@@ -165,5 +176,5 @@ In recent years, the rapid growth of AI and machine learning research has result
   `python postprocessing/backfill_missing_metadata_fields.py --abstract`,
   which extracts the abstract from GROBID TEI output (primary) or Nougat
   markdown (fallback) and records the origin in an `abstract_source` field.
-  The canonical dataset has been backfilled this way and has no missing
-  abstracts; only a fresh re-scrape starts with the gaps.
+  The generated [quality report](./statistics.md) is the source of truth for
+  remaining gaps in the canonical dataset.

@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 import main
 from postprocessing.backfill_missing_metadata_fields import enrich_papers
+from postprocessing.generate_statistics import format_years, scan
 from utils import assign_bibtex
 
 
@@ -135,6 +136,31 @@ class CliTests(unittest.TestCase):
 
         self.assertEqual(result.returncode, 2)
         self.assertIn("Please specify at least one year", result.stdout)
+
+
+class StatisticsTests(unittest.TestCase):
+    def test_year_ranges_preserve_gaps(self):
+        self.assertEqual(format_years([2013, 2015, 2016, 2018]),
+                         "2013, 2015–2016, 2018")
+
+    def test_scan_validates_real_pdf_and_quality_fields(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            metadata = root / "metadata/acl"
+            metadata.mkdir(parents=True)
+            pdf = root / "papers/acl/2026/p.pdf"
+            pdf.parent.mkdir(parents=True)
+            pdf.write_bytes(b"%PDF-1.7\n" + b"x" * 1024)
+            (metadata / "acl_2026.json").write_text(
+                '[{"id":"p","title":"T","authors":["A B"],'
+                '"abstract":"A","bibtex":"@x{p}",'
+                '"pdf_path":"papers/acl/2026/p.pdf"}]', encoding="utf-8")
+
+            row = scan(root / "metadata", root)["acl"][2026]
+
+        self.assertEqual(row["papers"], 1)
+        self.assertEqual(row["pdfs"], 1)
+        self.assertEqual(row["missing_pdfs"], 0)
 
 
 if __name__ == "__main__":

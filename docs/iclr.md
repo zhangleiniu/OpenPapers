@@ -6,13 +6,13 @@
 |-----------|--------|
 | 2013      | `api.openreview.net` (decision field in content) |
 | 2014–2016 | `iclr.cc` static archive pages + `arxiv.org` for abstracts and PDFs |
-| 2017–2023 | `api.openreview.net` (various strategies per year) |
+| 2017–2018, 2020–2023 | `api.openreview.net` (various strategies per year) |
 | 2019      | `iclr.cc/Downloads` JSON + OpenReview virtualsite pages |
 | 2024–2026 | `api2.openreview.net` (v2 API, `content.venueid`) |
 
-## Coverage
+## Dataset coverage
 
-2013-2026
+See the generated [coverage and quality report](../statistics.md).
 
 ## Strategy routing
 
@@ -42,13 +42,13 @@ on subsequent runs.
 
 | Field | Notes |
 |-------|-------|
-| `id` | OpenReview forum ID (2017+) or arXiv ID (2013–2016) |
+| `id` | OpenReview forum ID (2013, 2017+) or arXiv ID (2014–2016) |
 | `title` | ✓ |
 | `authors` | ✓ |
 | `abstract` | ✓ (fetched from arXiv for 2014–2016) |
 | `keywords` | ✓ (2017+, empty list for 2014–2016) |
 | `pdf_url` | arXiv PDF (2014–2016), OpenReview PDF (2017+) |
-| `openreview_url` | OpenReview forum URL (2017+) |
+| `openreview_url` | OpenReview forum URL (2013, 2017+) |
 | `track` | Track name (2015–2016 only, e.g. "Main Conference - Oral Presentations") |
 | `status` | Oral / Spotlight / Poster (when available from venue field) |
 
@@ -57,8 +57,10 @@ on subsequent runs.
 - **2023 venue labels**: ICLR 2023 used "notable top 5%" / "notable top 25%"
   instead of Oral / Spotlight. The venue filter accepts these (keyword
   "notable") and maps them to `status` Oral / Spotlight respectively.
-  Data scraped before 2026-07 misses these ~370 papers — re-scrape 2023
-  after deleting the `"2023"` key from `data/cache/iclr_papers.json`.
+  Data scraped before 2026-07 may miss these ~370 papers. The canonical data
+  was re-scraped and contains 1,573 ICLR 2023 papers.
+- **Authentication**: `OPENREVIEW_USERNAME` and `OPENREVIEW_PASSWORD` are
+  required for reliable access to older OpenReview data.
 - **2014**: The 2014 archive page is a Google Sites page with a different HTML
   structure from the 2015–2016 DokuWiki pages. A dedicated parser handles it.
 - **2015–2016 abstracts**: Fetched individually from arXiv on first parse;

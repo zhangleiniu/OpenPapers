@@ -4,9 +4,9 @@
 
 All years: `https://www.ijcai.org/proceedings/[year]/`
 
-## Coverage
+## Dataset coverage
 
-2017-2025
+See the generated [coverage and quality report](../statistics.md).
 
 ## Track filtering
 

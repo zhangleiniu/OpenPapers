@@ -8,9 +8,9 @@ Volume discovery is fully dynamic — no hardcoded mappings. The scraper
 searches the MLR Press main page for a volume matching "ICML {year}" and
 selects the main proceedings over workshop/satellite volumes.
 
-## Coverage
+## Dataset coverage
 
-2013–2025
+See the generated [coverage and quality report](../statistics.md).
 
 ## Volume disambiguation
 

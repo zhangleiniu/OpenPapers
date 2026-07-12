@@ -1,133 +1,169 @@
-"""Generate statistics.md from the metadata files — the single source of truth
-for dataset coverage.
+"""Generate the tracked dataset coverage and quality report.
 
-Scans every conference-year JSON under the metadata root and reports, per year:
-paper count, PDF completeness, and missing abstracts. Run it against the
-canonical data store and commit the regenerated statistics.md; never edit the
-numbers by hand.
-
-Usage:
-    python postprocessing/generate_statistics.py                  # print to stdout
-    python postprocessing/generate_statistics.py --write          # rewrite statistics.md
-    python postprocessing/generate_statistics.py --metadata-root /Volumes/MyData/mustcite/metadata
+The metadata and PDF trees are the source of truth.  The generated Markdown is
+deterministic: use ``--write`` to update it and ``--check`` in automation to
+fail when the tracked report is stale.
 """
 
 import argparse
 import json
 import sys
-from datetime import date
+from collections import Counter
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from config import METADATA_DIR  # noqa: E402
+from config import DATA_ROOT, METADATA_DIR  # noqa: E402
 
-# Display names for the summary table.
 NAMES = {
-    "neurips": "NeurIPS (Neural Information Processing Systems)",
-    "icml":    "ICML (International Conference on Machine Learning)",
-    "iclr":    "ICLR (International Conference on Learning Representations)",
-    "aaai":    "AAAI (AAAI Conference on Artificial Intelligence)",
-    "cvpr":    "CVPR (IEEE/CVF Conference on Computer Vision and Pattern Recognition)",
-    "iccv":    "ICCV (IEEE/CVF International Conference on Computer Vision)",
-    "eccv":    "ECCV (European Conference on Computer Vision)",
-    "acl":     "ACL (Annual Meeting of the Association for Computational Linguistics)",
-    "emnlp":   "EMNLP (Conference on Empirical Methods in Natural Language Processing)",
-    "naacl":   "NAACL (North American Chapter of the ACL)",
-    "ijcai":   "IJCAI (International Joint Conference on Artificial Intelligence)",
-    "aistats": "AISTATS (International Conference on Artificial Intelligence and Statistics)",
-    "colt":    "COLT (Conference on Learning Theory)",
-    "uai":     "UAI (Conference on Uncertainty in Artificial Intelligence)",
-    "jmlr":    "JMLR (Journal of Machine Learning Research)",
+    "neurips": "NeurIPS", "icml": "ICML", "iclr": "ICLR", "aaai": "AAAI",
+    "cvpr": "CVPR", "colt": "COLT", "uai": "UAI", "jmlr": "JMLR",
+    "aistats": "AISTATS", "ijcai": "IJCAI", "acl": "ACL", "emnlp": "EMNLP",
+    "naacl": "NAACL", "iccv": "ICCV", "eccv": "ECCV",
 }
-
-# Order conferences as in the README.
-ORDER = ["neurips", "icml", "iclr", "aaai", "cvpr", "colt", "uai", "jmlr",
-         "aistats", "ijcai", "acl", "emnlp", "naacl", "iccv", "eccv"]
+ORDER = list(NAMES)
+FIELDS = ("title", "authors", "abstract", "bibtex")
 
 
-def scan(metadata_root: Path):
-    """Return {conf: {year: (papers, pdfs, missing_abstract)}}."""
+def _pdf_file(data_root, pdf_path):
+    if not pdf_path:
+        return None
+    relative = pdf_path[5:] if pdf_path.startswith("data/") else pdf_path
+    return data_root / relative
+
+
+def scan(metadata_root: Path, data_root: Path):
     stats = {}
+    errors = []
     for path in sorted(metadata_root.glob("*/*.json")):
-        if path.name.endswith(".bak"):
-            continue
         conf = path.parent.name
-        year = path.stem.rsplit("_", 1)[-1]
         try:
-            papers = json.load(open(path, encoding="utf-8"))
-        except Exception as e:
-            print(f"[load error] {path}: {e}", file=sys.stderr)
+            year = int(path.stem.rsplit("_", 1)[-1])
+            papers = json.loads(path.read_text(encoding="utf-8"))
+            if not isinstance(papers, list):
+                raise ValueError("top-level JSON value is not a list")
+        except Exception as exc:
+            errors.append(f"{path}: {exc}")
             continue
-        n = len(papers)
-        pdfs = sum(1 for p in papers if p.get("pdf_downloaded"))
-        no_abs = sum(1 for p in papers if not (p.get("abstract") or "").strip())
-        stats.setdefault(conf, {})[year] = (n, pdfs, no_abs)
+
+        row = Counter(papers=len(papers))
+        ids = Counter(p.get("id") for p in papers if p.get("id"))
+        row["duplicate_ids"] = sum(count - 1 for count in ids.values() if count > 1)
+        for paper in papers:
+            for field in FIELDS:
+                if not paper.get(field):
+                    row[f"missing_{field}"] += 1
+            pdf = _pdf_file(data_root, paper.get("pdf_path"))
+            if pdf is None or not pdf.is_file():
+                row["missing_pdfs"] += 1
+                continue
+            try:
+                if pdf.stat().st_size < 1024:
+                    row["invalid_pdfs"] += 1
+                    continue
+                with pdf.open("rb") as handle:
+                    if handle.read(5) != b"%PDF-":
+                        row["invalid_pdfs"] += 1
+                        continue
+                row["pdfs"] += 1
+            except OSError:
+                row["invalid_pdfs"] += 1
+        stats.setdefault(conf, {})[year] = row
+
+    if errors:
+        raise RuntimeError("Metadata scan failed:\n" + "\n".join(errors))
     return stats
 
 
-def render(stats) -> str:
-    confs = [c for c in ORDER if c in stats] + sorted(set(stats) - set(ORDER))
-    grand_papers = grand_pdfs = 0
+def format_years(years):
+    years = sorted(years)
+    groups = []
+    start = previous = years[0]
+    for year in years[1:]:
+        if year == previous + 1:
+            previous = year
+            continue
+        groups.append(str(start) if start == previous else f"{start}–{previous}")
+        start = previous = year
+    groups.append(str(start) if start == previous else f"{start}–{previous}")
+    return ", ".join(groups)
 
-    out = []
-    out.append("# Academic Conference Papers Statistics Summary")
-    out.append("")
-    out.append(f"_Generated by `postprocessing/generate_statistics.py` "
-               f"on {date.today().isoformat()}. Do not edit numbers by hand._")
-    out.append("")
 
-    # Summary table -----------------------------------------------------------
-    out.append("## Coverage Summary")
-    out.append("")
-    out.append("| Conference | Years | Papers | PDFs |")
-    out.append("|------------|-------|--------|------|")
+def _total(rows, key):
+    return sum(row[key] for row in rows)
+
+
+def render(stats):
+    confs = [conf for conf in ORDER if conf in stats] + sorted(set(stats) - set(ORDER))
+    out = [
+        "# Dataset Coverage and Quality Report", "",
+        "_Generated by `postprocessing/generate_statistics.py`. Do not edit by hand._", "",
+        "## Coverage Summary", "",
+        "| Conference | Actual years | Papers | Valid PDFs | Missing abstracts |",
+        "|---|---:|---:|---:|---:|",
+    ]
+    grand = Counter()
     for conf in confs:
-        years = sorted(stats[conf])
-        papers = sum(v[0] for v in stats[conf].values())
-        pdfs = sum(v[1] for v in stats[conf].values())
-        grand_papers += papers
-        grand_pdfs += pdfs
-        out.append(f"| {conf.upper()} | {years[0]}–{years[-1]} "
-                   f"| {papers:,} | {pdfs:,} |")
-    out.append(f"| **Total** | | **{grand_papers:,}** | **{grand_pdfs:,}** |")
-    out.append("")
+        rows = list(stats[conf].values())
+        totals = Counter({key: _total(rows, key) for key in (
+            "papers", "pdfs", "missing_abstract")})
+        grand.update(totals)
+        out.append(
+            f"| {NAMES.get(conf, conf.upper())} | {format_years(stats[conf])} | "
+            f"{totals['papers']:,} | {totals['pdfs']:,} | {totals['missing_abstract']:,} |")
+    out.append(
+        f"| **Total** | | **{grand['papers']:,}** | **{grand['pdfs']:,}** | "
+        f"**{grand['missing_abstract']:,}** |")
+    out.extend(["", "## Detailed Quality by Conference", ""])
 
-    # Per-conference detail ---------------------------------------------------
-    out.append("## Detailed Statistics by Conference")
-    out.append("")
+    columns = ("papers", "pdfs", "missing_pdfs", "invalid_pdfs",
+               "missing_abstract", "missing_authors", "missing_bibtex", "duplicate_ids")
     for conf in confs:
-        out.append(f"### {NAMES.get(conf, conf.upper())}")
+        out.extend([
+            f"### {NAMES.get(conf, conf.upper())}", "",
+            "| Year | Papers | Valid PDFs | Missing PDFs | Invalid PDFs | Missing abstracts | Missing authors | Missing BibTeX | Duplicate IDs |",
+            "|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+        ])
+        for year, row in sorted(stats[conf].items()):
+            out.append("| " + str(year) + " | " + " | ".join(
+                f"{row[column]:,}" for column in columns) + " |")
+        rows = list(stats[conf].values())
+        out.append("| **Total** | " + " | ".join(
+            f"**{_total(rows, column):,}**" for column in columns) + " |")
         out.append("")
-        out.append("| Year | Papers | PDFs | Missing abstracts |")
-        out.append("|------|--------|------|-------------------|")
-        t_n = t_pdf = t_abs = 0
-        for year in sorted(stats[conf]):
-            n, pdfs, no_abs = stats[conf][year]
-            t_n += n; t_pdf += pdfs; t_abs += no_abs
-            out.append(f"| {year} | {n:,} | {pdfs:,} | {no_abs:,} |")
-        out.append(f"| **Total** | **{t_n:,}** | **{t_pdf:,}** | **{t_abs:,}** |")
-        out.append("")
-
     return "\n".join(out) + "\n"
 
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Regenerate statistics.md from the metadata files.")
-    parser.add_argument("--metadata-root", type=Path, default=METADATA_DIR,
-                        help=f"Metadata directory (default: {METADATA_DIR})")
-    parser.add_argument("--write", action="store_true",
-                        help="Write statistics.md at the repo root instead of stdout.")
-    args = parser.parse_args()
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--metadata-root", type=Path, default=METADATA_DIR)
+    parser.add_argument("--data-root", type=Path, default=DATA_ROOT)
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--write", action="store_true")
+    mode.add_argument("--check", action="store_true")
+    args = parser.parse_args(argv)
 
-    stats = scan(args.metadata_root)
+    try:
+        stats = scan(args.metadata_root, args.data_root)
+    except RuntimeError as exc:
+        print(exc, file=sys.stderr)
+        return 1
     if not stats:
-        sys.exit(f"No metadata found under {args.metadata_root}")
-    md = render(stats)
-
+        print(f"No metadata found under {args.metadata_root}", file=sys.stderr)
+        return 1
+    rendered = render(stats)
+    target = Path(__file__).resolve().parents[1] / "statistics.md"
     if args.write:
-        target = Path(__file__).resolve().parents[1] / "statistics.md"
-        target.write_text(md, encoding="utf-8")
+        target.write_text(rendered, encoding="utf-8")
         print(f"Wrote {target}")
+    elif args.check:
+        if not target.is_file() or target.read_text(encoding="utf-8") != rendered:
+            print(f"{target} is stale; run with --write", file=sys.stderr)
+            return 1
+        print(f"{target} is up to date")
     else:
-        sys.stdout.write(md)
+        sys.stdout.write(rendered)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

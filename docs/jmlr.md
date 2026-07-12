@@ -6,9 +6,9 @@ All years: `https://jmlr.org/papers/v[year - 1999]`
 
 Volume number is derived from year: `volume = year - 1999` (v1 = 2000, v2 = 2001, ...).
 
-## Coverage
+## Dataset coverage
 
-2000–2026
+See the generated [coverage and quality report](../statistics.md).
 
 ## Data fields
 
