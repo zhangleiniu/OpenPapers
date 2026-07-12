@@ -44,7 +44,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from config import DATA_ROOT, METADATA_DIR  # noqa: E402
 
-PAPERS_PREFIX = "data/papers/"
+# Current convention is "papers/..."; "data/papers/..." appears in metadata
+# written before 2026-07. Longer prefix must be tried first.
+PAPERS_PREFIXES = ("data/papers/", "papers/")
 
 # Provenance fields written when a value is backfilled (distinct per field type).
 ABSTRACT_SOURCE_FIELD = "abstract_source"
@@ -69,14 +71,15 @@ def is_empty(value):
 # pdf_path -> processed-file locations
 # ----------------------------------------------------------------------
 def stem_from_pdf_path(pdf_path):
-    """data/papers/conf/year/file.pdf  ->  conf/year/file   (None if unparseable)."""
-    idx = pdf_path.find(PAPERS_PREFIX)
-    if idx == -1:
-        return None
-    sub = pdf_path[idx + len(PAPERS_PREFIX):]
-    if sub.endswith(".pdf"):
-        sub = sub[:-4]
-    return sub
+    """papers/conf/year/file.pdf  ->  conf/year/file   (None if unparseable)."""
+    for prefix in PAPERS_PREFIXES:
+        idx = pdf_path.find(prefix)
+        if idx != -1:
+            sub = pdf_path[idx + len(prefix):]
+            if sub.endswith(".pdf"):
+                sub = sub[:-4]
+            return sub
+    return None
 
 
 # ----------------------------------------------------------------------
