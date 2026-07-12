@@ -35,6 +35,7 @@ class COLTScraper(BaseScraper):
     def __init__(self):
         super().__init__('colt')
         self._volume_cache: Dict[int, str] = {
+            2026: 'v336',
             2025: 'v291',
         }
 

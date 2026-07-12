@@ -5,6 +5,7 @@
 All years: `https://proceedings.mlr.press/`
 
 Known volume mappings (others discovered dynamically from the MLR Press main page):
+- 2026: `v336`
 - 2025: `v291`
 
 ## Dataset coverage
