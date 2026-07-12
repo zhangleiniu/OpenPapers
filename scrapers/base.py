@@ -59,8 +59,8 @@ class BaseScraper(ABC):
             pdf_path = PAPERS_DIR / self.conference / str(year) / filename
             success = self.session.download_file(paper['pdf_url'], pdf_path)
             if success:
-                # Store relative path
-                relative_path = f"data/papers/{self.conference}/{year}/{filename}"
+                # Path relative to the data root (mustcite convention: papers/...)
+                relative_path = f"papers/{self.conference}/{year}/{filename}"
                 paper['pdf_path'] = relative_path
                 paper['pdf_downloaded'] = True
             else:
