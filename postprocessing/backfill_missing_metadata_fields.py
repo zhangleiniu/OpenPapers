@@ -7,7 +7,7 @@ How it works:
    only if it has a pdf_path; everything else is skipped.
 
 2. For a missing abstract it derives the GROBID path from pdf_path
-   (papers/…/X.pdf → <grobid-root>/…/X.grobid.tei.xml) and parses the
+   (data/papers/…/X.pdf → <grobid-root>/…/X.grobid.tei.xml) and parses the
    TEI profileDesc/abstract.
 
 3. If the GROBID file isn't there (or yields nothing), it falls back to the
