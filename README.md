@@ -11,25 +11,28 @@ demos, tutorials, and other secondary material.
 
 ## Supported Conferences
 
-- **NeurIPS**(2000–2025)
-- **ICML**(2013–2025)
-- **ICLR**(2013–2026)
-- **AAAI**(2010–2026)
-- **CVPR**(2013–2026)
-- **COLT**(2011–2025)
-- **UAI**(2015–2025)
-- **JMLR**(2000–2026)
-- **AISTATS**(2009–2025)
-- **IJCAI**(2017–2025)
-- **ACL**(2017–2026)
-- **EMNLP**(2017–2025)
-- **NAACL**(2013–2025)
-- **ICCV**(2013–2025)
-- **ECCV**(2018–2024)
+<!-- BEGIN GENERATED COVERAGE -->
+- **NeurIPS** (2000–2025)
+- **ICML** (2013–2025)
+- **ICLR** (2013–2026)
+- **AAAI** (2010–2026)
+- **CVPR** (2013–2026)
+- **COLT** (2011–2026)
+- **UAI** (2015–2025)
+- **JMLR** (2000–2026)
+- **AISTATS** (2009–2025)
+- **IJCAI** (2017–2025)
+- **ACL** (2017–2026)
+- **EMNLP** (2017–2025)
+- **NAACL** (2013, 2015–2016, 2018–2019, 2021–2022, 2024–2025)
+- **ICCV** (2013, 2015, 2017, 2019, 2021, 2023, 2025)
+- **ECCV** (2018, 2020, 2022, 2024)
+<!-- END GENERATED COVERAGE -->
 
 [Generated coverage and quality report](./statistics.md) — regenerate with
-`python postprocessing/generate_statistics.py --write` after scraping;
-do not edit the numbers by hand.
+`python postprocessing/generate_statistics.py --write` after scraping. The
+command also updates the marker-delimited list above; do not edit generated
+coverage by hand.
 
 > ⚠️ **Note:** Due to access restrictions, the tool currently **does not support** scraping papers from **KDD**, **TPAMI**, and **ICDM**, as their full metadata or PDFs are not publicly available without a subscription or institutional access.
 

@@ -8,7 +8,9 @@ The pipeline has independent, resumable stages:
 4. Optionally enrich missing abstracts/authors from existing GROBID output,
    falling back to Nougat output.
 5. Validate required metadata and real PDF files.
-6. Regenerate the tracked coverage and quality report.
+6. Regenerate the tracked coverage report and README coverage list.
+7. Update the venue page only when the new year adds a source/volume mapping,
+   changes scraping policy, or has known missing/withdrawn-paper exceptions.
 
 ```bash
 python main.py acl 2026
@@ -16,6 +18,9 @@ python main.py acl 2026 --enrich-missing --require-complete
 python postprocessing/generate_statistics.py --write
 python postprocessing/generate_statistics.py --check
 ```
+
+The `--check` command fails if either `statistics.md` or the generated README
+coverage block is stale.
 
 `--enrich-missing` consumes `$SCRAPER_DATA_ROOT/grobid_output` and
 `nougat_output`; it does not launch those resource-intensive processors.

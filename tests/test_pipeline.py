@@ -7,7 +7,9 @@ from unittest.mock import patch
 
 import main
 from postprocessing.backfill_missing_metadata_fields import enrich_papers
-from postprocessing.generate_statistics import format_years, scan
+from postprocessing.generate_statistics import (
+    format_years, render_readme_coverage, replace_generated_section, scan,
+)
 from utils import assign_bibtex
 
 
@@ -142,6 +144,23 @@ class StatisticsTests(unittest.TestCase):
     def test_year_ranges_preserve_gaps(self):
         self.assertEqual(format_years([2013, 2015, 2016, 2018]),
                          "2013, 2015–2016, 2018")
+
+    def test_readme_coverage_uses_actual_years(self):
+        rendered = render_readme_coverage({
+            "colt": {2025: {}, 2026: {}},
+            "naacl": {2024: {}, 2026: {}},
+        })
+        self.assertEqual(rendered, (
+            "- **COLT** (2025–2026)\n"
+            "- **NAACL** (2024, 2026)"))
+
+    def test_generated_section_replacement_requires_markers(self):
+        text = "before\n<!-- S -->\nold\n<!-- E -->\nafter\n"
+        self.assertEqual(
+            replace_generated_section(text, "<!-- S -->", "<!-- E -->", "new"),
+            "before\n<!-- S -->\nnew\n<!-- E -->\nafter\n")
+        with self.assertRaises(ValueError):
+            replace_generated_section("no markers", "<!-- S -->", "<!-- E -->", "new")
 
     def test_scan_validates_real_pdf_and_quality_fields(self):
         with tempfile.TemporaryDirectory() as temp_dir:

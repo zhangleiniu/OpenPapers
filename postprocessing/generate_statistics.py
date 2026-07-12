@@ -2,7 +2,7 @@
 
 The metadata and PDF trees are the source of truth.  The generated Markdown is
 deterministic: use ``--write`` to update it and ``--check`` in automation to
-fail when the tracked report is stale.
+fail when the tracked report or README coverage summary is stale.
 """
 
 import argparse
@@ -22,6 +22,8 @@ NAMES = {
 }
 ORDER = list(NAMES)
 FIELDS = ("title", "authors", "abstract", "bibtex")
+README_START = "<!-- BEGIN GENERATED COVERAGE -->"
+README_END = "<!-- END GENERATED COVERAGE -->"
 
 
 def _pdf_file(data_root, pdf_path):
@@ -92,6 +94,24 @@ def _total(rows, key):
     return sum(row[key] for row in rows)
 
 
+def render_readme_coverage(stats):
+    """Render the compact README list from the same canonical scan."""
+    confs = [conf for conf in ORDER if conf in stats] + sorted(set(stats) - set(ORDER))
+    return "\n".join(
+        f"- **{NAMES.get(conf, conf.upper())}** ({format_years(stats[conf])})"
+        for conf in confs
+    )
+
+
+def replace_generated_section(text, start, end, content):
+    """Replace one marker-delimited generated section."""
+    if text.count(start) != 1 or text.count(end) != 1:
+        raise ValueError(f"expected exactly one {start!r}/{end!r} marker pair")
+    prefix, remainder = text.split(start, 1)
+    _, suffix = remainder.split(end, 1)
+    return f"{prefix}{start}\n{content}\n{end}{suffix}"
+
+
 def render(stats):
     confs = [conf for conf in ORDER if conf in stats] + sorted(set(stats) - set(ORDER))
     out = [
@@ -151,15 +171,32 @@ def main(argv=None):
         print(f"No metadata found under {args.metadata_root}", file=sys.stderr)
         return 1
     rendered = render(stats)
-    target = Path(__file__).resolve().parents[1] / "statistics.md"
+    repo_root = Path(__file__).resolve().parents[1]
+    target = repo_root / "statistics.md"
+    readme = repo_root / "README.md"
+    try:
+        readme_rendered = replace_generated_section(
+            readme.read_text(encoding="utf-8"), README_START, README_END,
+            render_readme_coverage(stats))
+    except (OSError, ValueError) as exc:
+        print(f"Cannot update README coverage: {exc}", file=sys.stderr)
+        return 1
     if args.write:
         target.write_text(rendered, encoding="utf-8")
+        readme.write_text(readme_rendered, encoding="utf-8")
         print(f"Wrote {target}")
+        print(f"Updated coverage in {readme}")
     elif args.check:
+        stale = False
         if not target.is_file() or target.read_text(encoding="utf-8") != rendered:
             print(f"{target} is stale; run with --write", file=sys.stderr)
+            stale = True
+        if readme.read_text(encoding="utf-8") != readme_rendered:
+            print(f"README coverage is stale; run with --write", file=sys.stderr)
+            stale = True
+        if stale:
             return 1
-        print(f"{target} is up to date")
+        print(f"{target} and README coverage are up to date")
     else:
         sys.stdout.write(rendered)
     return 0
