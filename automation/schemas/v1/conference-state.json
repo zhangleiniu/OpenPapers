@@ -1,0 +1,206 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openpapers.local/schemas/v1/conference-state.json",
+  "title": "OpenPapers conference state v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "venue_id",
+    "year",
+    "lifecycle_state",
+    "facets",
+    "milestones",
+    "next_check_at",
+    "next_check_reason",
+    "evidence_ids",
+    "blockers",
+    "transition_history",
+    "updated_at"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "venue_id": {"$ref": "#/$defs/venue_id"},
+    "year": {"type": "integer", "minimum": 1900, "maximum": 2200},
+    "lifecycle_state": {"$ref": "#/$defs/lifecycle_state"},
+    "facets": {"$ref": "#/$defs/facets"},
+    "milestones": {"$ref": "#/$defs/milestones"},
+    "next_check_at": {"type": ["string", "null"], "format": "date-time"},
+    "next_check_reason": {
+      "type": ["string", "null"],
+      "enum": [
+        "unknown_schedule_fallback",
+        "before_verified_milestone",
+        "expected_release",
+        "post_conference_release_backoff",
+        "maximum_silence_guard",
+        "manual",
+        null
+      ]
+    },
+    "evidence_ids": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/id"},
+      "uniqueItems": true
+    },
+    "blockers": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/blocker"},
+      "uniqueItems": true
+    },
+    "transition_history": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/transition"}
+    },
+    "updated_at": {"type": "string", "format": "date-time"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"next_check_at": {"type": "null"}}},
+      "then": {"properties": {"next_check_reason": {"type": "null"}}}
+    },
+    {
+      "if": {"properties": {"next_check_reason": {"type": "null"}}},
+      "then": {"properties": {"next_check_at": {"type": "null"}}}
+    }
+  ],
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._:-]{2,127}$"
+    },
+    "venue_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]{1,31}$"
+    },
+    "lifecycle_state": {
+      "enum": [
+        "unknown",
+        "scheduled",
+        "conference_ended",
+        "paper_list_released",
+        "metadata_ready",
+        "pdf_partial",
+        "pdf_ready",
+        "ingestion_queued",
+        "ingesting",
+        "validated",
+        "published"
+      ]
+    },
+    "blocker": {
+      "enum": [
+        "no_public_list",
+        "no_pdf",
+        "unknown_download_source",
+        "unsupported_scraper",
+        "scraper_failed",
+        "validation_failed",
+        "agent_pending",
+        "codex_patch_pending",
+        "human_review_required",
+        "crawl_policy_denied"
+      ]
+    },
+    "facets": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "conference_status",
+        "paper_list_status",
+        "metadata_status",
+        "pdf_status",
+        "proceedings_status"
+      ],
+      "properties": {
+        "conference_status": {"enum": ["unknown", "scheduled", "ended"]},
+        "paper_list_status": {"enum": ["unknown", "unavailable", "partial", "released"]},
+        "metadata_status": {"enum": ["unknown", "unavailable", "partial", "ready"]},
+        "pdf_status": {"enum": ["unknown", "unavailable", "partial", "ready"]},
+        "proceedings_status": {"enum": ["unknown", "unavailable", "provisional", "archival"]}
+      }
+    },
+    "milestones": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "conference_start",
+        "conference_end",
+        "acceptance_notification",
+        "paper_list_expected",
+        "proceedings_expected",
+        "paper_list_released",
+        "proceedings_released"
+      ],
+      "properties": {
+        "conference_start": {"$ref": "#/$defs/nullable_milestone"},
+        "conference_end": {"$ref": "#/$defs/nullable_milestone"},
+        "acceptance_notification": {"$ref": "#/$defs/nullable_milestone"},
+        "paper_list_expected": {"$ref": "#/$defs/nullable_milestone"},
+        "proceedings_expected": {"$ref": "#/$defs/nullable_milestone"},
+        "paper_list_released": {"$ref": "#/$defs/nullable_milestone"},
+        "proceedings_released": {"$ref": "#/$defs/nullable_milestone"}
+      }
+    },
+    "nullable_milestone": {
+      "oneOf": [
+        {"$ref": "#/$defs/milestone"},
+        {"type": "null"}
+      ]
+    },
+    "milestone": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "at",
+        "status",
+        "source_type",
+        "source_url",
+        "evidence_ids",
+        "observed_at"
+      ],
+      "properties": {
+        "at": {"type": "string", "format": "date-time"},
+        "status": {"enum": ["verified", "observed"]},
+        "source_type": {"enum": ["official", "archival"]},
+        "source_url": {"type": "string", "format": "uri", "pattern": "^https://"},
+        "evidence_ids": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/id"},
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "observed_at": {"type": "string", "format": "date-time"}
+      }
+    },
+    "transition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "transition_id",
+        "previous_state",
+        "new_state",
+        "evidence_ids",
+        "reason",
+        "actor",
+        "at"
+      ],
+      "properties": {
+        "transition_id": {"$ref": "#/$defs/id"},
+        "previous_state": {"$ref": "#/$defs/lifecycle_state"},
+        "new_state": {"$ref": "#/$defs/lifecycle_state"},
+        "evidence_ids": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/id"},
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "reason": {"type": "string", "minLength": 1, "maxLength": 1000},
+        "actor": {
+          "enum": ["deterministic_verifier", "job_result_consumer", "human"]
+        },
+        "at": {"type": "string", "format": "date-time"}
+      }
+    }
+  }
+}

@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openpapers.local/schemas/v1/codex-result.json",
+  "title": "OpenPapers Codex result v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "job_id",
+    "completed_at",
+    "status",
+    "failure_fingerprint",
+    "summary",
+    "branch",
+    "worktree",
+    "changed_files",
+    "tests",
+    "patch_artifact_id",
+    "requires_human_review",
+    "recursive_triggered",
+    "merged",
+    "deployed"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "job_id": {"$ref": "#/$defs/id"},
+    "completed_at": {"type": "string", "format": "date-time"},
+    "status": {"enum": ["diagnosed", "patch_proposed", "no_change", "failed"]},
+    "failure_fingerprint": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "summary": {"type": "string", "minLength": 1, "maxLength": 10000},
+    "branch": {"type": ["string", "null"], "maxLength": 500},
+    "worktree": {"type": ["string", "null"], "maxLength": 1000},
+    "changed_files": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1, "maxLength": 1000},
+      "uniqueItems": true
+    },
+    "tests": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/test_result"}
+    },
+    "patch_artifact_id": {"type": ["string", "null"], "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._:-]{2,127}$"},
+    "requires_human_review": {"const": true},
+    "recursive_triggered": {"const": false},
+    "merged": {"const": false},
+    "deployed": {"const": false}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "patch_proposed"}}},
+      "then": {
+        "properties": {
+          "branch": {"type": "string", "minLength": 1},
+          "worktree": {"type": "string", "minLength": 1},
+          "changed_files": {"minItems": 1},
+          "patch_artifact_id": {"type": "string"}
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._:-]{2,127}$"
+    },
+    "test_result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["command", "status", "exit_code"],
+      "properties": {
+        "command": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "status": {"enum": ["passed", "failed", "not_run"]},
+        "exit_code": {"type": ["integer", "null"]}
+      }
+    }
+  }
+}

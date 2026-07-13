@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "case_id": "case:icml:2026:no-pdf",
+  "venue_id": "icml",
+  "year": 2026,
+  "blocker": "no_pdf",
+  "status": "open",
+  "summary": "The public list exists but archival PDFs are not available.",
+  "evidence_ids": ["evidence:icml:2026:list"],
+  "first_observed_at": "2026-07-13T13:00:00Z",
+  "last_checked_at": "2026-07-13T13:00:00Z",
+  "last_meaningful_change_at": "2026-07-13T13:00:00Z",
+  "snoozed_until": null,
+  "resolution": null
+}

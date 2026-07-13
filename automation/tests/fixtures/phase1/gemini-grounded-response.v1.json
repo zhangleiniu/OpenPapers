@@ -1,0 +1,62 @@
+{
+  "body": {
+    "venue_id": "icml",
+    "year": 2026,
+    "conference_status": "scheduled",
+    "paper_list_status": "unknown",
+    "metadata_status": "unknown",
+    "pdf_status": "unknown",
+    "proceedings_status": "unknown",
+    "claims": [
+      {
+        "venue_id": "icml",
+        "year": 2026,
+        "claim_kind": "conference",
+        "statement": "ICML 2026 is scheduled for July 13 through July 18, 2026.",
+        "evidence_urls": [
+          "https://icml.cc/virtual/2026/calendar"
+        ],
+        "source_type": "official",
+        "published_at": null
+      }
+    ],
+    "candidate_milestones": [
+      {
+        "venue_id": "icml",
+        "year": 2026,
+        "milestone_type": "conference_start",
+        "scope": "conference",
+        "date": "2026-07-13",
+        "evidence_urls": [
+          "https://icml.cc/virtual/2026/calendar"
+        ],
+        "source_type": "official"
+      },
+      {
+        "venue_id": "icml",
+        "year": 2026,
+        "milestone_type": "conference_end",
+        "scope": "conference",
+        "date": "2026-07-18",
+        "evidence_urls": [
+          "https://icml.cc/virtual/2026/calendar"
+        ],
+        "source_type": "official"
+      }
+    ],
+    "confidence": 0.9,
+    "uncertainties": [
+      "The archival proceedings release date is not established by this source."
+    ]
+  },
+  "grounding_sources": [
+    {
+      "uri": "https://icml.cc/virtual/2026/calendar",
+      "title": "ICML 2026 Schedule",
+      "domain": "icml.cc"
+    }
+  ],
+  "search_queries": [
+    "ICML 2026 official conference dates proceedings"
+  ]
+}

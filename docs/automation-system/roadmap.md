@@ -1,0 +1,282 @@
+# Automation roadmap
+
+This roadmap describes planned work, not a claim that the target system is
+already implemented. Update the status table and the relevant acceptance
+criteria in the same change that completes a phase.
+
+## Status
+
+| Phase | Scope | Status |
+|---|---|---|
+| Existing baseline | Deterministic monitor, Cloud Run/Prefect/GCS, email | Implemented |
+| 0 | Contracts, policies, ownership, and safety boundaries | Implemented |
+| 1 | LLM search discovery in shadow mode | Shadow (15-venue live review, 2026-07-13) |
+| 2 | Evidence verification and lifecycle state | Planned |
+| 3 | Cases and fatigue-resistant notifications | Planned |
+| 4 | Mac mini Prefect worker and immutable results | Planned |
+| 5 | Automatic execution of existing scrapers | Planned |
+| 6 | Budgeted Codex diagnosis and repair proposals | Planned |
+| 7 | Dataset promotion and MustCite deployment | Planned |
+| 8 | Venue rollout and operational hardening | Planned |
+
+Valid phase statuses are `Planned`, `In progress`, `Shadow`, `Implemented`,
+and `Paused`, with a short reason/date when paused.
+
+## Phase 0: contracts and policy foundation
+
+Deliverables:
+
+- versioned schemas for discovery, conference/case state, typed jobs, immutable
+  job results, and Codex results;
+- venue catalog containing stable identity, aliases, official domains,
+  lifecycle kind, and existing scraper capability;
+- evidence-backed conference-year milestones and policy-derived
+  `next_check_at` scheduling;
+- transition table and blocker codes;
+- single-writer SQLite/GCS ownership and job-result protocol;
+- configurable reminder-decay, provider budget, Codex budget, and systemic
+  failure policies;
+- crawl/publication policy model;
+- architecture tests for schema validation and invalid transitions.
+
+Acceptance:
+
+- planned and implemented behavior are clearly distinguished;
+- schemas reject unknown/missing execution-critical fields;
+- no LLM result can directly create a scrape command;
+- duplicate evidence/job results are idempotent;
+- storage ownership and secret boundaries are documented and tested where
+  executable;
+- the existing production monitor remains operational.
+
+Implemented in the Phase 0 foundation:
+
+- `automation/schemas/v1/` and `automation/contracts.py` provide strict,
+  versioned artifact validation and reject missing/unknown executable fields;
+- `automation/config/venue_catalog.v1.json` covers all 15 current core
+  scrapers without changing the deployed monitor registry or hardcoding
+  year-specific check months;
+- `automation/config/policies.v1.json` defines conservative reminder, provider,
+  Codex, systemic-failure, dynamic scheduling, crawl, and publication defaults;
+- `automation/scheduling.py` derives `next_check_at` from verified milestones,
+  post-event backoff, low-frequency unknown-date fallback, and a maximum
+  silence guard;
+- `automation/domain.py` provides the transition/action/blocker/permission
+  vocabulary, deterministic actor gate, evidence replay, write-once result,
+  single-writer ownership, and secret-boundary checks; and
+- sanitized fixture tests prove invalid transition and schema rejection,
+  discovery/action separation, idempotent evidence/result replay, Mac/cloud
+  ownership, JMLR continuous-publication behavior, and current monitor
+  compatibility.
+
+Phase 0 does not provide durable control state, a discovery provider, evidence
+verification, routing, execution, or deployment. Those remain assigned to the
+later phases below.
+
+## Phase 1: LLM discovery
+
+Deliverables:
+
+- provider-neutral discovery interface;
+- initial Gemini search-grounded implementation;
+- structured prompt and output-schema versions;
+- caching, discovery of candidate milestone dates, daily/per-venue budgets,
+  and second-provider escalation interface;
+- retained discovery/evidence artifacts;
+- fixture-based tests plus a live, opt-in canary command.
+
+Run in shadow mode across all registered venues. Discovery may report what it
+would do but cannot queue a scrape.
+
+Acceptance:
+
+- every actionable claim has a source URL;
+- venue/year mismatches and unsupported claims are rejected;
+- daily and per-venue call limits work under retries;
+- repeated unchanged checks use cache where appropriate;
+- a manually reviewed sample across all venue families records agreement,
+  false positives, missed sources, and ambiguous cases;
+- the deterministic baseline continues in parallel.
+
+Implemented so far:
+
+- `automation/discovery.py` defines the provider-neutral interface and
+  validates that every claim and candidate milestone matches the exact
+  venue/year and cites a URL returned in provider grounding metadata;
+- the version 1 discovery schema has a backwards-compatible typed
+  `candidate_milestones` extension; candidates remain unverified evidence;
+- immutable evidence artifacts, request/evidence fingerprints, an expiring
+  cache, attempt-before-I/O daily/per-venue budgets, bounded concurrency and
+  retries, safe error fingerprints, and a second-provider policy/interface are
+  implemented with deterministic clocks and fakes;
+- `automation/providers/gemini.py` uses Vertex AI Gemini Search Grounding plus
+  a no-tool schema structuring pass over grounded excerpts, and
+  `automation/run_discovery.py`
+  refuses remote access unless `--live` is explicit. The manual development
+  CLI is unmetered and accepts any catalog venue, while the reusable service
+  retains tested ledger enforcement for future automatic callers; and
+- fixture tests cover unsupported citations, source-class claims,
+  venue/year/date mismatch, cache replay, retry accounting, second-provider
+  escalation, and the command's non-live boundary.
+
+Contract-valid live observations and manual review now cover all 15 catalog
+venues and every rollout family. The review confirmed useful date and
+paper-list discovery, while recording readiness false positives and NAACL/ACL
+identity contamination. Prompt v14 uses grounded excerpt-to-source mappings,
+deterministic catalog source classification, typed facet claims, conservative
+status downgrades, cross-year annual milestones, continuous-publication
+handling, and deterministic ended-date derivation. The review matrix is in
+`phase1-live-review-2026-07-13.md`. Phase 1 is now `Shadow`, not `Implemented`:
+repeat observations and operational integration remain future work, and Phase
+2 must fetch cited resources and verify list, metadata, PDF, proceedings, and
+venue identity before any state transition.
+
+## Phase 2: verification and state transitions
+
+Deliverables:
+
+- URL/source trust classification;
+- page, list-count, metadata, and PDF validators;
+- crawl-policy enforcement before network actions;
+- idempotent state reducer with evidence history;
+- typed action router;
+- source snapshots suitable for later parser repair.
+
+Acceptance:
+
+- unverified or conflicting claims cannot queue execution;
+- PDF-ready claims include successful fetch/signature sampling where allowed;
+- state history explains why every transition occurred;
+- a new domain defaults to review rather than unrestricted crawling;
+- JMLR follows a continuous-publication policy;
+- replaying artifacts produces the same state.
+
+## Phase 3: cases and notifications
+
+Deliverables:
+
+- persistent unresolved cases with deduplication;
+- immediate transition/failure notifications;
+- weekly, monthly, and dormant digest generation;
+- snooze/ignore/reactivate/resolve controls;
+- notification delivery retries separated from case creation.
+
+Acceptance:
+
+- one event creates at most one immediate notification;
+- weeks 1-4, weeks 5-12, and dormant policies are covered by clock-controlled
+  tests;
+- `last_meaningful_change_at` drives aging;
+- resolved cases stop appearing;
+- one digest contains all due cases, grouped by urgency;
+- email includes evidence and run references without leaking credentials.
+
+## Phase 4: Mac mini execution plane
+
+Deliverables:
+
+- dedicated Prefect work pool and typed queues;
+- macOS installation and `launchd` runbook;
+- worker health check and Codex login check;
+- venue/year locks, disk checks, timeouts, cancellation, and idempotent job IDs;
+- immutable GCS job-result/manifest publishing;
+- cloud result-consumer flow.
+
+Acceptance:
+
+- worker resumes after Mac reboot and SSH disconnect;
+- the Mac requires no public inbound command endpoint;
+- duplicate delivery does not repeat a completed scrape;
+- the Mac cannot update cloud-owned SQLite state;
+- logs appear in Prefect and artifacts contain a stable result manifest;
+- offline workers leave work queued and visible.
+
+## Phase 5: execute existing scrapers
+
+Deliverables:
+
+- approved command templates rather than arbitrary shell input;
+- announced, metadata, and archival readiness routing;
+- staging data directory and promotion candidate manifest;
+- independent validation and repository completion checks;
+- retry classification that separates transient, operational, and structural
+  failures.
+
+Acceptance:
+
+- only verified, crawl-policy-allowed sources can queue a scrape;
+- paper counts, required metadata, duplicate IDs, PDFs, minimum size, and PDF
+  signatures are checked as applicable;
+- invalid or partial output cannot overwrite canonical data;
+- statistics and generated README coverage are updated only in a promotion
+  candidate change;
+- success, partial success, and failure are distinguishable and resumable.
+
+## Phase 6: Codex diagnosis and repair
+
+Deliverables:
+
+- error classifier and stable failure fingerprints;
+- per-venue/global budgets, cooldowns, concurrency, runtime limits, and a
+  systemic-incident circuit breaker;
+- local `codex exec --json` adapter with schema-constrained output;
+- isolated branch/worktree lifecycle;
+- patch, fixture, test, and review report artifacts.
+
+Acceptance:
+
+- transient HTTP, credentials, disk, or provider outages do not trigger Codex;
+- the same failure fingerprint respects its cooldown;
+- three or more likely-related venue failures open one systemic incident;
+- Codex cannot access the primary checkout or unrelated secrets;
+- Codex does not recursively trigger itself;
+- code changes stop at a reviewable patch/branch and never auto-merge/deploy.
+
+## Phase 7: promotion and MustCite deployment
+
+Deliverables:
+
+- explicit `validated -> release candidate -> promoted -> deployed` workflow;
+- provenance and rights metadata in release manifests;
+- rollback-capable canonical data versioning;
+- MustCite deployment adapter and post-deploy health check;
+- separate policy for metadata publication and PDF redistribution.
+
+Acceptance:
+
+- public availability of a PDF is not treated as redistribution permission;
+- every promoted dataset can be traced to evidence, scraper version, job,
+  validation report, and approval actor;
+- deployment failure does not corrupt the validated dataset;
+- rollback and health-check procedures have been exercised;
+- initial promotion/deployment remains manually approved.
+
+## Phase 8: rollout
+
+Roll out in venue families, each beginning in shadow mode:
+
+1. ICML, AISTATS, IJCAI: compare with the existing monitor;
+2. ICLR, NeurIPS, AAAI: OpenReview and official proceedings;
+3. ACL, EMNLP, NAACL: ACL Anthology;
+4. CVPR, ICCV, ECCV: visual-conference sources;
+5. COLT, UAI, JMLR: PMLR and continuous publication.
+
+Acceptance for each family:
+
+- reviewed discovery/evidence accuracy is recorded;
+- no executable false positive occurred during shadow mode;
+- domain crawl policy is approved;
+- scraper capabilities and expected readiness are accurate;
+- operational cost and notification volume remain within configured budgets;
+- failure and rollback drills have passed before enabling automatic action.
+
+## Deferred decisions
+
+Do not implement these merely because they appear attractive:
+
+- Firestore/PostgreSQL migration without a documented trigger;
+- calling two LLM providers for every check;
+- a public endpoint that accepts arbitrary Mac mini commands;
+- automatic Codex merge or production deployment;
+- public rehosting of PDFs based only on a downloadable URL;
+- a real-time dashboard before cases and operations show it is necessary.

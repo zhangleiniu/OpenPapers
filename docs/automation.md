@@ -4,6 +4,19 @@ The automation layer is a control plane around the existing deterministic
 scrapers. It detects source changes cheaply and emits structured events; it
 does not publish datasets or execute LLM-generated code by itself.
 
+This page documents the **current deployed implementation**. Phase 0's strict
+contracts, catalog, policy configuration, and pure state/idempotency rules now
+exist in the repository, including evidence-driven `next_check_at` scheduling,
+but are not wired into this deployment. A Phase 1 Gemini Search Grounding
+adapter, cache/budget controls, and an explicit shadow-only command also exist
+in the repository. Its 15-venue live review is complete and the phase is in
+shadow status, but it is not deployed or scheduled. Persistent lifecycle/case
+state, reminder delivery, the Mac mini worker, Codex repair execution, and
+MustCite deployment are not implemented.
+Start at the [automation system development guide](./automation-system/README.md) for
+the implemented foundation, target architecture, roadmap, and zero-context
+development workflow.
+
 ## Registry and runtime state
 
 `automation/conferences.json` is versioned configuration. Each conference-year

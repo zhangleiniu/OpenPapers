@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openpapers.local/schemas/v1/job-result.json",
+  "title": "OpenPapers immutable job result v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "job_id",
+    "worker_id",
+    "completed_at",
+    "status",
+    "result_fingerprint",
+    "artifact_ids",
+    "error_code",
+    "error_summary",
+    "metrics"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "job_id": {"$ref": "#/$defs/id"},
+    "worker_id": {"$ref": "#/$defs/id"},
+    "completed_at": {"type": "string", "format": "date-time"},
+    "status": {"enum": ["succeeded", "failed", "cancelled"]},
+    "result_fingerprint": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "artifact_ids": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/id"},
+      "uniqueItems": true
+    },
+    "error_code": {"type": ["string", "null"], "pattern": "^[a-z][a-z0-9_]{2,63}$"},
+    "error_summary": {"type": ["string", "null"], "maxLength": 5000},
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["duration_seconds", "paper_count", "valid_pdf_count"],
+      "properties": {
+        "duration_seconds": {"type": "number", "minimum": 0},
+        "paper_count": {"type": ["integer", "null"], "minimum": 0},
+        "valid_pdf_count": {"type": ["integer", "null"], "minimum": 0}
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "succeeded"}}},
+      "then": {
+        "properties": {
+          "error_code": {"const": null},
+          "error_summary": {"const": null}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"status": {"const": "failed"}}},
+      "then": {
+        "properties": {
+          "error_code": {"type": "string"},
+          "error_summary": {"type": "string", "minLength": 1}
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._:-]{2,127}$"
+    }
+  }
+}

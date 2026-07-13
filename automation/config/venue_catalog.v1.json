@@ -1,0 +1,245 @@
+{
+  "schema_version": 1,
+  "venues": [
+    {
+      "venue_id": "neurips",
+      "display_name": "Conference on Neural Information Processing Systems",
+      "aliases": ["neurips", "nips"],
+      "official_domains": ["neurips.cc"],
+      "archival_domains": ["papers.nips.cc"],
+      "lifecycle": {
+        "kind": "annual"
+      },
+      "scraper": {
+        "module": "scrapers.neurips",
+        "class_name": "NeurIPSScraper",
+        "capabilities": ["metadata", "pdf", "archival_source"],
+        "monitor_registered": false
+      }
+    },
+    {
+      "venue_id": "icml",
+      "display_name": "International Conference on Machine Learning",
+      "aliases": ["icml"],
+      "official_domains": ["icml.cc"],
+      "archival_domains": ["proceedings.mlr.press", "openreview.net"],
+      "lifecycle": {
+        "kind": "annual"
+      },
+      "scraper": {
+        "module": "scrapers.icml",
+        "class_name": "ICMLScraper",
+        "capabilities": ["metadata", "pdf", "provisional_source", "archival_source"],
+        "monitor_registered": true
+      }
+    },
+    {
+      "venue_id": "iclr",
+      "display_name": "International Conference on Learning Representations",
+      "aliases": ["iclr"],
+      "official_domains": ["iclr.cc"],
+      "archival_domains": ["openreview.net"],
+      "lifecycle": {
+        "kind": "annual"
+      },
+      "scraper": {
+        "module": "scrapers.iclr",
+        "class_name": "ICLRScraper",
+        "capabilities": ["metadata", "pdf", "provisional_source", "archival_source"],
+        "monitor_registered": false
+      }
+    },
+    {
+      "venue_id": "aaai",
+      "display_name": "AAAI Conference on Artificial Intelligence",
+      "aliases": ["aaai"],
+      "official_domains": ["aaai.org"],
+      "archival_domains": ["ojs.aaai.org"],
+      "lifecycle": {
+        "kind": "annual"
+      },
+      "scraper": {
+        "module": "scrapers.aaai",
+        "class_name": "AAAIScraper",
+        "capabilities": ["metadata", "pdf", "archival_source"],
+        "monitor_registered": false
+      }
+    },
+    {
+      "venue_id": "cvpr",
+      "display_name": "Conference on Computer Vision and Pattern Recognition",
+      "aliases": ["cvpr"],
+      "official_domains": ["cvpr.thecvf.com"],
+      "archival_domains": ["openaccess.thecvf.com"],
+      "lifecycle": {
+        "kind": "annual"
+      },
+      "scraper": {
+        "module": "scrapers.cvpr",
+        "class_name": "CVPRScraper",
+        "capabilities": ["metadata", "pdf", "archival_source"],
+        "monitor_registered": false
+      }
+    },
+    {
+      "venue_id": "iccv",
+      "display_name": "International Conference on Computer Vision",
+      "aliases": ["iccv"],
+      "official_domains": ["iccv.thecvf.com"],
+      "archival_domains": ["openaccess.thecvf.com"],
+      "lifecycle": {
+        "kind": "annual"
+      },
+      "scraper": {
+        "module": "scrapers.iccv",
+        "class_name": "ICCVScraper",
+        "capabilities": ["metadata", "pdf", "archival_source"],
+        "monitor_registered": false
+      }
+    },
+    {
+      "venue_id": "colt",
+      "display_name": "Conference on Learning Theory",
+      "aliases": ["colt"],
+      "official_domains": ["learningtheory.org"],
+      "archival_domains": ["proceedings.mlr.press"],
+      "lifecycle": {
+        "kind": "annual"
+      },
+      "scraper": {
+        "module": "scrapers.colt",
+        "class_name": "COLTScraper",
+        "capabilities": ["metadata", "pdf", "archival_source"],
+        "monitor_registered": false
+      }
+    },
+    {
+      "venue_id": "uai",
+      "display_name": "Conference on Uncertainty in Artificial Intelligence",
+      "aliases": ["uai"],
+      "official_domains": ["auai.org"],
+      "archival_domains": ["proceedings.mlr.press"],
+      "lifecycle": {
+        "kind": "annual"
+      },
+      "scraper": {
+        "module": "scrapers.uai",
+        "class_name": "UAIScraper",
+        "capabilities": ["metadata", "pdf", "archival_source"],
+        "monitor_registered": false
+      }
+    },
+    {
+      "venue_id": "aistats",
+      "display_name": "International Conference on Artificial Intelligence and Statistics",
+      "aliases": ["aistats"],
+      "official_domains": ["aistats.org"],
+      "archival_domains": ["proceedings.mlr.press", "openreview.net"],
+      "lifecycle": {
+        "kind": "annual"
+      },
+      "scraper": {
+        "module": "scrapers.aistats",
+        "class_name": "AISTATSScraper",
+        "capabilities": ["metadata", "pdf", "provisional_source", "archival_source"],
+        "monitor_registered": true
+      }
+    },
+    {
+      "venue_id": "jmlr",
+      "display_name": "Journal of Machine Learning Research",
+      "aliases": ["jmlr"],
+      "official_domains": ["jmlr.org"],
+      "archival_domains": [],
+      "lifecycle": {
+        "kind": "continuous"
+      },
+      "scraper": {
+        "module": "scrapers.jmlr",
+        "class_name": "JMLRScraper",
+        "capabilities": ["metadata", "pdf", "archival_source"],
+        "monitor_registered": false
+      }
+    },
+    {
+      "venue_id": "eccv",
+      "display_name": "European Conference on Computer Vision",
+      "aliases": ["eccv"],
+      "official_domains": ["eccv.ecva.net"],
+      "archival_domains": ["ecva.net"],
+      "lifecycle": {
+        "kind": "annual"
+      },
+      "scraper": {
+        "module": "scrapers.eccv",
+        "class_name": "ECCVScraper",
+        "capabilities": ["metadata", "pdf", "archival_source"],
+        "monitor_registered": false
+      }
+    },
+    {
+      "venue_id": "acl",
+      "display_name": "Annual Meeting of the Association for Computational Linguistics",
+      "aliases": ["acl"],
+      "official_domains": ["aclweb.org"],
+      "archival_domains": ["aclanthology.org"],
+      "lifecycle": {
+        "kind": "annual"
+      },
+      "scraper": {
+        "module": "scrapers.acl",
+        "class_name": "ACLScraper",
+        "capabilities": ["metadata", "pdf", "archival_source"],
+        "monitor_registered": false
+      }
+    },
+    {
+      "venue_id": "emnlp",
+      "display_name": "Conference on Empirical Methods in Natural Language Processing",
+      "aliases": ["emnlp"],
+      "official_domains": ["emnlp.org"],
+      "archival_domains": ["aclanthology.org"],
+      "lifecycle": {
+        "kind": "annual"
+      },
+      "scraper": {
+        "module": "scrapers.emnlp",
+        "class_name": "EMNLPScraper",
+        "capabilities": ["metadata", "pdf", "archival_source"],
+        "monitor_registered": false
+      }
+    },
+    {
+      "venue_id": "naacl",
+      "display_name": "Annual Conference of the Nations of the Americas Chapter of the ACL",
+      "aliases": ["naacl"],
+      "official_domains": ["naacl.org"],
+      "archival_domains": ["aclanthology.org"],
+      "lifecycle": {
+        "kind": "annual"
+      },
+      "scraper": {
+        "module": "scrapers.naacl",
+        "class_name": "NAACLScraper",
+        "capabilities": ["metadata", "pdf", "archival_source"],
+        "monitor_registered": false
+      }
+    },
+    {
+      "venue_id": "ijcai",
+      "display_name": "International Joint Conference on Artificial Intelligence",
+      "aliases": ["ijcai"],
+      "official_domains": ["ijcai.org"],
+      "archival_domains": [],
+      "lifecycle": {
+        "kind": "annual"
+      },
+      "scraper": {
+        "module": "scrapers.ijcai",
+        "class_name": "IJCAIScraper",
+        "capabilities": ["metadata", "pdf", "provisional_source", "archival_source"],
+        "monitor_registered": true
+      }
+    }
+  ]
+}

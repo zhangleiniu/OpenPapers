@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "discovery_id": "discovery:icml:2026:001",
+  "venue_id": "icml",
+  "year": 2026,
+  "checked_at": "2026-07-13T13:00:00Z",
+  "provider": "fixture-provider",
+  "model": "fixture-model",
+  "prompt_version": "v1",
+  "conference_status": "ended",
+  "paper_list_status": "released",
+  "metadata_status": "ready",
+  "pdf_status": "partial",
+  "proceedings_status": "provisional",
+  "claims": [
+    {
+      "claim_id": "claim:icml:2026:list",
+      "statement": "The accepted-paper list is publicly available.",
+      "evidence_urls": ["https://example.test/icml-2026"],
+      "source_type": "official",
+      "published_at": null
+    }
+  ],
+  "candidate_milestones": [
+    {
+      "milestone_id": "milestone:icml:2026:end",
+      "milestone_type": "conference_end",
+      "date": "2026-07-18",
+      "evidence_urls": ["https://example.test/icml-2026"],
+      "source_type": "official"
+    }
+  ],
+  "confidence": 0.9,
+  "uncertainties": ["Formal proceedings are not yet represented by this fixture."],
+  "evidence_fingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+}

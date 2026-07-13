@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openpapers.local/schemas/v1/job.json",
+  "title": "OpenPapers typed job v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "job_id",
+    "job_type",
+    "venue_id",
+    "year",
+    "created_at",
+    "requested_by",
+    "input_artifact_ids",
+    "payload"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "job_id": {"$ref": "#/$defs/id"},
+    "job_type": {"enum": ["scrape_existing", "validate_candidate", "codex_diagnosis"]},
+    "venue_id": {"$ref": "#/$defs/venue_id"},
+    "year": {"type": "integer", "minimum": 1900, "maximum": 2200},
+    "created_at": {"type": "string", "format": "date-time"},
+    "requested_by": {"enum": ["action_router", "human"]},
+    "input_artifact_ids": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/id"},
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "payload": {"type": "object"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"job_type": {"const": "scrape_existing"}}},
+      "then": {"properties": {"payload": {"$ref": "#/$defs/scrape_payload"}}}
+    },
+    {
+      "if": {"properties": {"job_type": {"const": "validate_candidate"}}},
+      "then": {"properties": {"payload": {"$ref": "#/$defs/validation_payload"}}}
+    },
+    {
+      "if": {"properties": {"job_type": {"const": "codex_diagnosis"}}},
+      "then": {"properties": {"payload": {"$ref": "#/$defs/codex_payload"}}}
+    }
+  ],
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._:-]{2,127}$"
+    },
+    "venue_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]{1,31}$"
+    },
+    "completeness": {"enum": ["announced", "metadata", "archival"]},
+    "scrape_payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["completeness_level", "download_pdfs", "expected_count"],
+      "properties": {
+        "completeness_level": {"$ref": "#/$defs/completeness"},
+        "download_pdfs": {"type": "boolean"},
+        "expected_count": {"type": ["integer", "null"], "minimum": 1}
+      }
+    },
+    "validation_payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["candidate_manifest_id", "completeness_level", "require_pdfs", "expected_count"],
+      "properties": {
+        "candidate_manifest_id": {"$ref": "#/$defs/id"},
+        "completeness_level": {"$ref": "#/$defs/completeness"},
+        "require_pdfs": {"type": "boolean"},
+        "expected_count": {"type": ["integer", "null"], "minimum": 1}
+      }
+    },
+    "codex_payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["failure_fingerprint", "snapshot_ids", "allowed_paths", "max_runtime_minutes", "mode"],
+      "properties": {
+        "failure_fingerprint": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "snapshot_ids": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/id"},
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "allowed_paths": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1, "maxLength": 500},
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "max_runtime_minutes": {"type": "integer", "minimum": 1, "maximum": 240},
+        "mode": {"enum": ["diagnose_only", "propose_patch"]}
+      }
+    }
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "venue_id": "icml",
+  "year": 2026,
+  "lifecycle_state": "unknown",
+  "facets": {
+    "conference_status": "unknown",
+    "paper_list_status": "unknown",
+    "metadata_status": "unknown",
+    "pdf_status": "unknown",
+    "proceedings_status": "unknown"
+  },
+  "milestones": {
+    "conference_start": null,
+    "conference_end": null,
+    "acceptance_notification": null,
+    "paper_list_expected": null,
+    "proceedings_expected": null,
+    "paper_list_released": null,
+    "proceedings_released": null
+  },
+  "next_check_at": null,
+  "next_check_reason": null,
+  "evidence_ids": [],
+  "blockers": [],
+  "transition_history": [],
+  "updated_at": "2026-07-13T13:00:00Z"
+}

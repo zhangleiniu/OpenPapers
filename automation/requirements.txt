@@ -1,0 +1,4 @@
+# Optional automation contract validation; not required by the core scrapers.
+jsonschema>=4.23,<5
+google-genai>=1.30,<3
+python-dotenv>=1.0,<2

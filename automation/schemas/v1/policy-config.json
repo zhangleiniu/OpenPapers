@@ -1,0 +1,214 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openpapers.local/schemas/v1/policy-config.json",
+  "title": "OpenPapers automation policy configuration v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "scheduling",
+    "reminders",
+    "discovery_budget",
+    "codex_budget",
+    "systemic_failure",
+    "crawl",
+    "publication"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "scheduling": {"$ref": "#/$defs/scheduling"},
+    "reminders": {"$ref": "#/$defs/reminders"},
+    "discovery_budget": {"$ref": "#/$defs/discovery_budget"},
+    "codex_budget": {"$ref": "#/$defs/codex_budget"},
+    "systemic_failure": {"$ref": "#/$defs/systemic_failure"},
+    "crawl": {"$ref": "#/$defs/crawl"},
+    "publication": {"$ref": "#/$defs/publication"}
+  },
+  "$defs": {
+    "scheduling": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "unknown_schedule_interval_days",
+        "verified_milestone_lead_days",
+        "post_conference_release_backoff_days",
+        "max_silence_days",
+        "minimum_recheck_interval_hours"
+      ],
+      "properties": {
+        "unknown_schedule_interval_days": {"type": "integer", "minimum": 1},
+        "verified_milestone_lead_days": {"type": "integer", "minimum": 0},
+        "post_conference_release_backoff_days": {
+          "type": "array",
+          "items": {"type": "integer", "minimum": 0},
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "max_silence_days": {"type": "integer", "minimum": 1},
+        "minimum_recheck_interval_hours": {"type": "integer", "minimum": 1}
+      }
+    },
+    "reminders": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "immediate_on_first_observation",
+        "weekly_interval_days",
+        "weekly_until_days",
+        "monthly_interval_days",
+        "monthly_until_days",
+        "dormant_after_days",
+        "dormant_interval_days"
+      ],
+      "properties": {
+        "immediate_on_first_observation": {"type": "boolean"},
+        "weekly_interval_days": {"type": "integer", "minimum": 1},
+        "weekly_until_days": {"type": "integer", "minimum": 1},
+        "monthly_interval_days": {"type": "integer", "minimum": 1},
+        "monthly_until_days": {"type": "integer", "minimum": 1},
+        "dormant_after_days": {"type": "integer", "minimum": 1},
+        "dormant_interval_days": {"type": "integer", "minimum": 1}
+      }
+    },
+    "discovery_budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max_calls_per_day",
+        "max_calls_per_venue_per_day",
+        "max_concurrency",
+        "max_second_provider_calls_per_day"
+      ],
+      "properties": {
+        "max_calls_per_day": {"type": "integer", "minimum": 0},
+        "max_calls_per_venue_per_day": {"type": "integer", "minimum": 0},
+        "max_concurrency": {"type": "integer", "minimum": 1},
+        "max_second_provider_calls_per_day": {"type": "integer", "minimum": 0}
+      }
+    },
+    "codex_budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max_runs_per_day",
+        "max_runs_per_venue_per_day",
+        "max_concurrency",
+        "same_error_cooldown_days",
+        "max_runtime_minutes",
+        "allow_recursive_trigger"
+      ],
+      "properties": {
+        "max_runs_per_day": {"type": "integer", "minimum": 0},
+        "max_runs_per_venue_per_day": {"type": "integer", "minimum": 0},
+        "max_concurrency": {"type": "integer", "minimum": 1},
+        "same_error_cooldown_days": {"type": "integer", "minimum": 1},
+        "max_runtime_minutes": {"type": "integer", "minimum": 1, "maximum": 240},
+        "allow_recursive_trigger": {"const": false}
+      }
+    },
+    "systemic_failure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["venue_failure_threshold", "suppress_per_venue_codex", "single_incident_notification"],
+      "properties": {
+        "venue_failure_threshold": {"type": "integer", "minimum": 2},
+        "suppress_per_venue_codex": {"const": true},
+        "single_incident_notification": {"const": true}
+      }
+    },
+    "crawl": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["default_classification", "domains"],
+      "properties": {
+        "default_classification": {"const": "review_required"},
+        "domains": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/domain_policy"}
+        }
+      }
+    },
+    "domain_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "domain",
+        "classification",
+        "allowed_permissions",
+        "max_concurrency",
+        "minimum_delay_seconds",
+        "jitter_seconds",
+        "max_requests_per_run",
+        "honor_retry_after",
+        "stop_statuses",
+        "stop_on_captcha",
+        "api_preferred",
+        "user_agent_contact"
+      ],
+      "properties": {
+        "domain": {
+          "type": "string",
+          "pattern": "^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}$"
+        },
+        "classification": {"enum": ["approved", "review_required", "denied"]},
+        "allowed_permissions": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "monitor",
+              "metadata_fetch",
+              "pdf_fetch_for_processing",
+              "store_internal_copy",
+              "redistribute_metadata",
+              "redistribute_pdf"
+            ]
+          },
+          "uniqueItems": true
+        },
+        "max_concurrency": {"type": "integer", "minimum": 1},
+        "minimum_delay_seconds": {"type": "number", "minimum": 0},
+        "jitter_seconds": {"type": "number", "minimum": 0},
+        "max_requests_per_run": {"type": "integer", "minimum": 1},
+        "honor_retry_after": {"const": true},
+        "stop_statuses": {
+          "type": "array",
+          "items": {"type": "integer", "minimum": 400, "maximum": 599},
+          "contains": {"const": 429},
+          "uniqueItems": true
+        },
+        "stop_on_captcha": {"const": true},
+        "api_preferred": {"type": "boolean"},
+        "user_agent_contact": {"type": ["string", "null"], "maxLength": 500}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"classification": {"const": "approved"}}},
+          "then": {
+            "properties": {
+              "allowed_permissions": {"minItems": 1},
+              "user_agent_contact": {"type": "string", "minLength": 3}
+            }
+          }
+        },
+        {
+          "if": {"properties": {"classification": {"const": "denied"}}},
+          "then": {"properties": {"allowed_permissions": {"maxItems": 0}}}
+        }
+      ]
+    },
+    "publication": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "default_pdf_delivery",
+        "redistribute_metadata_without_review",
+        "redistribute_pdf_without_review"
+      ],
+      "properties": {
+        "default_pdf_delivery": {"const": "authoritative_link"},
+        "redistribute_metadata_without_review": {"const": false},
+        "redistribute_pdf_without_review": {"const": false}
+      }
+    }
+  }
+}

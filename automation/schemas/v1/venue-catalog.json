@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openpapers.local/schemas/v1/venue-catalog.json",
+  "title": "OpenPapers venue catalog v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "venues"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "venues": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/venue"},
+      "minItems": 1
+    }
+  },
+  "$defs": {
+    "venue_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]{1,31}$"
+    },
+    "domain": {
+      "type": "string",
+      "pattern": "^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}$"
+    },
+    "venue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "venue_id",
+        "display_name",
+        "aliases",
+        "official_domains",
+        "archival_domains",
+        "lifecycle",
+        "scraper"
+      ],
+      "properties": {
+        "venue_id": {"$ref": "#/$defs/venue_id"},
+        "display_name": {"type": "string", "minLength": 2, "maxLength": 200},
+        "aliases": {
+          "type": "array",
+          "items": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{1,63}$"},
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "official_domains": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/domain"},
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "archival_domains": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/domain"},
+          "uniqueItems": true
+        },
+        "lifecycle": {"$ref": "#/$defs/lifecycle"},
+        "scraper": {"$ref": "#/$defs/scraper"}
+      }
+    },
+    "lifecycle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind"],
+      "properties": {
+        "kind": {"enum": ["annual", "continuous"]}
+      }
+    },
+    "scraper": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["module", "class_name", "capabilities", "monitor_registered"],
+      "properties": {
+        "module": {"type": "string", "pattern": "^scrapers\\.[a-z0-9_]+$"},
+        "class_name": {"type": "string", "pattern": "^[A-Z][A-Za-z0-9]+Scraper$"},
+        "capabilities": {
+          "type": "array",
+          "items": {"enum": ["metadata", "pdf", "provisional_source", "archival_source"]},
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "monitor_registered": {"type": "boolean"}
+      }
+    }
+  }
+}
