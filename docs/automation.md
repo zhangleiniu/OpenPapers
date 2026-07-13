@@ -41,11 +41,14 @@ transition/case action data, persists case events independently, queries due
 repository reminders, filters already claimed slots, and retains only pending
 immediate/grouped shadow intents with zero attempts. It has no command,
 scheduler, or transport call. These local Phase 3 packages are not wired to
-this deployment and add no real email/SMTP, HTTP/webhook, Prefect,
-cloud-notification adapter, recipients, or external delivery. A
-production-integrated verifier/case/reminder flow, real notification delivery,
-the Mac mini worker, Codex repair execution, and MustCite deployment are not
-implemented.
+this deployment. P3.S adds a separate manual `--live` command and one-request
+Resend adapter that can deliver only a fixed three-item synthetic canary after
+an approved-recipient fingerprint check. Its first isolated canary was accepted
+by the provider, but it cannot read P3.4 output and adds no production
+recipient, schedule, Prefect/Cloud Run integration, or production-state
+change. A production-integrated verifier/case/reminder flow and notification
+delivery, the Mac mini worker, Codex repair execution, and MustCite deployment
+are not implemented.
 
 Start at the [automation system development guide](./automation-system/README.md) for
 the implemented foundation, target architecture, roadmap, and zero-context

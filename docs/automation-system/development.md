@@ -356,7 +356,7 @@ classification, replay, source conflicts, corruption, lease loss, and
 ambiguous post-acceptance failure. There is no concrete transport, external
 request, recipient, Prefect integration, case/action/reminder consumer, or
 deployment change. P3.4 composes this boundary without calling a transport;
-P3.S retains every delivery-canary action.
+P3.S completed the separately authorized synthetic delivery-canary action.
 
 The P3.4 persistent shadow-integration checks are:
 
@@ -382,6 +382,40 @@ transport protocol, Prefect, email/SMTP, HTTP/webhooks, a cloud notification
 provider, recipients, credentials, or any external service. P3.S is the only
 package that may add a separately authorized non-sensitive delivery/fatigue
 canary; that authority is not inherited by P3.4 tests or callers.
+
+The P3.S concrete transport and synthetic-canary checks are:
+
+```bash
+python -m unittest automation.tests.test_resend_notifications -v
+python -m unittest automation.tests.test_run_notification_canary -v
+python -m automation.run_notification_canary \
+  --output-root /tmp/openpapers-p3s-refusal \
+  --approved-recipient-sha256 \
+  0000000000000000000000000000000000000000000000000000000000000000
+```
+
+The final command must refuse before constructing a transport because
+`--live` is absent. An explicitly authorized canary sets `RESEND_KEY`,
+`OPENPAPERS_CANARY_EMAIL_FROM`, and `OPENPAPERS_CANARY_EMAIL_TO` only in the
+manual process environment, computes the normalized recipient SHA-256 without
+retaining the address, and uses a new ignored output root:
+
+```bash
+python -m automation.run_notification_canary --live \
+  --output-root "$SCRAPER_DATA_ROOT/automation/notification-canary/<review-id>" \
+  --approved-recipient-sha256 "<approved normalized recipient SHA-256>"
+```
+
+The command builds exactly one three-item synthetic digest, refuses any second
+request even after a typed retryable outcome, writes an in-flight claim before
+transport I/O, and records only bounded results plus recipient/receipt
+fingerprints in JSON. A marked
+delivered root may be reopened to prove suppression, but it must not be copied
+or pointed at a P3.4 root. Removing the three canary environment variables
+disables delivery; there is no deployed resource or schema migration to roll
+back. Provider acceptance is not independent mailbox confirmation. The first
+authorized record is
+`docs/automation-system/phase3-delivery-review-2026-07-13.md`.
 
 Scheduling tests use an injected timezone-aware clock. Keep venue catalogs free
 of year-specific month/date assumptions; discovery records candidates, a

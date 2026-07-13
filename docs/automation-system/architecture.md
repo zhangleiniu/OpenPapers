@@ -4,7 +4,7 @@ This document defines the target boundaries and safety invariants. Most of the
 components described here are planned; consult [roadmap.md](./roadmap.md) and
 the executable code before assuming a component exists.
 
-## Implemented foundation and Phase 1/2.S/P3.1-P3.4 boundaries
+## Implemented foundation and Phase 1/2.S/P3.S boundaries
 
 Phase 0 is implemented as a side-effect-free foundation and is not yet wired
 into the deployed monitor:
@@ -199,8 +199,9 @@ transport, job submission, scraper execution, GCS integration, or
 production-state migration.
 
 P3.1 adds a local case domain and extends the same control repository, P3.2
-adds a separate pure reminder projection, P3.3 adds a fake-only delivery
-boundary, and P3.4 adds local pending-output integration:
+adds a separate pure reminder projection, P3.3 adds an injected delivery
+boundary, P3.4 adds local pending-output integration, and P3.S adds one
+synthetic-only live canary:
 
 - `automation/cases.py` derives the stable case identity from
   venue/year/blocker, preserves one case per key, separates ordinary checks
@@ -229,15 +230,30 @@ boundary, and P3.4 adds local pending-output integration:
   events before registering their meaningful immediate output, queries
   unresolved cases, removes reminder slots already claimed by an immutable
   intent, and registers one grouped digest for all remaining due items.
+- `automation/resend_notifications.py` implements a one-request concrete
+  Resend HTTPS transport with a fixed endpoint, no redirects or automatic
+  retry, bounded responses, typed failures, and the stable notification ID as
+  the provider idempotency key; and
+- `automation/notification_canary.py` constructs only three synthetic cases at
+  the weekly, monthly, and dormant boundaries. Its manual CLI requires
+  `--live`, a fresh or marked isolated root, and an exact approved-recipient
+  fingerprint before it creates the transport.
 
 P3.1 accepts explicitly supplied observations and controls only. P3.2 accepts
 explicit case states, policy, and an aware clock only; it does not persist its
-aged copies. P3.3's transport protocol has no concrete implementation; tests
-inject a fake. P3.4 never invokes that protocol or claims an attempt: every
+aged copies. P3.4 never invokes the P3.3 protocol or claims an attempt: every
 shadow record remains `pending` with zero attempts. The unique source mapping
 proves one transition, case event, or reminder slot cannot acquire another
-intent. No package wires into the deployed monitor or adds email, SMTP, HTTP,
-webhooks, Prefect, cloud notification, recipients, or live delivery.
+intent. P3.S never imports P3.4, reads its database, accepts event input, or
+changes case state. Its first review made one provider-accepted delivery with
+one attempt and one external request, then proved zero-call replay, typed
+failure retention, empty case state, and credential-removal rollback. The
+provider receipt proves API acceptance, not independent mailbox delivery.
+P3.S also refuses to retry a root whose one attempt ended `retryable`; P3.3's
+general explicit-retry capability remains available only outside this canary.
+No package wires Phase 3 into the deployed monitor or adds a scheduler,
+production recipient configuration, Prefect integration, or production-state
+authority.
 
 ## Design principles
 
@@ -448,8 +464,9 @@ share the deployed monitor's database. `JobResultRegistry` is a pure executable
 model of the job protocol: an identical result replay is accepted as already
 seen, while a different result for the same job ID is rejected. P2.5 now
 composes retained verification replay with optimistic state updates locally.
-GCS generation preconditions, cloud restore/upload, deployed integration, real
-notification delivery, and job-result consumption remain future work.
+GCS generation preconditions, cloud restore/upload, deployed Phase 3 delivery,
+and job-result consumption remain future work. P3.S's isolated SQLite root is
+manual canary evidence, not a cloud state store or deployed migration.
 
 Schema version 3 has no deployed migration or current operator action. Valid
 local version-1 and version-2 control databases migrate on open, preserving
@@ -485,8 +502,9 @@ output is persisted, submitted, or executed. P3.4 consumes only
 stable case observations and registers pending immediate output for transition
 or meaningful case events. Recheck, review, and scraper-queue actions remain
 inert. Repository reminder projection can also register one grouped pending
-digest after excluding claimed slots. Real delivery, job creation/submission,
-and command selection remain later packages.
+digest after excluding claimed slots. P3.S can deliver only its fixed
+synthetic digest and cannot select repository output. Production delivery,
+job creation/submission, and command selection remain later packages.
 Job payload contracts continue to enumerate approved fields for existing
 scraper, validation, and Codex-diagnosis jobs and cannot contain arbitrary
 shell commands.
@@ -535,8 +553,10 @@ claimed by any retained intent and registers all remaining due slots as one
 pending grouped shadow output. It also registers immediate transition and
 meaningful case-event output. Case writes and output registrations are
 separate transactions, so a failed registration cannot erase a durable case.
-Monthly override, won't-fix control, all real transports, and live fatigue
-review remain P3.S or later work.
+P3.S reviewed a three-item synthetic weekly/monthly/dormant message through a
+separate database and transport; it does not grant P3.4 delivery authority.
+Monthly override, won't-fix control, production notification integration, and
+high-volume fatigue evaluation remain later work.
 
 ## Cost and execution guardrails
 

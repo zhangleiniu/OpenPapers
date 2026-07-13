@@ -76,8 +76,10 @@ explicitly authorized 15-venue live shadow review using isolated roots and no
 production action. Phase 2 is now `Shadow`. P3.1 has completed the persistent
 case slice, P3.2 has completed reminder aging and grouped digest data, P3.3 has
 completed the fake-only durable delivery boundary, and P3.4 has completed
-pending shadow-output integration. P3.S is the only current `Ready` package
-and requires separate authorization.
+pending shadow-output integration. P3.S has completed one separately
+authorized synthetic delivery/fatigue canary, so Phase 3 is now `Shadow`.
+Phase 4 remains `Planned`; no later package is started or authorized by this
+status change.
 
 ### P2.1R — harden verifier contract semantics
 
@@ -302,7 +304,7 @@ case/action intents, create immediate or digest notification intents, classify
 delivery retries, redact/render messages, call email or another transport,
 synchronize GCS, use Prefect, or change the deployed monitor. P3.3 now owns the
 isolated fake-only delivery boundary; P3.4 now owns pending integration and
-P3.S retains all live-canary work.
+P3.S has completed the separate authorized live canary.
 
 ### P3.3 — idempotent notification delivery boundary
 
@@ -331,8 +333,8 @@ Tests use only fake transports, fixed clocks, and temporary SQLite databases.
 The package does not consume P2.5 action intents or case events, query case
 state, coordinate reminder slots, use Prefect, provide email/SMTP/HTTP/webhook
 or cloud adapters, configure recipients, synchronize GCS, call an external
-service, or change the deployed monitor. P3.4 now owns integration and shadow
-output; P3.S retains all authorized real-delivery and fatigue review work.
+service, or change the deployed monitor. P3.4 owns integration and shadow
+output; P3.S completed only the separate synthetic delivery/fatigue review.
 
 ### P3.4 — persistent shadow notification integration
 
@@ -362,8 +364,40 @@ status `pending`, attempt count zero, and empty attempt history. The package
 does not call the P3.3 fake protocol or any real email/SMTP/HTTP/webhook,
 Prefect, cloud provider, recipient, credential, scheduler, deployed monitor,
 GCS synchronization, action executor, scraper, Mac worker, Codex, promotion,
-or deployment path. P3.S and all later packages remain separate and
-unimplemented.
+or deployment path. P3.S remains a separate manual boundary and does not grant
+P3.4 delivery authority.
+
+### P3.S — authorized notification delivery and fatigue canary
+
+Status: `Complete`
+
+Depends on: P3.4
+
+Completed boundary: `automation/resend_notifications.py` implements one
+bounded Resend HTTPS request with no redirect and no second request after any
+consumed attempt, a strict response limit, typed secret-free failure mapping,
+and the stable notification ID as provider idempotency.
+`automation/run_notification_canary.py` refuses
+without `--live`, an explicit isolated output root, and the normalized SHA-256
+fingerprint of one approved test recipient. The command accepts no event,
+case, notification, or state input and builds only a fixed digest of three
+non-sensitive synthetic cases at the weekly, monthly, and dormant boundaries.
+
+The authorized run made one external request and retained one delivered
+attempt after provider acceptance. A fake-only rate-limit drill retained a
+retryable category without creating case state, exact reopen used zero
+transport calls, and removing recipient configuration refused before root
+creation or I/O. Retained JSON contains recipient and receipt fingerprints,
+not addresses, credentials, or raw provider responses. The fatigue review
+found the three-item grouped message clear at 1,334 characters and 36 lines;
+larger-volume fatigue and independent mailbox confirmation remain unproven.
+The durable record is
+[`phase3-delivery-review-2026-07-13.md`](./phase3-delivery-review-2026-07-13.md).
+
+P3.S does not import or deliver retained P3.4 output, change case/reminder
+semantics or schemas, configure a production recipient, migrate production
+state, wire Prefect/Cloud Run/Scheduler, or begin a job, scraper, Mac worker,
+Codex, promotion, deployment, or P4 package.
 
 | ID | Status | Depends on | Objective and completion boundary |
 |---|---|---|---|
@@ -371,7 +405,7 @@ unimplemented.
 | P3.2 | Complete | P3.1 | Clock-controlled weekly, monthly, and dormant reminder policy plus grouped digest generation. No persisted delivery state, notification intent, or transport adapter. |
 | P3.3 | Complete | P3.2 | Strict immediate/digest intents, unique source claims, persistent idempotent attempts, bounded retry classification, redaction, and fake-only transport tests. No real transport or integration. |
 | P3.4 | Complete | P3.3 | Typed transition/case actions plus repository reminders produce uniquely claimed pending immediate/grouped shadow intents with zero delivery attempts. Case and output commits remain independently replayable. |
-| P3.S | Ready | P3.4 | Separately authorized delivery canary and fatigue review using non-sensitive test events. Record results and rollback without changing case semantics. |
+| P3.S | Complete | P3.4 | One approved-recipient delivery of a fixed non-sensitive synthetic weekly/monthly/dormant digest, with provider acceptance, replay, fatigue, failure, and rollback evidence. No P3.4 output or production integration. |
 
 Case creation and message delivery remain separate effects. A transport failure
 must not erase or duplicate the durable case.

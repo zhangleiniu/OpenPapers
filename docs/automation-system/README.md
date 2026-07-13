@@ -153,9 +153,9 @@ no redistribution authority. Phase 2 is `Shadow`, not deployed or
 implemented; live source-profile coverage remains conservative.
 
 Phase 3.1 persistent unresolved cases, P3.2 reminder/digest policy, P3.3's
-fake-only notification delivery boundary, and P3.4's persistent shadow-output
-integration are implemented locally and are not wired into the deployed
-monitor:
+fake-only notification delivery boundary, P3.4's persistent shadow-output
+integration, and the P3.S isolated delivery canary are implemented locally and
+are not wired into the deployed monitor:
 
 - `automation/cases.py` derives one stable case per venue/year/blocker,
   distinguishes repeated checks from meaningful changes, retains new evidence,
@@ -182,22 +182,32 @@ monitor:
   repository cases for due reminders, filters already claimed slots, and
   registers one grouped digest for all remaining due cases. Registration
   retains `pending` intent/source records with zero delivery attempts.
+- `automation/resend_notifications.py` is a one-request Resend HTTPS adapter
+  with provider idempotency and bounded failure classification, while
+  `automation/run_notification_canary.py` requires `--live`, an explicit
+  isolated root, and the SHA-256 identity of one approved test recipient. It
+  can build and deliver only a fixed synthetic weekly/monthly/dormant digest;
+  it cannot select or deliver a retained P3.4 intent.
 
 P3.3 tests use only fake transports and temporary SQLite databases. P3.4 calls
 no transport at all: its temporary-database tests persist only pending shadow
 output and prove that exact event replay cannot create a second intent. Case
 events commit separately from notification registration, so registration
-failure cannot erase a case and replay can recover the missing output. These
-packages add no email/SMTP, webhook, Prefect, HTTP, cloud provider, recipient
-configuration, live delivery, or production-state change. Phase 3 remains `In
-progress`; P3.S is the separately authorized delivery/fatigue canary.
+failure cannot erase a case and replay can recover the missing output. P3.S
+made one authorized provider-accepted delivery to the approved test recipient
+using three non-sensitive synthetic events. Its replay, failure, fatigue, and
+rollback record is
+[`phase3-delivery-review-2026-07-13.md`](./phase3-delivery-review-2026-07-13.md).
+Phase 3 is `Shadow`: P3.S is manual and isolated, and no Phase 3 component is
+scheduled, deployed, connected to P3.4 output, or authorized to act on
+production state.
 
 The following does **not** exist yet:
 
 - scheduled or deployed LLM discovery;
 - a scheduled or deployed HTML/PDF verifier and persistent reducer/router;
-- scheduled or deployed case/action/reminder integration, or any real
-  notification transport and delivery;
+- scheduled or deployed case/action/reminder integration or notification
+  delivery;
 - automated routing from discovery to a scrape job;
 - a Mac mini Prefect worker;
 - a Codex execution adapter;
@@ -293,12 +303,13 @@ intents. P3.1 can persist explicitly supplied case observations and human
 controls under the local lease, and P3.2 can project them through
 clock-controlled weekly/monthly/dormant policy into grouped digest data.
 P3.3 can turn explicitly supplied event/digest data into a strict redacted
-intent and exercise durable delivery only through an injected fake. P3.4 can
+intent and exercise durable delivery through an injected transport. P3.4 can
 consume P2.5 transition/case action data, persist cases independently, filter
 repository reminder slots, and retain pending immediate/digest shadow output
-without claiming a delivery attempt. None is connected to the deployed
-monitor. No Phase 2 command can execute an action or write production state,
-and no Phase 3 integration code has or calls a real notification transport.
+without claiming a delivery attempt. P3.S adds one concrete transport only
+behind a manual synthetic-only canary; it cannot read P3.4 output. None is
+connected to the deployed monitor. No Phase 2 command can execute an action or
+write production state, and no Phase 3 path can deliver a production event.
 
 Keep Phase 1 additive. It may report what a verified later phase could do, but
 must not create a job, write lifecycle state, invoke a scraper, or promote data.

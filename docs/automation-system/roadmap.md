@@ -16,7 +16,7 @@ phase-level outcomes and status.
 | 0 | Contracts, policies, ownership, and safety boundaries | Implemented |
 | 1 | LLM search discovery in shadow mode | Shadow (15-venue live review, 2026-07-13) |
 | 2 | Evidence verification and lifecycle state | Shadow (P2.S 15-venue live review, 2026-07-13) |
-| 3 | Cases and fatigue-resistant notifications | In progress (P3.1-P3.4 complete, 2026-07-13) |
+| 3 | Cases and fatigue-resistant notifications | Shadow (P3.S one-delivery canary, 2026-07-13) |
 | 4 | Mac mini Prefect worker and immutable results | Planned |
 | 5 | Automatic execution of existing scrapers | Planned |
 | 6 | Budgeted Codex diagnosis and repair proposals | Planned |
@@ -352,8 +352,30 @@ Accepted P3.4 shadow-integration implementation:
 
 P3.4 calls no transport and adds no recipient, credential, external request,
 Prefect/deployment wiring, production-state migration, or action execution.
-Phase 3 is still `In progress`, not `Implemented`: P3.S owns the separately
-authorized delivery/fatigue canary. P3.S and later work remain unimplemented.
+
+Accepted P3.S delivery/fatigue canary:
+
+- a separate Resend HTTPS adapter makes at most one non-redirecting request,
+  uses the stable notification ID for provider idempotency, bounds response
+  handling, and maps only secret-free failure categories into P3.3 state;
+- the manual command refuses without `--live`, an isolated marked root, and a
+  SHA-256 match for one approved recipient. It accepts no event, case,
+  notification, database, or P3.4 input and constructs only a fixed synthetic
+  weekly/monthly/dormant digest;
+- the authorized review recorded one provider-accepted request and one durable
+  delivered attempt. Reopen suppressed transport replay, the local rate-limit
+  drill retained a retryable failure with no case rows, and removing canary
+  recipient configuration refused before output or I/O; and
+- the 1,334-character, 36-line grouped message kept synthetic evidence/run
+  references and clear urgency headings. It is suitable for the sampled
+  three-item volume; high-volume fatigue remains unproven.
+
+The review is
+[`phase3-delivery-review-2026-07-13.md`](./phase3-delivery-review-2026-07-13.md).
+Phase 3 is `Shadow`, not `Implemented`: the canary is manual and isolated,
+provider acceptance was not independently confirmed at the mailbox, P3.4
+outputs remain pending, and no production flow, scheduler, state store, or
+recipient is connected.
 
 ## Phase 4: Mac mini execution plane
 
