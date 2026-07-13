@@ -15,7 +15,7 @@ phase-level outcomes and status.
 | Existing baseline | Deterministic monitor, Cloud Run/Prefect/GCS, email | Implemented |
 | 0 | Contracts, policies, ownership, and safety boundaries | Implemented |
 | 1 | LLM search discovery in shadow mode | Shadow (15-venue live review, 2026-07-13) |
-| 2 | Evidence verification and lifecycle state | In progress (P2.1/P2.1R/P2.2/P2.3/P2.4 accepted, 2026-07-13) |
+| 2 | Evidence verification and lifecycle state | In progress (P2.1-P2.5 accepted; P2.S pending, 2026-07-13) |
 | 3 | Cases and fatigue-resistant notifications | Planned |
 | 4 | Mac mini Prefect worker and immutable results | Planned |
 | 5 | Automatic execution of existing scrapers | Planned |
@@ -220,11 +220,24 @@ Accepted P2.4 persistent control-state implementation:
   snapshot history, atomic rollback, identical-write no-ops, and stale-write
   rejection.
 
-P2.1/P2.1R/P2.2/P2.3/P2.4 are not deployed. P2.4 can write local lifecycle
-state supplied by a caller but does not derive that state from findings or
-create an action. The remaining implementation slice is P2.5
-reducer/scheduling/typed-router integration. A separate P2.S thread performs
-the 15-venue live shadow review after P2.5.
+Accepted P2.5 lifecycle reduction and typed-routing implementation:
+
+- positive facets and milestones are promoted only from retained fetched
+  official/archival evidence whose catalog trust is independently recomputed;
+- monotonic facets, observed/verified milestones, the Phase 0 reducer, and
+  evidence-time scheduling produce a strict state whose transitions trace to
+  immutable verification evidence;
+- stable typed recheck, transition, case/review, and existing-scraper intents
+  are returned as data and never persisted, submitted, or executed;
+- ambiguous, conflicting, crawl-denied, untrusted, continuous-conference, and
+  unsupported-scraper conditions suppress executable intents; and
+- a thin P2.4 coordinator persists optimistic revisions, while temporary
+  fixture repositories prove deterministic replay for all 15 catalog venues,
+  annual/continuous shapes, and compatible v1 artifacts.
+
+P2.1 through P2.5 are not deployed. There is no live verifier runtime or
+action dispatcher. The remaining Phase 2 slice is the separately authorized
+P2.S 15-venue live shadow review using isolated roots and no production action.
 
 ## Phase 3: cases and notifications
 

@@ -4,7 +4,7 @@ This document defines the target boundaries and safety invariants. Most of the
 components described here are planned; consult [roadmap.md](./roadmap.md) and
 the executable code before assuming a component exists.
 
-## Implemented foundation and Phase 1/2.4 boundaries
+## Implemented foundation and Phase 1/2.5 boundaries
 
 Phase 0 is implemented as a side-effect-free foundation and is not yet wired
 into the deployed monitor:
@@ -41,8 +41,9 @@ manual review now cover all 15 catalog venues, but they remain unverified
 discovery evidence until replayed by a deterministic verifier. No scheduled or
 deployed content verifier, persistent reducer, action router, Mac worker, or
 Codex adapter consumes discovery output. P2.4's local persistence repository
-can retain an explicitly supplied, already validated artifact bundle; no live
-or scheduled caller supplies one.
+can retain an explicitly supplied, already validated artifact bundle, and
+P2.5 can reduce such retained fixture/local records; no live or scheduled
+caller supplies one.
 
 Phase 2.1 plus its P2.1R hardening add verifier contracts and effect boundaries
 without claiming content verification:
@@ -136,8 +137,35 @@ repository for the cloud control plane:
   ownership rule.
 
 P2.4 uses temporary databases in tests and has no deployed migration, GCS
-adapter, reducer, scheduler, router, or action. Only P2.5 may interpret retained
-findings, derive and submit updated conference state, or return typed actions.
+adapter, reducer, scheduler, router, or action. It remains a persistence-only
+module.
+
+P2.5 adds `automation/lifecycle.py` and `automation/control_plane.py` without
+changing that storage boundary:
+
+- a strict verification bundle is revalidated and each positive facet or
+  milestone must map to a retained HTTP-200 snapshot from an official or
+  archival URL whose trust is recomputed from the catalog;
+- facet promotion is monotonic, release observations and verified candidate
+  milestones retain provenance, and the highest newly justified lifecycle
+  state is applied through `automation.domain.apply_transition`;
+- every consumed verification ID is retained in conference state, schedules
+  use the first retained `verified_at`, and replaying an already consumed
+  record is a no-op;
+- continuous publications reject conference facets/milestones into human
+  review, and conflict/review/crawl blockers suppress executable intents;
+- the router returns immutable, stable recheck, transition-notice, case,
+  human-review, or existing-scraper intents as data. Only a newly supported,
+  overall-verified PDF-ready result can return the scraper intent; and
+- the thin coordinator reads the current optimistic revision and stores the
+  pure reduction under the caller's existing P2.4 lease.
+
+P2.5 fixture replay covers every catalog venue plus annual and continuous
+lifecycle shapes, including semantically compatible v1 artifacts. It has no
+live transport, action store/dispatcher, case or notification service, job
+submission, scraper invocation, GCS adapter, Prefect wiring, or deployed
+migration. Returning a queue intent does not claim `ingestion_queued` and does
+not perform an effect.
 
 ## Design principles
 
@@ -238,8 +266,9 @@ positives. It does not prove that all 15 live venue shapes are configured or
 healthy. P2.3 implements deterministic PDF permission, exact cited-URL,
 status, size, signature, and bounded-sampling verification with fake responses
 and sanitized fixtures. P2.4 persistently retains already validated bundles
-and state revisions behind a lease, but only P2.5 connects verified findings
-to transitions, scheduling, and typed actions without executing those actions.
+and state revisions behind a lease. P2.5 connects authoritative retained
+findings to transitions, scheduling, and typed action data without executing
+those actions. P2.S remains responsible for live shape review.
 
 ## Conference-year state
 
@@ -290,8 +319,9 @@ Only a deterministic verifier, job-result consumer, or human actor can request
 a transition; an LLM discovery actor is not valid. Equivalent evidence replay
 is a no-op, conflicting reuse is rejected, and the continuous-publication
 guard prevents JMLR from entering `conference_ended`. Persistent state and the
-deterministic evidence verifiers now exist locally, but applying verified
-findings through this reducer remains P2.5 work.
+deterministic evidence verifiers now exist locally. P2.5 applies authoritative
+retained findings through this reducer and stores the next optimistic revision;
+there is still no live or deployed caller.
 
 The version 1 state also stores nullable evidence-backed milestones for
 conference start/end, acceptance notification, expected paper-list and
@@ -338,9 +368,9 @@ revision history. It deliberately rejects a populated unversioned database and
 does not migrate or share the deployed monitor's database. `JobResultRegistry`
 is a pure executable model of the job protocol: an identical result replay is
 accepted as already seen, while a different result for the same job ID is
-rejected. GCS generation preconditions, cloud restore/upload, deployed
-integration, job-result consumption, and reducer/router use of the SQLite
-repository remain future implementation work.
+rejected. P2.5 now composes retained verification replay with optimistic state
+updates locally. GCS generation preconditions, cloud restore/upload, deployed
+integration, and job-result consumption remain future implementation work.
 
 Evaluate Firestore or PostgreSQL only after a concrete trigger: multiple
 control-plane writers, unavoidable overlapping state updates, a real-time
@@ -362,7 +392,11 @@ prepare_promotion_candidate
 ```
 
 The `ActionType` vocabulary and strict job payload contracts are implemented.
-There is no router yet. Job payloads enumerate approved fields for existing
+P2.5 now provides a pure router for stable immutable action intents. Its closed
+payload dataclasses cannot contain shell commands, and no router output is
+persisted, submitted, or executed. Actual case state, notification delivery,
+job creation/submission, and command selection remain their later packages.
+Job payload contracts continue to enumerate approved fields for existing
 scraper, validation, and Codex-diagnosis jobs and cannot contain arbitrary
 shell commands.
 

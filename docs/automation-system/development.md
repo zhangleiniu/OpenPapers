@@ -35,6 +35,10 @@ automation/providers/gemini.py
 automation/run_discovery.py
 automation/verification.py
 automation/html_verification.py
+automation/pdf_verification.py
+automation/control_state.py
+automation/lifecycle.py
+automation/control_plane.py
 automation/config/venue_catalog.v1.json
 automation/config/policies.v1.json
 ```
@@ -238,7 +242,24 @@ unrecognized schemas, cloud-only ownership, lease overlap/expiry/renewal,
 atomic verification-bundle retention, semantic no-op replay, ordered validated
 reopen, optimistic conference-state revisions, rollback, stale writes, and
 stored corruption. P2.4 does not reduce findings, promote facets or milestones,
-compute schedules, or return actions; keep those behaviors in P2.5.
+compute schedules, or return actions; those behaviors remain separated in the
+P2.5 modules.
+
+The P2.5 lifecycle reduction and typed-routing checks are:
+
+```bash
+python -m unittest automation.tests.test_lifecycle -v
+```
+
+`automation/lifecycle.py` remains pure: it revalidates retained bundles,
+reclassifies positive evidence, promotes monotonic facets/milestones, invokes
+the existing reducer/scheduler, and returns immutable action intents without
+performing them. `automation/control_plane.py` is only a lease/revision-aware
+composition layer over P2.4. Tests replay compatible v1 artifacts and every
+catalog venue/lifecycle shape through temporary repositories. They also prove
+that untrusted, conflicting, continuous-conference, stale-readiness, and lost
+lease paths cannot return or persist an executable effect. P2.S live review is
+not part of these tests and requires separate authorization.
 
 A live fetch adapter must add transport-level DNS/SSRF protections and
 operational crawl controls before use; the existence of the injected interface

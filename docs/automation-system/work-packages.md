@@ -71,10 +71,11 @@ parallel.
 ## Current packages
 
 P2.1R has closed the initial verifier-contract review findings, P2.2 and P2.3
-have completed deterministic HTML and PDF verification, and P2.4 has completed
-the independent persistent-state slice. P2.5 is the only current `Ready`
-package; it may consume retained verified evidence through the reducer but
-must return typed actions as data without executing them.
+have completed deterministic HTML and PDF verification, P2.4 has completed the
+independent persistent-state slice, and P2.5 has completed local lifecycle
+reduction, scheduling, and inert typed routing. P2.S is the only current
+`Ready` package. It requires separate live authorization and must use isolated
+state/artifact roots without any production action.
 
 ### P2.1R — harden verifier contract semantics
 
@@ -199,10 +200,37 @@ reducer, milestone/facet promotion, scheduling integration, action router,
 live network, GCS adapter, deployed migration, monitor-state change, job, or
 deployment behavior.
 
+### P2.5 — verified lifecycle reduction and typed routing
+
+Status: `Complete`
+
+Depends on: P2.4
+
+Completed boundary: `automation/lifecycle.py` revalidates each retained bundle,
+recomputes source trust, and promotes only fetched official/archival evidence
+into monotonic facets, release/verified milestones, the existing
+evidence-backed transition reducer, and an evidence-time-derived schedule.
+Continuous venues cannot acquire conference-specific state, conflicts remain
+review-blocking, and every consumed verification identity makes ordered replay
+idempotent.
+
+The pure router returns stable immutable recheck, transition-notice,
+case/review, and existing-scraper intents as data. A scraper intent requires an
+overall-verified authoritative PDF-ready facet, catalog scraper capability,
+and no execution blocker. It does not create/submit a job, execute a scraper,
+notify, persist an action, or advance state to `ingestion_queued`.
+`automation/control_plane.py` only composes one retained record with the P2.4
+lease and optimistic revision APIs. Sanitized temporary-repository fixtures
+replay compatible v1 artifacts plus every catalog venue and annual/continuous
+lifecycle shape deterministically. There is no live network, P2.S observation,
+production state/GCS/Prefect integration, case service, notification, Mac
+worker, Codex, promotion, or deployment behavior.
+
 ## Phase 2 packages — verification and lifecycle state
 
-Phase gate: no verified result may affect state or actions until P2.5. Live
-network observations occur only in P2.S and remain isolated from production.
+Phase gate: P2.5 permits explicitly supplied authoritative retained evidence to
+affect local control state and inert action data. Live network observations
+occur only in P2.S and remain isolated from production.
 
 | ID | Status | Depends on | Objective and completion boundary |
 |---|---|---|---|
@@ -210,8 +238,8 @@ network observations occur only in P2.S and remain isolated from production.
 | P2.2 | Complete | P2.1R | Deterministic redirect, venue/year identity, HTML list-count, metadata, and proceedings-index verification. Sanitized EMNLP, NAACL/ACL, and IJCAI regressions; no PDF verification, state write, action, or live run. |
 | P2.3 | Complete | P2.1R | PDF permission, URL/status, size, `%PDF-` signature, and deterministic sampling. No HTML identity logic, state write, redistribution grant, or live run. |
 | P2.4 | Complete | P2.2, P2.3 | Single-writer SQLite repository, schema/migration, evidence history, lease, idempotent consumption, and replay. Temporary databases in tests; no deployed migration. |
-| P2.5 | Ready | P2.4 | Verified evidence to state reducer, milestone scheduling, and typed action routing. Actions are returned as data and never executed. Replay all catalog venue/lifecycle shapes with fixtures. |
-| P2.S | Planned | P2.5 | Explicitly authorized 15-venue shadow review using approved crawl policy and isolated state/artifact roots. Record agreement and false positives; perform no job, scraper, notification, or production-state write. |
+| P2.5 | Complete | P2.4 | Verified evidence to state reducer, milestone scheduling, and typed action routing. Actions are returned as data and never executed. Replay all catalog venue/lifecycle shapes with fixtures. |
+| P2.S | Ready | P2.5 | Explicitly authorized 15-venue shadow review using approved crawl policy and isolated state/artifact roots. Record agreement and false positives; perform no job, scraper, notification, or production-state write. |
 
 Phase 2 closes only when the roadmap acceptance criteria pass and P2.S has a
 reviewed record. Change the phase to `Shadow` before `Implemented` when live

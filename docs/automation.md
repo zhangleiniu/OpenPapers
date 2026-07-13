@@ -21,9 +21,12 @@ status, size, Content-Length, and `%PDF-` checks. These components have no live
 HTTP adapter and are not deployed. P2.4 adds a separate local, versioned
 single-writer SQLite repository with an expiring lease, atomic replayable
 verification history, and optimistic conference-state revisions. It is not
-wired into this deployment and does not interpret findings or create actions.
-PDF processing and internal-copy permissions remain separate, and verification
-grants no redistribution authority. The integrated lifecycle reducer,
+wired into this deployment. P2.5 adds a local pure lifecycle reducer,
+evidence-time scheduling, inert typed action intents, and a thin P2.4
+composition boundary; fixture replay covers all catalog venues, but none of
+this code is scheduled or deployed and no intent is persisted, submitted, or
+executed. PDF processing and internal-copy permissions remain separate, and
+verification grants no redistribution authority. A live integrated verifier,
 persistent case state, reminder delivery, the Mac mini worker, Codex repair
 execution, and MustCite deployment are not implemented.
 

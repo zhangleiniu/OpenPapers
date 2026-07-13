@@ -89,8 +89,9 @@ Phase 1 is `Shadow`; the review matrix is
 Deterministic readiness and identity verification remains Phase 2.
 
 Phase 2.1's verifier foundation, P2.1R contract hardening, P2.2 HTML verifier,
-P2.3 PDF verifier, and P2.4 control-state repository are implemented locally
-and are not wired into the deployed monitor flow:
+P2.3 PDF verifier, P2.4 control-state repository, and P2.5 lifecycle reducer
+and typed router are implemented locally and are not wired into the deployed
+monitor flow:
 
 - version 2 verification request/result contracts keep discovery evidence
   separate from deterministic findings, bind each target to its derived kind,
@@ -125,20 +126,27 @@ and are not wired into the deployed monitor flow:
   control plane, refuses populated unversioned databases, excludes overlapping
   writers with an expiring singleton lease, atomically retains strict
   discovery/request/result bundles, and stores optimistic conference-state
-  revisions with immutable history.
+  revisions with immutable history; and
+- `automation/lifecycle.py` independently reclassifies retained positive
+  evidence, monotonically promotes facets and milestones, applies the existing
+  evidence-backed transition reducer, computes `next_check_at` from the
+  retained verification time, and returns stable typed action intents as data.
+  `automation/control_plane.py` is the thin lease/revision-aware composition
+  boundary that persists that pure result.
 
 Neither content-verifier module contains a live HTTP adapter. P2.2 and P2.3 can
-produce strict fixture-backed v2 HTML or PDF findings, and P2.4 can persist and
-replay those validated artifacts without interpreting them. No finding is
-promoted into lifecycle state, scheduled, or authorized to create an action.
-PDF evidence retention grants no redistribution authority. P2.5 remains
-responsible for reducer, scheduling, and typed-router integration.
+produce strict fixture-backed v2 HTML or PDF findings, P2.4 can persist and
+replay those validated artifacts, and P2.5 can reduce explicitly supplied
+retained records into local state revisions. Actions are returned only as
+inert data: no intent is persisted, submitted, notified, or executed. PDF evidence
+retention grants no redistribution authority. Fixture replay covers all 15
+catalog venues and both annual and continuous lifecycle shapes; live shape
+review remains P2.S.
 
 The following does **not** exist yet:
 
 - scheduled or deployed LLM discovery;
-- a live HTML/PDF verification runtime and an integrated persistent state
-  reducer;
+- a live HTML/PDF verification runtime or deployed persistent reducer/router;
 - unresolved cases and reminder decay;
 - automated routing from discovery to a scrape job;
 - a Mac mini Prefect worker;
@@ -227,8 +235,10 @@ Do not weaken citation or venue/year validation merely to make a provider
 sample pass. P2.2 now provides fixture-backed deterministic candidate-date and
 HTML-readiness verification, while P2.3 provides fixture-backed PDF permission,
 status, size, signature, and sampling verification. P2.4 can retain those
-artifacts locally for replay. Phase 2.5 may later promote verified findings
-into conference state for `next_check_at` computation.
+artifacts locally for replay, and P2.5 can promote authoritative findings into
+local conference state and inert action intents. P2.S is the next isolated
+package and requires separate authorization for its 15-venue live shadow
+review; it still cannot execute an action or write production state.
 
 Keep Phase 1 additive. It may report what a verified later phase could do, but
 must not create a job, write lifecycle state, invoke a scraper, or promote data.
