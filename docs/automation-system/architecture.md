@@ -4,7 +4,7 @@ This document defines the target boundaries and safety invariants. Most of the
 components described here are planned; consult [roadmap.md](./roadmap.md) and
 the executable code before assuming a component exists.
 
-## Implemented foundation and Phase 1/2.S boundaries
+## Implemented foundation and Phase 1/2.S/P3.1 boundaries
 
 Phase 0 is implemented as a side-effect-free foundation and is not yet wired
 into the deployed monitor:
@@ -194,8 +194,27 @@ signals failed exact-URL signature checks, the EMNLP proceedings false positive
 did not promote, JMLR stayed on its continuous policy, and no queue intent was
 returned. The live review also found conservative source-shape gaps; Phase 2
 is therefore `Shadow`, not `Implemented`. There remains no scheduled/deployed
-verifier, action store/dispatcher, case/notification service, job submission,
+verifier, action store/dispatcher, notification service, job submission,
 scraper execution, GCS integration, or production-state migration.
+
+P3.1 adds a local case domain and extends the same control repository:
+
+- `automation/cases.py` derives the stable case identity from
+  venue/year/blocker, preserves one case per key, separates ordinary checks
+  from meaningful evidence/summary changes, and applies resolve, snooze,
+  ignore, and reactivate controls without storage or transport effects;
+- new evidence reactivates a `dormant` case, but it does not silently override
+  `resolved`, `ignored`, or `wont_fix`; those require an explicit reactivate
+  control; and
+- control schema version 2 migrates a valid version-1 database atomically and
+  stores lease-protected case current rows, immutable revisions, and immutable
+  event records. A stable event ID is a no-op on exact replay and a conflict
+  when reused with different meaning.
+
+P3.1 accepts explicitly supplied observations and controls only. It does not
+consume P2.5 action intents, calculate weekly/monthly/dormant policy, group a
+digest, create a notification intent, or deliver email or another transport.
+It is local and not wired into the deployed monitor.
 
 ## Design principles
 
@@ -396,13 +415,22 @@ is not the cloud state store or a GCS adapter. P2.4's
 `ControlStateRepository` implements schema-versioned local SQLite control
 state, an expiring singleton writer lease, atomic idempotent verification
 bundle retention, validated ordered replay, and optimistic conference-state
-revision history. It deliberately rejects a populated unversioned database and
-does not migrate or share the deployed monitor's database. `JobResultRegistry`
-is a pure executable model of the job protocol: an identical result replay is
-accepted as already seen, while a different result for the same job ID is
-rejected. P2.5 now composes retained verification replay with optimistic state
-updates locally. GCS generation preconditions, cloud restore/upload, deployed
-integration, and job-result consumption remain future implementation work.
+revision history. P3.1 advances that database to schema version 2 with
+deduplicated case current/history/event storage under the same lease. It
+deliberately rejects a populated unversioned database and does not migrate or
+share the deployed monitor's database. `JobResultRegistry` is a pure executable
+model of the job protocol: an identical result replay is accepted as already
+seen, while a different result for the same job ID is rejected. P2.5 now
+composes retained verification replay with optimistic state updates locally.
+GCS generation preconditions, cloud restore/upload, deployed integration,
+case-intent consumption, and job-result consumption remain future work.
+
+Schema version 2 has no deployed migration or current operator action. A valid
+local version-1 control database migrates on open, preserving its verification
+and conference-state data. Before any future durable operator database is
+opened by version-2 code, stop overlapping writers and take a backup; rollback
+after migration requires restoring that backup because older code must reject,
+not downgrade or delete, a newer schema.
 
 Evaluate Firestore or PostgreSQL only after a concrete trigger: multiple
 control-plane writers, unavoidable overlapping state updates, a real-time
@@ -426,8 +454,10 @@ prepare_promotion_candidate
 The `ActionType` vocabulary and strict job payload contracts are implemented.
 P2.5 now provides a pure router for stable immutable action intents. Its closed
 payload dataclasses cannot contain shell commands, and no router output is
-persisted, submitted, or executed. Actual case state, notification delivery,
-job creation/submission, and command selection remain their later packages.
+persisted, submitted, or executed. P3.1 can persist separately supplied case
+observations but is not an action consumer. Router-to-case integration,
+notification delivery, job creation/submission, and command selection remain
+their later packages.
 Job payload contracts continue to enumerate approved fields for existing
 scraper, validation, and Codex-diagnosis jobs and cannot contain arbitrary
 shell commands.
@@ -455,6 +485,12 @@ Default reminder policy:
 Use `last_meaningful_change_at`, not merely `last_checked_at`, to calculate
 age. New evidence reactivates a dormant case. Human controls must support
 snooze, monthly, ignore, reactivate, resolve, and won't-fix outcomes.
+
+P3.1 implements the timestamp distinction, new-evidence dormant reactivation,
+and resolve/snooze/ignore/reactivate controls. It deliberately does not assign
+`stalled`/`dormant` by age, provide a monthly override or won't-fix control,
+select due cases, or construct a digest; those remain P3.2 or a later scoped
+package.
 
 ## Cost and execution guardrails
 

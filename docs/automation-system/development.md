@@ -39,6 +39,7 @@ automation/pdf_verification.py
 automation/control_state.py
 automation/lifecycle.py
 automation/control_plane.py
+automation/cases.py
 automation/config/venue_catalog.v1.json
 automation/config/policies.v1.json
 ```
@@ -297,6 +298,24 @@ artifacts, an isolated SQLite database, and inert summaries. A completed root
 replays its first summary without a new network call. It is not a scheduler,
 production state writer, dispatcher, or deployment surface. The first
 15-venue record is `phase2-live-review-2026-07-13.md`.
+
+The P3.1 persistent unresolved-case checks are:
+
+```bash
+python -m unittest automation.tests.test_cases -v
+python -m unittest automation.tests.test_control_state -v
+```
+
+`automation/cases.py` is pure and accepts explicit typed observations or human
+controls; it does not consume P2.5 intents or calculate reminders.
+`ControlStateRepository` schema version 2 stores one current case per
+venue/year/blocker plus immutable revisions and events under the existing
+lease. Tests use temporary databases and fixed clocks to cover stable-key and
+event-ID deduplication, meaningful-change timestamps, dormant-only automatic
+reactivation, resolve/snooze/ignore/reactivate, unresolved-only listing,
+version-1 migration, replay, corruption, lease loss, and transaction rollback.
+P3.2 remains responsible for weekly/monthly/dormant aging and grouped digest
+data; no P3.1 test constructs or sends a notification.
 
 Scheduling tests use an injected timezone-aware clock. Keep venue catalogs free
 of year-specific month/date assumptions; discovery records candidates, a

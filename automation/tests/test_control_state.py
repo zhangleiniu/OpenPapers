@@ -18,7 +18,9 @@ from automation.control_state import (
     StateRevisionConflictError,
     StoredDataError,
     VerificationReplayConflictError,
+    _MIGRATION_1,
 )
+from automation.contracts import artifact_fingerprint
 from automation.domain import OwnershipError, Writer
 from automation.verification import VerificationError, build_verification_result
 
@@ -63,11 +65,60 @@ class SchemaAndBoundaryTests(unittest.TestCase):
                 versions = repository._connection.execute(
                     "SELECT version FROM schema_migrations"
                 ).fetchall()
-                self.assertEqual([row[0] for row in versions], [1])
+                self.assertEqual([row[0] for row in versions], [1, 2])
 
             with ControlStateRepository(path) as reopened:
-                self.assertEqual(reopened.schema_version, 1)
+                self.assertEqual(reopened.schema_version, CONTROL_SCHEMA_VERSION)
                 self.assertEqual(reopened.replay_verifications(), ())
+
+    def test_valid_version_one_database_migrates_without_losing_state(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "state.sqlite3"
+            connection = sqlite3.connect(path)
+            for statement in _MIGRATION_1:
+                connection.execute(statement)
+            connection.execute(
+                "INSERT INTO schema_migrations (version, applied_at) VALUES (1, ?)",
+                ("2026-07-13T20:30:00Z",),
+            )
+            state = conference_state()
+            state_json = json.dumps(
+                state,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+                allow_nan=False,
+            )
+            values = (
+                state["venue_id"],
+                state["year"],
+                1,
+                artifact_fingerprint(state),
+                "2026-07-13T20:30:00Z",
+                state_json,
+            )
+            connection.execute(
+                "INSERT INTO conference_state_history VALUES (?, ?, ?, ?, ?, ?)",
+                values,
+            )
+            connection.execute(
+                "INSERT INTO conference_state_current VALUES (?, ?, ?, ?, ?, ?)",
+                values,
+            )
+            connection.execute("PRAGMA user_version = 1")
+            connection.commit()
+            connection.close()
+
+            with ControlStateRepository(path, clock=MutableClock()) as repository:
+                self.assertEqual(repository.schema_version, 2)
+                self.assertEqual(
+                    repository.get_conference_state("icml", 2026).state, state
+                )
+                self.assertEqual(repository.list_cases(include_closed=True), ())
+                versions = repository._connection.execute(
+                    "SELECT version FROM schema_migrations ORDER BY version"
+                ).fetchall()
+                self.assertEqual([row[0] for row in versions], [1, 2])
 
     def test_unrecognized_and_future_databases_fail_without_mutation(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -89,7 +140,9 @@ class SchemaAndBoundaryTests(unittest.TestCase):
 
             future = Path(directory) / "future.sqlite3"
             connection = sqlite3.connect(future)
-            connection.execute("PRAGMA user_version = 2")
+            connection.execute(
+                f"PRAGMA user_version = {CONTROL_SCHEMA_VERSION + 1}"
+            )
             connection.commit()
             connection.close()
             with self.assertRaisesRegex(SchemaMigrationError, "newer"):
@@ -110,6 +163,15 @@ class SchemaAndBoundaryTests(unittest.TestCase):
             connection.close()
             with self.assertRaisesRegex(SchemaMigrationError, "missing tables"):
                 ControlStateRepository(malformed)
+            connection = sqlite3.connect(malformed)
+            tables = {
+                row[0]
+                for row in connection.execute(
+                    "SELECT name FROM sqlite_master WHERE type = 'table'"
+                )
+            }
+            connection.close()
+            self.assertEqual(tables, {"schema_migrations"})
 
     def test_only_cloud_control_plane_can_construct_repository(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -16,7 +16,7 @@ phase-level outcomes and status.
 | 0 | Contracts, policies, ownership, and safety boundaries | Implemented |
 | 1 | LLM search discovery in shadow mode | Shadow (15-venue live review, 2026-07-13) |
 | 2 | Evidence verification and lifecycle state | Shadow (P2.S 15-venue live review, 2026-07-13) |
-| 3 | Cases and fatigue-resistant notifications | Planned |
+| 3 | Cases and fatigue-resistant notifications | In progress (P3.1 complete, 2026-07-13) |
 | 4 | Mac mini Prefect worker and immutable results | Planned |
 | 5 | Automatic execution of existing scrapers | Planned |
 | 6 | Budgeted Codex diagnosis and repair proposals | Planned |
@@ -274,6 +274,28 @@ Acceptance:
 - resolved cases stop appearing;
 - one digest contains all due cases, grouped by urgency;
 - email includes evidence and run references without leaking credentials.
+
+Accepted P3.1 persistent-case implementation:
+
+- `automation/cases.py` derives one stable case per venue/year/blocker and
+  validates the existing version 1 case contract with additional identity,
+  timestamp, status, snooze, resolution, and non-empty-evidence semantics;
+- ordinary repeated observations advance `last_checked_at` without resetting
+  `last_meaningful_change_at`; new evidence or a changed summary is meaningful,
+  and only new evidence automatically reactivates a dormant case;
+- resolve, snooze, ignore, and reactivate are pure, validated controls. Human
+  terminal states remain closed until explicit reactivation; and
+- control-state schema version 2 atomically migrates valid version-1 local
+  databases and retains one current case per key plus immutable revisions and
+  observation/control events under the existing singleton lease. Exact event
+  replay is a no-op, conflicting ID reuse fails, and default queries omit
+  terminal cases.
+
+P3.1 is not connected to P2.5 action intents or the deployed monitor. It adds
+no reminder aging, due-case selection, digest/notification construction,
+delivery retry, redaction, email, or other transport. Therefore Phase 3 is
+`In progress`, not `Implemented`; its clock-controlled and delivery acceptance
+criteria remain assigned to P3.2 through P3.4 and P3.S.
 
 ## Phase 4: Mac mini execution plane
 

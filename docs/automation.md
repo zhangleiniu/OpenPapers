@@ -29,9 +29,14 @@ public-address-only DNS checks, pinned hostname-verified HTTPS, a separately
 reviewed crawl policy, immutable snapshots, and isolated state. Its 15-venue
 review is complete, but it is not scheduled or deployed and cannot dispatch
 an intent. PDF processing and internal-copy permissions remain separate, and
-verification grants no redistribution authority. A production-integrated
-verifier, persistent case state, reminder delivery, the Mac mini worker, Codex
-repair execution, and MustCite deployment are not implemented.
+verification grants no redistribution authority. P3.1 adds a local pure case
+domain and control-state schema version 2 with lease-protected deduplicated
+case current/history/event persistence plus resolve, snooze, ignore, and
+reactivate controls. It is not wired to P2.5 intents or this deployment and
+does not compute reminders or construct/deliver notifications. A
+production-integrated verifier/case flow, reminder and notification handling,
+the Mac mini worker, Codex repair execution, and MustCite deployment are not
+implemented.
 
 Start at the [automation system development guide](./automation-system/README.md) for
 the implemented foundation, target architecture, roadmap, and zero-context

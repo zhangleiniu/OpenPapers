@@ -152,11 +152,28 @@ notification is delivered, and no scraper runs. PDF evidence retention grants
 no redistribution authority. Phase 2 is `Shadow`, not deployed or
 implemented; live source-profile coverage remains conservative.
 
+Phase 3.1 persistent unresolved cases are implemented locally and are not
+wired into the deployed monitor or the P2.5 action router:
+
+- `automation/cases.py` derives one stable case per venue/year/blocker,
+  distinguishes repeated checks from meaningful changes, retains new evidence,
+  reactivates a dormant case only for new evidence, and implements resolve,
+  snooze, ignore, and explicit reactivate controls as pure state changes; and
+- control-state schema version 2 adds lease-protected current case rows,
+  immutable revisions, and immutable observation/control events. Valid schema
+  version 1 databases migrate atomically, repeated event IDs are idempotent,
+  conflicting reuse fails closed, and unresolved-only listing excludes
+  terminal cases by default.
+
+P3.1 does not consume case intents, age cases into reminder windows, build a
+digest or notification, call a transport, or change production state. Phase 3
+is `In progress`; P3.2 reminder policy and digest generation are next.
+
 The following does **not** exist yet:
 
 - scheduled or deployed LLM discovery;
 - a scheduled or deployed HTML/PDF verifier and persistent reducer/router;
-- unresolved cases and reminder decay;
+- case-intent integration, reminder aging/digests, or notification delivery;
 - automated routing from discovery to a scrape job;
 - a Mac mini Prefect worker;
 - a Codex execution adapter;
@@ -248,8 +265,11 @@ artifacts locally for replay, and P2.5 can promote authoritative findings into
 local conference state and inert action intents. The explicitly authorized
 P2.S review is complete; it observed all 15 venues through isolated roots and
 confirmed that the known readiness false positives do not create queue
-intents. P3.1 persistent case state is the next isolated package. No Phase 2
-command can execute an action or write production state.
+intents. P3.1 can now persist explicitly supplied case observations and human
+controls under the local lease, but it is not connected to those intents.
+P3.2 clock-controlled reminder policy and grouped digest data is the next
+isolated package. No Phase 2 command can execute an action or write production
+state, and no Phase 3 code can deliver a notification.
 
 Keep Phase 1 additive. It may report what a verified later phase could do, but
 must not create a job, write lifecycle state, invoke a scraper, or promote data.

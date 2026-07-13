@@ -73,8 +73,8 @@ parallel.
 P2.1R through P2.5 have completed the local verification, persistence,
 lifecycle, scheduling, and inert-routing slices. P2.S has completed the
 explicitly authorized 15-venue live shadow review using isolated roots and no
-production action. Phase 2 is now `Shadow`; P3.1 is the only current `Ready`
-package.
+production action. Phase 2 is now `Shadow`. P3.1 has completed the persistent
+case slice; P3.2 is the only current `Ready` package.
 
 ### P2.1R — harden verifier contract semantics
 
@@ -247,10 +247,36 @@ coverage remains conservative.
 
 ## Phase 3 packages — cases and notifications
 
+### P3.1 — persistent unresolved-case state and controls
+
+Status: `Complete`
+
+Depends on: Phase 2 gate
+
+Completed boundary: `automation/cases.py` derives one stable case per
+venue/year/blocker, distinguishes repeated checks from meaningful changes,
+retains evidence, reactivates dormant state only for new evidence, and applies
+resolve, snooze, ignore, and reactivate as pure state controls. Closed human
+states require explicit reactivation.
+
+Control-state schema version 2 atomically migrates a valid version-1 database
+and persists lease-protected case current rows, immutable state revisions, and
+immutable observation/control events. Exact event replay is a no-op,
+conflicting reuse is rejected, a relational uniqueness constraint reinforces
+domain deduplication, terminal cases are absent from the default list, and
+stored corruption or compound-write failure fails closed. Tests use fixed
+clocks and temporary databases.
+
+The package does not consume P2.5 action intents, compute weekly, monthly, or
+dormant policy, group a digest, create or deliver a notification, call email
+or another transport, synchronize GCS, or change the deployed monitor. P3.2
+and later retain all reminder, notification, integration, and live-delivery
+work.
+
 | ID | Status | Depends on | Objective and completion boundary |
 |---|---|---|---|
-| P3.1 | Ready | Phase 2 gate | Persistent unresolved-case domain and repository with deduplication plus resolve, snooze, ignore, and reactivate controls. No email delivery. |
-| P3.2 | Planned | P3.1 | Clock-controlled weekly, monthly, and dormant reminder policy plus grouped digest generation. No transport adapter. |
+| P3.1 | Complete | Phase 2 gate | Persistent unresolved-case domain and repository with deduplication plus resolve, snooze, ignore, and reactivate controls. No reminder or notification generation and no transport. |
+| P3.2 | Ready | P3.1 | Clock-controlled weekly, monthly, and dormant reminder policy plus grouped digest generation. No transport adapter. |
 | P3.3 | Planned | P3.2 | Immediate/digest delivery boundary with idempotency, retry classification, redaction, and fake transport tests. No real email without explicit authorization. |
 | P3.4 | Planned | P3.3 | Integrate transitions, cases, reminders, and notification intents; prove one event creates at most one notification. Shadow output before any live delivery. |
 | P3.S | Planned | P3.4 | Separately authorized delivery canary and fatigue review using non-sensitive test events. Record results and rollback without changing case semantics. |
