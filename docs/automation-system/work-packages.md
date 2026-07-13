@@ -70,11 +70,11 @@ parallel.
 
 ## Current packages
 
-P2.1R has closed the initial verifier-contract review findings, P2.2 has
-completed deterministic HTML evidence verification, and P2.3 has completed
-the independent PDF-verification slice. P2.4 is the only current `Ready`
-package; it must remain a persistent-state thread and consume verifier results
-without adding reducer or action behavior.
+P2.1R has closed the initial verifier-contract review findings, P2.2 and P2.3
+have completed deterministic HTML and PDF verification, and P2.4 has completed
+the independent persistent-state slice. P2.5 is the only current `Ready`
+package; it may consume retained verified evidence through the reducer but
+must return typed actions as data without executing them.
 
 ### P2.1R — harden verifier contract semantics
 
@@ -176,6 +176,29 @@ invalid content, provenance forgery, and scope boundaries. The package adds no
 HTML identity logic, live transport, persistent state, reducer, action, job,
 redistribution grant, or deployment behavior.
 
+### P2.4 — persistent control state and replay
+
+Status: `Complete`
+
+Depends on: P2.2 and P2.3
+
+Completed boundary: `automation/control_state.py` provides schema-versioned
+SQLite storage restricted to the cloud control-plane owner. An empty database
+migrates to version 1; future, malformed, and populated unversioned databases
+fail closed. One expiring singleton lease excludes overlapping writers, and
+every verification or conference-state mutation validates its opaque token in
+the same immediate transaction.
+
+Strict discovery/request/result bundles are retained atomically with canonical
+fingerprints. Semantic replay preserves the first payload as a no-op, identity
+conflicts fail, and ordered reads revalidate all three contracts. Conference
+state uses optimistic current revisions plus immutable snapshot history, with
+identical-write no-ops, stale-write rejection, and compound rollback. Tests use
+temporary databases and deterministic clocks. The package adds no finding
+reducer, milestone/facet promotion, scheduling integration, action router,
+live network, GCS adapter, deployed migration, monitor-state change, job, or
+deployment behavior.
+
 ## Phase 2 packages — verification and lifecycle state
 
 Phase gate: no verified result may affect state or actions until P2.5. Live
@@ -186,8 +209,8 @@ network observations occur only in P2.S and remain isolated from production.
 | P2.1 | Complete | Phase 1 | Verifier contracts, source trust, crawl gate, one-request fetch boundary, immutable local snapshots, and P2.1R semantic hardening. |
 | P2.2 | Complete | P2.1R | Deterministic redirect, venue/year identity, HTML list-count, metadata, and proceedings-index verification. Sanitized EMNLP, NAACL/ACL, and IJCAI regressions; no PDF verification, state write, action, or live run. |
 | P2.3 | Complete | P2.1R | PDF permission, URL/status, size, `%PDF-` signature, and deterministic sampling. No HTML identity logic, state write, redistribution grant, or live run. |
-| P2.4 | Ready | P2.2, P2.3 | Single-writer SQLite repository, schema/migration, evidence history, lease, idempotent consumption, and replay. Temporary databases in tests; no deployed migration. |
-| P2.5 | Planned | P2.4 | Verified evidence to state reducer, milestone scheduling, and typed action routing. Actions are returned as data and never executed. Replay all catalog venue/lifecycle shapes with fixtures. |
+| P2.4 | Complete | P2.2, P2.3 | Single-writer SQLite repository, schema/migration, evidence history, lease, idempotent consumption, and replay. Temporary databases in tests; no deployed migration. |
+| P2.5 | Ready | P2.4 | Verified evidence to state reducer, milestone scheduling, and typed action routing. Actions are returned as data and never executed. Replay all catalog venue/lifecycle shapes with fixtures. |
 | P2.S | Planned | P2.5 | Explicitly authorized 15-venue shadow review using approved crawl policy and isolated state/artifact roots. Record agreement and false positives; perform no job, scraper, notification, or production-state write. |
 
 Phase 2 closes only when the roadmap acceptance criteria pass and P2.S has a

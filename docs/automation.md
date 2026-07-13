@@ -18,11 +18,14 @@ fake/fixture-only redirect coordinator and bounded HTML verifier for exact
 identity, dates, list counts, metadata, and current proceedings indexes. P2.3
 adds fake/fixture-only, permission-gated deterministic PDF sampling with
 status, size, Content-Length, and `%PDF-` checks. These components have no live
-HTTP adapter and are not deployed; no result is wired to lifecycle state or
-actions. PDF processing and internal-copy permissions remain separate, and
-verification grants no redistribution authority.
-Persistent lifecycle/case state, reminder delivery, the Mac mini worker, Codex
-repair execution, and MustCite deployment are not implemented.
+HTTP adapter and are not deployed. P2.4 adds a separate local, versioned
+single-writer SQLite repository with an expiring lease, atomic replayable
+verification history, and optimistic conference-state revisions. It is not
+wired into this deployment and does not interpret findings or create actions.
+PDF processing and internal-copy permissions remain separate, and verification
+grants no redistribution authority. The integrated lifecycle reducer,
+persistent case state, reminder delivery, the Mac mini worker, Codex repair
+execution, and MustCite deployment are not implemented.
 
 Start at the [automation system development guide](./automation-system/README.md) for
 the implemented foundation, target architecture, roadmap, and zero-context

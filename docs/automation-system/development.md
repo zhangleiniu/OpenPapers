@@ -223,8 +223,22 @@ uses stable bounded sampling, the injected one-request fetcher, explicit
 fixtures, and temporary snapshot roots. Tests cover per-hop redirects and
 policy closure, exact cited sample selection, final HTTP status, minimum/actual
 size, Content-Length, `%PDF-` signature, replay, forged provenance, and P2.3
-scope boundaries. Keep persistent history, migrations, leases, and replay
-repositories in P2.4.
+scope boundaries. Persistent history remains outside the PDF verifier.
+
+The P2.4 persistent control-state checks are:
+
+```bash
+python -m unittest automation.tests.test_control_state -v
+```
+
+`automation/control_state.py` is a standard-library SQLite repository distinct
+from the deployed monitor's `StateStore`. Tests use temporary databases and
+fixed clocks to cover empty-database migration, rejection of future and
+unrecognized schemas, cloud-only ownership, lease overlap/expiry/renewal,
+atomic verification-bundle retention, semantic no-op replay, ordered validated
+reopen, optimistic conference-state revisions, rollback, stale writes, and
+stored corruption. P2.4 does not reduce findings, promote facets or milestones,
+compute schedules, or return actions; keep those behaviors in P2.5.
 
 A live fetch adapter must add transport-level DNS/SSRF protections and
 operational crawl controls before use; the existence of the injected interface

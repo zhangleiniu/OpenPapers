@@ -4,7 +4,7 @@ This document defines the target boundaries and safety invariants. Most of the
 components described here are planned; consult [roadmap.md](./roadmap.md) and
 the executable code before assuming a component exists.
 
-## Implemented foundation and Phase 1/2.3 boundaries
+## Implemented foundation and Phase 1/2.4 boundaries
 
 Phase 0 is implemented as a side-effect-free foundation and is not yet wired
 into the deployed monitor:
@@ -39,8 +39,10 @@ Phase 1 now adds an optional, shadow-only discovery path:
 This path is not deployed or scheduled. Contract-valid live artifacts and a
 manual review now cover all 15 catalog venues, but they remain unverified
 discovery evidence until replayed by a deterministic verifier. No scheduled or
-deployed content verifier, persistent conference/case store, action router, Mac
-worker, or Codex adapter consumes discovery output.
+deployed content verifier, persistent reducer, action router, Mac worker, or
+Codex adapter consumes discovery output. P2.4's local persistence repository
+can retain an explicitly supplied, already validated artifact bundle; no live
+or scheduled caller supplies one.
 
 Phase 2.1 plus its P2.1R hardening add verifier contracts and effect boundaries
 without claiming content verification:
@@ -113,9 +115,29 @@ P2.3 consumes the same accepted foundation independently in
   produce readiness.
 
 P2.3 uses no live transport or HTML identity inference and grants no
-`redistribute_pdf` permission. P2.2/P2.3 findings remain data only; P2.4 owns
-durable history, and only P2.5 may connect verified findings to state and typed
-actions.
+`redistribute_pdf` permission. P2.2/P2.3 findings remain data only.
+
+P2.4 adds `automation/control_state.py` as a separate standard-library SQLite
+repository for the cloud control plane:
+
+- schema version 1 is created only from an empty database; newer, malformed,
+  and populated unversioned databases fail closed so the deployed monitor
+  database cannot be mistaken for control state;
+- one expiring singleton lease is acquired, renewed, and released with an
+  opaque token, and every mutable history/state write rechecks that token in
+  the same `BEGIN IMMEDIATE` transaction;
+- a discovery, verification request, and verification result are retained as
+  one canonical bundle after existing cross-artifact validation. Equivalent
+  semantic replay is a no-op, conflicting identity is rejected, and ordered
+  reads revalidate stored fingerprints and semantics;
+- conference state is stored as an optimistic current revision plus immutable
+  revision history. Identical writes are no-ops and stale revisions fail; and
+- repository construction enforces the existing cloud-only `control_state`
+  ownership rule.
+
+P2.4 uses temporary databases in tests and has no deployed migration, GCS
+adapter, reducer, scheduler, router, or action. Only P2.5 may interpret retained
+findings, derive and submit updated conference state, or return typed actions.
 
 ## Design principles
 
@@ -213,11 +235,11 @@ P2.2 implements redirect, venue/year identity, candidate-date, list-count,
 metadata, and proceedings-index verification, including fixture regressions
 for the known EMNLP future-index, NAACL/ACL identity, and IJCAI no-PDF false
 positives. It does not prove that all 15 live venue shapes are configured or
-healthy. P2.3 now implements deterministic PDF permission, exact cited-URL,
+healthy. P2.3 implements deterministic PDF permission, exact cited-URL,
 status, size, signature, and bounded-sampling verification with fake responses
-and sanitized fixtures. P2.4 owns persistent SQLite history, migrations,
-leases, and replay; P2.5 alone connects verified findings to transitions,
-scheduling, and typed actions without executing those actions.
+and sanitized fixtures. P2.4 persistently retains already validated bundles
+and state revisions behind a lease, but only P2.5 connects verified findings
+to transitions, scheduling, and typed actions without executing those actions.
 
 ## Conference-year state
 
@@ -263,12 +285,13 @@ actor, and timestamp. Replaying the same evidence must be idempotent.
 JMLR is continuously published and requires a lifecycle policy different from
 annual conferences. Do not fabricate a conference-ended transition for it.
 
-`automation/domain.py` now implements this transition table as pure Python.
+`automation/domain.py` implements this transition table as pure Python.
 Only a deterministic verifier, job-result consumer, or human actor can request
 a transition; an LLM discovery actor is not valid. Equivalent evidence replay
 is a no-op, conflicting reuse is rejected, and the continuous-publication
 guard prevents JMLR from entering `conference_ended`. Persistent state and the
-deterministic evidence verifier remain Phase 2 work.
+deterministic evidence verifiers now exist locally, but applying verified
+findings through this reducer remains P2.5 work.
 
 The version 1 state also stores nullable evidence-backed milestones for
 conference start/end, acceptance notification, expected paper-list and
@@ -307,11 +330,17 @@ Phase 0 expresses the ownership and write-once rules in
 cloud evidence/discovery/verification objects, while the Mac worker owns
 immutable job results, manifests, and Codex results. P2.1's
 `FileSnapshotStore` proves local content-addressed source snapshot replay but
-is not the cloud state store or a GCS adapter. `JobResultRegistry` is a pure
-executable model of the job protocol: an identical result replay is accepted
-as already seen, while a different result for the same job ID is rejected.
-GCS generation preconditions, leases, durable consumption, and SQLite
-integration remain future implementation work.
+is not the cloud state store or a GCS adapter. P2.4's
+`ControlStateRepository` implements schema-versioned local SQLite control
+state, an expiring singleton writer lease, atomic idempotent verification
+bundle retention, validated ordered replay, and optimistic conference-state
+revision history. It deliberately rejects a populated unversioned database and
+does not migrate or share the deployed monitor's database. `JobResultRegistry`
+is a pure executable model of the job protocol: an identical result replay is
+accepted as already seen, while a different result for the same job ID is
+rejected. GCS generation preconditions, cloud restore/upload, deployed
+integration, job-result consumption, and reducer/router use of the SQLite
+repository remain future implementation work.
 
 Evaluate Firestore or PostgreSQL only after a concrete trigger: multiple
 control-plane writers, unavoidable overlapping state updates, a real-time

@@ -15,7 +15,7 @@ phase-level outcomes and status.
 | Existing baseline | Deterministic monitor, Cloud Run/Prefect/GCS, email | Implemented |
 | 0 | Contracts, policies, ownership, and safety boundaries | Implemented |
 | 1 | LLM search discovery in shadow mode | Shadow (15-venue live review, 2026-07-13) |
-| 2 | Evidence verification and lifecycle state | In progress (P2.1/P2.1R/P2.2/P2.3 accepted, 2026-07-13) |
+| 2 | Evidence verification and lifecycle state | In progress (P2.1/P2.1R/P2.2/P2.3/P2.4 accepted, 2026-07-13) |
 | 3 | Cases and fatigue-resistant notifications | Planned |
 | 4 | Mac mini Prefect worker and immutable results | Planned |
 | 5 | Automatic execution of existing scrapers | Planned |
@@ -206,11 +206,25 @@ Accepted P2.3 PDF evidence implementation:
   and untrusted samples while retaining replay-stable evidence and never
   granting redistribution permission.
 
-P2.1/P2.1R/P2.2/P2.3 are not deployed and cannot write lifecycle state or
-create an action. Remaining slices are P2.4 persistent SQLite
-state/history/lease and replay, and P2.5 reducer/scheduling/typed-router
-integration. A separate P2.S thread performs the 15-venue live shadow review
-and phase-status update after those slices.
+Accepted P2.4 persistent control-state implementation:
+
+- a versioned standard-library SQLite repository is restricted to the cloud
+  control-plane owner and rejects future, malformed, or populated unversioned
+  databases rather than touching the deployed monitor state;
+- an expiring singleton lease prevents overlapping control writers and is
+  revalidated in the same transaction as every history or state mutation;
+- strict discovery/request/result bundles are retained atomically, use their
+  validated semantic identity for idempotent consumption, and are
+  fingerprint- and semantics-checked again during ordered replay; and
+- conference-state current rows use optimistic revisions with an immutable
+  snapshot history, atomic rollback, identical-write no-ops, and stale-write
+  rejection.
+
+P2.1/P2.1R/P2.2/P2.3/P2.4 are not deployed. P2.4 can write local lifecycle
+state supplied by a caller but does not derive that state from findings or
+create an action. The remaining implementation slice is P2.5
+reducer/scheduling/typed-router integration. A separate P2.S thread performs
+the 15-venue live shadow review after P2.5.
 
 ## Phase 3: cases and notifications
 
