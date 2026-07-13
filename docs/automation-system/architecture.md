@@ -4,7 +4,7 @@ This document defines the target boundaries and safety invariants. Most of the
 components described here are planned; consult [roadmap.md](./roadmap.md) and
 the executable code before assuming a component exists.
 
-## Implemented foundation and Phase 1/2.S/P3.1 boundaries
+## Implemented foundation and Phase 1/2.S/P3.1/P3.2 boundaries
 
 Phase 0 is implemented as a side-effect-free foundation and is not yet wired
 into the deployed monitor:
@@ -197,7 +197,8 @@ is therefore `Shadow`, not `Implemented`. There remains no scheduled/deployed
 verifier, action store/dispatcher, notification service, job submission,
 scraper execution, GCS integration, or production-state migration.
 
-P3.1 adds a local case domain and extends the same control repository:
+P3.1 adds a local case domain and extends the same control repository; P3.2
+adds a separate pure reminder projection:
 
 - `automation/cases.py` derives the stable case identity from
   venue/year/blocker, preserves one case per key, separates ordinary checks
@@ -209,12 +210,17 @@ P3.1 adds a local case domain and extends the same control repository:
 - control schema version 2 migrates a valid version-1 database atomically and
   stores lease-protected case current rows, immutable revisions, and immutable
   event records. A stable event ID is a no-op on exact replay and a conflict
-  when reused with different meaning.
+  when reused with different meaning; and
+- `automation/reminders.py` validates case/policy inputs, uses
+  `last_meaningful_change_at` for clock-controlled aging, returns defensive
+  `stalled`/`dormant` state projections and stable cadence slots, and groups
+  all due cases into deterministic weekly, monthly, and dormant digest data.
 
-P3.1 accepts explicitly supplied observations and controls only. It does not
-consume P2.5 action intents, calculate weekly/monthly/dormant policy, group a
-digest, create a notification intent, or deliver email or another transport.
-It is local and not wired into the deployed monitor.
+P3.1 accepts explicitly supplied observations and controls only. P3.2 accepts
+explicit case states, policy, and an aware clock only; it does not persist its
+aged copies or record a delivery. Neither package consumes P2.5 action intents,
+creates a notification intent, delivers email or another transport, or wires
+into the deployed monitor.
 
 ## Design principles
 
@@ -487,10 +493,20 @@ age. New evidence reactivates a dormant case. Human controls must support
 snooze, monthly, ignore, reactivate, resolve, and won't-fix outcomes.
 
 P3.1 implements the timestamp distinction, new-evidence dormant reactivation,
-and resolve/snooze/ignore/reactivate controls. It deliberately does not assign
-`stalled`/`dormant` by age, provide a monthly override or won't-fix control,
-select due cases, or construct a digest; those remain P3.2 or a later scoped
-package.
+and resolve/snooze/ignore/reactivate controls. P3.2 applies the configured
+default windows as a pure projection: weekly slots occur at days 7, 14, 21,
+and 28 after the last meaningful change; monthly slots are anchored to that
+same timestamp while the case is `stalled`; at day 84 the case becomes
+`dormant`, with later slots every configured dormant interval. Exact boundary
+behavior is policy-derived rather than hardcoded, active snoozes are excluded,
+and expired snoozes resume at their age-appropriate cadence. The digest keeps
+stable case, evidence, and slot references and groups every due case in
+weekly/monthly/dormant urgency order.
+
+P3.2 records no last-delivery state, so replay produces the same due slot until
+the clock crosses the next slot. Persistent delivery idempotency, retries,
+redaction, immediate notifications, monthly override, won't-fix control,
+case/action integration, and all transports remain P3.3 or later work.
 
 ## Cost and execution guardrails
 

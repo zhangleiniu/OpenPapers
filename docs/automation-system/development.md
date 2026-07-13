@@ -40,6 +40,7 @@ automation/control_state.py
 automation/lifecycle.py
 automation/control_plane.py
 automation/cases.py
+automation/reminders.py
 automation/config/venue_catalog.v1.json
 automation/config/policies.v1.json
 ```
@@ -314,8 +315,22 @@ lease. Tests use temporary databases and fixed clocks to cover stable-key and
 event-ID deduplication, meaningful-change timestamps, dormant-only automatic
 reactivation, resolve/snooze/ignore/reactivate, unresolved-only listing,
 version-1 migration, replay, corruption, lease loss, and transaction rollback.
-P3.2 remains responsible for weekly/monthly/dormant aging and grouped digest
-data; no P3.1 test constructs or sends a notification.
+No P3.1 test constructs or sends a notification.
+
+The P3.2 clock-controlled reminder and grouped-digest checks are:
+
+```bash
+python -m unittest automation.tests.test_reminders -v
+```
+
+`automation/reminders.py` accepts validated case states, the existing policy,
+and an injected aware clock. It returns defensive aged states plus stable due
+slots and one immutable digest grouped weekly/monthly/dormant. Tests cover
+exact windows, `last_meaningful_change_at` aging, active and expired snoozes,
+closed/dormant cases, stable replay, grouping, and invalid clocks. The module
+does not persist state, create a notification intent, classify delivery
+retries, render/redact a message, or import a storage, orchestration, network,
+email, or other transport dependency. Those remain P3.3 and later work.
 
 Scheduling tests use an injected timezone-aware clock. Keep venue catalogs free
 of year-specific month/date assumptions; discovery records candidates, a

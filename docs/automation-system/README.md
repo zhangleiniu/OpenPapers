@@ -152,8 +152,9 @@ notification is delivered, and no scraper runs. PDF evidence retention grants
 no redistribution authority. Phase 2 is `Shadow`, not deployed or
 implemented; live source-profile coverage remains conservative.
 
-Phase 3.1 persistent unresolved cases are implemented locally and are not
-wired into the deployed monitor or the P2.5 action router:
+Phase 3.1 persistent unresolved cases and P3.2 reminder/digest policy are
+implemented locally and are not wired into the deployed monitor or the P2.5
+action router:
 
 - `automation/cases.py` derives one stable case per venue/year/blocker,
   distinguishes repeated checks from meaningful changes, retains new evidence,
@@ -163,17 +164,22 @@ wired into the deployed monitor or the P2.5 action router:
   immutable revisions, and immutable observation/control events. Valid schema
   version 1 databases migrate atomically, repeated event IDs are idempotent,
   conflicting reuse fails closed, and unresolved-only listing excludes
-  terminal cases by default.
+  terminal cases by default; and
+- `automation/reminders.py` deterministically ages validated case copies from
+  `last_meaningful_change_at`, selects stable weekly, monthly, or dormant
+  cadence slots, releases expired snoozes, excludes closed cases, and builds
+  one immutable in-memory digest grouped by urgency.
 
-P3.1 does not consume case intents, age cases into reminder windows, build a
-digest or notification, call a transport, or change production state. Phase 3
-is `In progress`; P3.2 reminder policy and digest generation are next.
+P3.2 does not persist aged state or delivery attempts, create a notification
+intent, consume case/action intents, call a transport, or change production
+state. Phase 3 is `In progress`; P3.3's delivery boundary is next.
 
 The following does **not** exist yet:
 
 - scheduled or deployed LLM discovery;
 - a scheduled or deployed HTML/PDF verifier and persistent reducer/router;
-- case-intent integration, reminder aging/digests, or notification delivery;
+- case-intent integration, persistent reminder coordination, or notification
+  delivery;
 - automated routing from discovery to a scrape job;
 - a Mac mini Prefect worker;
 - a Codex execution adapter;
@@ -265,9 +271,10 @@ artifacts locally for replay, and P2.5 can promote authoritative findings into
 local conference state and inert action intents. The explicitly authorized
 P2.S review is complete; it observed all 15 venues through isolated roots and
 confirmed that the known readiness false positives do not create queue
-intents. P3.1 can now persist explicitly supplied case observations and human
-controls under the local lease, but it is not connected to those intents.
-P3.2 clock-controlled reminder policy and grouped digest data is the next
+intents. P3.1 can persist explicitly supplied case observations and human
+controls under the local lease, and P3.2 can project them through
+clock-controlled weekly/monthly/dormant policy into grouped digest data.
+Neither is connected to P2.5 intents. P3.3's delivery boundary is the next
 isolated package. No Phase 2 command can execute an action or write production
 state, and no Phase 3 code can deliver a notification.
 

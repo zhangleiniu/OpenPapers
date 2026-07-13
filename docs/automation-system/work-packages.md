@@ -74,7 +74,8 @@ P2.1R through P2.5 have completed the local verification, persistence,
 lifecycle, scheduling, and inert-routing slices. P2.S has completed the
 explicitly authorized 15-venue live shadow review using isolated roots and no
 production action. Phase 2 is now `Shadow`. P3.1 has completed the persistent
-case slice; P3.2 is the only current `Ready` package.
+case slice and P3.2 has completed reminder aging and grouped digest data; P3.3
+is the only current `Ready` package.
 
 ### P2.1R — harden verifier contract semantics
 
@@ -273,11 +274,38 @@ or another transport, synchronize GCS, or change the deployed monitor. P3.2
 and later retain all reminder, notification, integration, and live-delivery
 work.
 
+### P3.2 — clock-controlled reminder policy and grouped digest
+
+Status: `Complete`
+
+Depends on: P3.1
+
+Completed boundary: `automation/reminders.py` is a pure projection over the
+existing validated case and policy contracts. An injected aware clock and
+`last_meaningful_change_at` select stable weekly, monthly, and dormant cadence
+slots, age defensive case copies to `stalled`/`dormant`, release expired
+snoozes, preserve dormant reactivation semantics, and exclude closed or
+actively snoozed cases. Exact default boundaries are days 7/14/21/28,
+30/60, and 84 followed by the configured dormant interval.
+
+`build_case_digest` returns one immutable in-memory result containing every
+currently due case once, grouped in weekly/monthly/dormant urgency order with
+stable evidence and slot references. Equal input and clock values replay to
+equal output. Fixed-clock tests cover window boundaries, meaningful-change
+versus last-check aging, snooze expiry, closed/dormant behavior, invalid input,
+stable grouping, input immutability, and effect-free module imports.
+
+The package does not persist aged state or delivery attempts, consume P2.5
+case/action intents, create immediate or digest notification intents, classify
+delivery retries, redact/render messages, call email or another transport,
+synchronize GCS, use Prefect, or change the deployed monitor. P3.3 and later
+retain all delivery, integration, and live-canary work.
+
 | ID | Status | Depends on | Objective and completion boundary |
 |---|---|---|---|
 | P3.1 | Complete | Phase 2 gate | Persistent unresolved-case domain and repository with deduplication plus resolve, snooze, ignore, and reactivate controls. No reminder or notification generation and no transport. |
-| P3.2 | Ready | P3.1 | Clock-controlled weekly, monthly, and dormant reminder policy plus grouped digest generation. No transport adapter. |
-| P3.3 | Planned | P3.2 | Immediate/digest delivery boundary with idempotency, retry classification, redaction, and fake transport tests. No real email without explicit authorization. |
+| P3.2 | Complete | P3.1 | Clock-controlled weekly, monthly, and dormant reminder policy plus grouped digest generation. No persisted delivery state, notification intent, or transport adapter. |
+| P3.3 | Ready | P3.2 | Immediate/digest delivery boundary with idempotency, retry classification, redaction, and fake transport tests. No real email without explicit authorization. |
 | P3.4 | Planned | P3.3 | Integrate transitions, cases, reminders, and notification intents; prove one event creates at most one notification. Shadow output before any live delivery. |
 | P3.S | Planned | P3.4 | Separately authorized delivery canary and fatigue review using non-sensitive test events. Record results and rollback without changing case semantics. |
 

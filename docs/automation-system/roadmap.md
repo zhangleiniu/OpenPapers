@@ -16,7 +16,7 @@ phase-level outcomes and status.
 | 0 | Contracts, policies, ownership, and safety boundaries | Implemented |
 | 1 | LLM search discovery in shadow mode | Shadow (15-venue live review, 2026-07-13) |
 | 2 | Evidence verification and lifecycle state | Shadow (P2.S 15-venue live review, 2026-07-13) |
-| 3 | Cases and fatigue-resistant notifications | In progress (P3.1 complete, 2026-07-13) |
+| 3 | Cases and fatigue-resistant notifications | In progress (P3.1-P3.2 complete, 2026-07-13) |
 | 4 | Mac mini Prefect worker and immutable results | Planned |
 | 5 | Automatic execution of existing scrapers | Planned |
 | 6 | Budgeted Codex diagnosis and repair proposals | Planned |
@@ -292,10 +292,28 @@ Accepted P3.1 persistent-case implementation:
   terminal cases.
 
 P3.1 is not connected to P2.5 action intents or the deployed monitor. It adds
-no reminder aging, due-case selection, digest/notification construction,
-delivery retry, redaction, email, or other transport. Therefore Phase 3 is
-`In progress`, not `Implemented`; its clock-controlled and delivery acceptance
-criteria remain assigned to P3.2 through P3.4 and P3.S.
+no notification construction or delivery behavior.
+
+Accepted P3.2 reminder-policy and digest implementation:
+
+- `automation/reminders.py` validates the existing case and policy contracts
+  and uses an injected aware clock plus `last_meaningful_change_at` to derive
+  non-mutating case aging and stable due slots;
+- weeks 1-4, weeks 5-12, the exact dormant threshold, later dormant cadence,
+  active/expired snoozes, closed cases, meaningful-change reset, and regressing
+  clocks have deterministic tests;
+- `open` cases age to projected `stalled`/`dormant` copies, while existing
+  dormant state remains closed until P3.1's explicit/new-evidence reactivation
+  semantics apply; and
+- one immutable in-memory digest contains every currently due case once,
+  retains evidence references, and groups cases in stable weekly, monthly, and
+  dormant urgency order.
+
+P3.2 is not connected to the case repository, P2.5 intents, or the deployed
+monitor. It records no sent state, delivery attempt, immediate notification,
+retry, redaction, email, or other transport. Therefore Phase 3 is `In
+progress`, not `Implemented`; immediate/delivery/email acceptance criteria
+remain assigned to P3.3, P3.4, and P3.S.
 
 ## Phase 4: Mac mini execution plane
 

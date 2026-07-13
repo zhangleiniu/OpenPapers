@@ -32,11 +32,12 @@ an intent. PDF processing and internal-copy permissions remain separate, and
 verification grants no redistribution authority. P3.1 adds a local pure case
 domain and control-state schema version 2 with lease-protected deduplicated
 case current/history/event persistence plus resolve, snooze, ignore, and
-reactivate controls. It is not wired to P2.5 intents or this deployment and
-does not compute reminders or construct/deliver notifications. A
-production-integrated verifier/case flow, reminder and notification handling,
-the Mac mini worker, Codex repair execution, and MustCite deployment are not
-implemented.
+reactivate controls. P3.2 adds local clock-controlled case aging and grouped
+weekly/monthly/dormant digest data. Neither is wired to P2.5 intents or this
+deployment; P3.2 does not persist delivery state, construct a notification
+intent, or call email or another transport. A production-integrated
+verifier/case/reminder flow, notification delivery, the Mac mini worker, Codex
+repair execution, and MustCite deployment are not implemented.
 
 Start at the [automation system development guide](./automation-system/README.md) for
 the implemented foundation, target architecture, roadmap, and zero-context
