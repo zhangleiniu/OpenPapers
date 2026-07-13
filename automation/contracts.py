@@ -25,6 +25,7 @@ class ContractName(str, Enum):
     VERIFICATION_RESULT = "verification_result"
     CONFERENCE_STATE = "conference_state"
     CASE_STATE = "case_state"
+    NOTIFICATION_INTENT = "notification_intent"
     JOB = "job"
     JOB_RESULT = "job_result"
     CODEX_RESULT = "codex_result"
@@ -38,6 +39,7 @@ _SCHEMA_FILES = {
     ContractName.VERIFICATION_RESULT: "verification-result.json",
     ContractName.CONFERENCE_STATE: "conference-state.json",
     ContractName.CASE_STATE: "case-state.json",
+    ContractName.NOTIFICATION_INTENT: "notification-intent.json",
     ContractName.JOB: "job.json",
     ContractName.JOB_RESULT: "job-result.json",
     ContractName.CODEX_RESULT: "codex-result.json",

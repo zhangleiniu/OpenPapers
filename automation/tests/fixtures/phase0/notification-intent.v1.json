@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "notification_id": "notification:immediate:5dfbbdead430c0d889f94fa07a07941df6568d6718620605c523037178a35fed",
+  "kind": "immediate",
+  "source_ids": ["case-event:icml:2026:no-pdf:1"],
+  "created_at": "2026-07-13T22:30:00Z",
+  "subject": "OpenPapers immediate: ICML 2026",
+  "body": "Immediate automation notification\nVenue: icml\nYear: 2026\nSummary: Archival PDFs are not available.\nEvidence references:\n- verification:icml:2026:list\nRun references:\n- run:monitor:2026-07-13",
+  "evidence_ids": ["verification:icml:2026:list"],
+  "run_ids": ["run:monitor:2026-07-13"]
+}

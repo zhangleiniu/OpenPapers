@@ -33,11 +33,15 @@ verification grants no redistribution authority. P3.1 adds a local pure case
 domain and control-state schema version 2 with lease-protected deduplicated
 case current/history/event persistence plus resolve, snooze, ignore, and
 reactivate controls. P3.2 adds local clock-controlled case aging and grouped
-weekly/monthly/dormant digest data. Neither is wired to P2.5 intents or this
-deployment; P3.2 does not persist delivery state, construct a notification
-intent, or call email or another transport. A production-integrated
-verifier/case/reminder flow, notification delivery, the Mac mini worker, Codex
-repair execution, and MustCite deployment are not implemented.
+weekly/monthly/dormant digest data. P3.3 adds a strict redacted notification
+intent and control-state schema version 3 for unique sources and immutable
+intents plus durable numbered-attempt history, exercised only through injected
+fake transports. These local Phase 3 packages are not wired to P2.5 intents or
+this deployment. They add no
+real email/SMTP, HTTP/webhook, Prefect, cloud-notification adapter, recipients,
+or external delivery. A production-integrated verifier/case/reminder flow,
+notification integration and real delivery, the Mac mini worker, Codex repair
+execution, and MustCite deployment are not implemented.
 
 Start at the [automation system development guide](./automation-system/README.md) for
 the implemented foundation, target architecture, roadmap, and zero-context

@@ -74,8 +74,9 @@ P2.1R through P2.5 have completed the local verification, persistence,
 lifecycle, scheduling, and inert-routing slices. P2.S has completed the
 explicitly authorized 15-venue live shadow review using isolated roots and no
 production action. Phase 2 is now `Shadow`. P3.1 has completed the persistent
-case slice and P3.2 has completed reminder aging and grouped digest data; P3.3
-is the only current `Ready` package.
+case slice, P3.2 has completed reminder aging and grouped digest data, and P3.3
+has completed the fake-only durable delivery boundary. P3.4 is the only current
+`Ready` package.
 
 ### P2.1R — harden verifier contract semantics
 
@@ -298,15 +299,46 @@ stable grouping, input immutability, and effect-free module imports.
 The package does not persist aged state or delivery attempts, consume P2.5
 case/action intents, create immediate or digest notification intents, classify
 delivery retries, redact/render messages, call email or another transport,
-synchronize GCS, use Prefect, or change the deployed monitor. P3.3 and later
-retain all delivery, integration, and live-canary work.
+synchronize GCS, use Prefect, or change the deployed monitor. P3.3 now owns the
+isolated fake-only delivery boundary; P3.4/P3.S retain integration and all
+live-canary work.
+
+### P3.3 — idempotent notification delivery boundary
+
+Status: `Complete`
+
+Depends on: P3.2
+
+Completed boundary: the strict version 1 notification-intent contract and
+`automation/notifications.py` build stable immediate messages from explicitly
+supplied events and stable grouped messages from explicitly supplied P3.2
+digests. Messages retain evidence/run IDs, have explicit item/text bounds, and
+redact common credential assignments, authorization/cookie/token forms,
+credential-bearing URLs, and signed query values before validation or
+persistence.
+
+Control-state schema version 3 atomically migrates valid version-1/version-2
+local databases and retains immutable notification intents, uniquely claimed
+event/reminder-slot sources, and numbered attempt history under the singleton
+lease. The coordinator commits an in-flight claim before calling the injected
+transport. Delivered, permanent-failure, and unresolved in-flight replay is
+suppressed; typed retryable failures allow an explicit next attempt; untyped
+transport bugs propagate and leave the claim closed for inspection; raw error
+text is never retained.
+
+Tests use only fake transports, fixed clocks, and temporary SQLite databases.
+The package does not consume P2.5 action intents or case events, query case
+state, coordinate reminder slots, use Prefect, provide email/SMTP/HTTP/webhook
+or cloud adapters, configure recipients, synchronize GCS, call an external
+service, or change the deployed monitor. P3.4 retains integration and shadow
+output; P3.S retains all authorized real-delivery and fatigue review work.
 
 | ID | Status | Depends on | Objective and completion boundary |
 |---|---|---|---|
 | P3.1 | Complete | Phase 2 gate | Persistent unresolved-case domain and repository with deduplication plus resolve, snooze, ignore, and reactivate controls. No reminder or notification generation and no transport. |
 | P3.2 | Complete | P3.1 | Clock-controlled weekly, monthly, and dormant reminder policy plus grouped digest generation. No persisted delivery state, notification intent, or transport adapter. |
-| P3.3 | Ready | P3.2 | Immediate/digest delivery boundary with idempotency, retry classification, redaction, and fake transport tests. No real email without explicit authorization. |
-| P3.4 | Planned | P3.3 | Integrate transitions, cases, reminders, and notification intents; prove one event creates at most one notification. Shadow output before any live delivery. |
+| P3.3 | Complete | P3.2 | Strict immediate/digest intents, unique source claims, persistent idempotent attempts, bounded retry classification, redaction, and fake-only transport tests. No real transport or integration. |
+| P3.4 | Ready | P3.3 | Integrate transitions, cases, reminders, and notification intents; prove one event creates at most one notification. Shadow output before any live delivery. |
 | P3.S | Planned | P3.4 | Separately authorized delivery canary and fatigue review using non-sensitive test events. Record results and rollback without changing case semantics. |
 
 Case creation and message delivery remain separate effects. A transport failure

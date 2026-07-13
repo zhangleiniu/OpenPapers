@@ -39,6 +39,7 @@ class ContractTests(unittest.TestCase):
         ContractName.VERIFICATION_RESULT: "verification-result.v2.json",
         ContractName.CONFERENCE_STATE: "conference-state.v1.json",
         ContractName.CASE_STATE: "case-state.v1.json",
+        ContractName.NOTIFICATION_INTENT: "notification-intent.v1.json",
         ContractName.JOB: "scrape-job.v1.json",
         ContractName.JOB_RESULT: "job-result.v1.json",
         ContractName.CODEX_RESULT: "codex-result.v1.json",

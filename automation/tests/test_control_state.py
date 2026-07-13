@@ -19,7 +19,9 @@ from automation.control_state import (
     StoredDataError,
     VerificationReplayConflictError,
     _MIGRATION_1,
+    _MIGRATION_2,
 )
+from automation.cases import CaseObservation, case_event_payload, observe_case
 from automation.contracts import artifact_fingerprint
 from automation.domain import OwnershipError, Writer
 from automation.verification import VerificationError, build_verification_result
@@ -56,6 +58,16 @@ def conference_state():
     return load_json(FIXTURES / "phase0" / "conference-state.v1.json")
 
 
+def canonical_json(payload):
+    return json.dumps(
+        payload,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    )
+
+
 class SchemaAndBoundaryTests(unittest.TestCase):
     def test_empty_database_migrates_and_reopens_at_explicit_version(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -65,7 +77,7 @@ class SchemaAndBoundaryTests(unittest.TestCase):
                 versions = repository._connection.execute(
                     "SELECT version FROM schema_migrations"
                 ).fetchall()
-                self.assertEqual([row[0] for row in versions], [1, 2])
+                self.assertEqual([row[0] for row in versions], [1, 2, 3])
 
             with ControlStateRepository(path) as reopened:
                 self.assertEqual(reopened.schema_version, CONTROL_SCHEMA_VERSION)
@@ -82,13 +94,7 @@ class SchemaAndBoundaryTests(unittest.TestCase):
                 ("2026-07-13T20:30:00Z",),
             )
             state = conference_state()
-            state_json = json.dumps(
-                state,
-                ensure_ascii=False,
-                sort_keys=True,
-                separators=(",", ":"),
-                allow_nan=False,
-            )
+            state_json = canonical_json(state)
             values = (
                 state["venue_id"],
                 state["year"],
@@ -110,7 +116,7 @@ class SchemaAndBoundaryTests(unittest.TestCase):
             connection.close()
 
             with ControlStateRepository(path, clock=MutableClock()) as repository:
-                self.assertEqual(repository.schema_version, 2)
+                self.assertEqual(repository.schema_version, 3)
                 self.assertEqual(
                     repository.get_conference_state("icml", 2026).state, state
                 )
@@ -118,7 +124,81 @@ class SchemaAndBoundaryTests(unittest.TestCase):
                 versions = repository._connection.execute(
                     "SELECT version FROM schema_migrations ORDER BY version"
                 ).fetchall()
-                self.assertEqual([row[0] for row in versions], [1, 2])
+                self.assertEqual([row[0] for row in versions], [1, 2, 3])
+
+    def test_valid_version_two_database_migrates_without_losing_cases(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "state.sqlite3"
+            connection = sqlite3.connect(path)
+            connection.execute("PRAGMA foreign_keys = ON")
+            for statement in (*_MIGRATION_1, *_MIGRATION_2):
+                connection.execute(statement)
+            connection.executemany(
+                "INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)",
+                (
+                    (1, "2026-07-13T20:30:00Z"),
+                    (2, "2026-07-13T21:30:00Z"),
+                ),
+            )
+            observation = CaseObservation(
+                event_id="case-event:icml:2026:no-pdf:1",
+                venue_id="icml",
+                year=2026,
+                blocker="no_pdf",
+                summary="The public list exists but archival PDFs are not available.",
+                evidence_ids=("evidence:icml:2026:list",),
+                observed_at="2026-07-13T13:00:00Z",
+            )
+            event = case_event_payload(observation)
+            state = observe_case(None, observation).state
+            state_values = (
+                state["case_id"],
+                state["venue_id"],
+                state["year"],
+                state["blocker"],
+                state["status"],
+                1,
+                artifact_fingerprint(state),
+                "2026-07-13T21:30:00Z",
+                canonical_json(state),
+            )
+            connection.execute(
+                "INSERT INTO case_state_history VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                state_values,
+            )
+            connection.execute(
+                "INSERT INTO case_state_current VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                state_values,
+            )
+            connection.execute(
+                """
+                INSERT INTO case_event_history (
+                    event_id, case_id, event_kind, event_at, event_fingerprint,
+                    previous_revision, resulting_revision, revision_applied,
+                    meaningful_change, reactivated, event_json
+                ) VALUES (?, ?, ?, ?, ?, 0, 1, 1, 1, 0, ?)
+                """,
+                (
+                    event["event_id"],
+                    event["case_id"],
+                    event["event_kind"],
+                    event["at"],
+                    artifact_fingerprint(event),
+                    canonical_json(event),
+                ),
+            )
+            connection.execute("PRAGMA user_version = 2")
+            connection.commit()
+            connection.close()
+
+            with ControlStateRepository(path, clock=MutableClock()) as repository:
+                self.assertEqual(repository.schema_version, 3)
+                self.assertEqual(repository.get_case(state["case_id"]).state, state)
+                self.assertEqual(repository.get_notification("missing"), None)
+                versions = repository._connection.execute(
+                    "SELECT version FROM schema_migrations ORDER BY version"
+                ).fetchall()
+                self.assertEqual([row[0] for row in versions], [1, 2, 3])
 
     def test_unrecognized_and_future_databases_fail_without_mutation(self):
         with tempfile.TemporaryDirectory() as directory:

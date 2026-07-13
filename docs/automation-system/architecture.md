@@ -4,7 +4,7 @@ This document defines the target boundaries and safety invariants. Most of the
 components described here are planned; consult [roadmap.md](./roadmap.md) and
 the executable code before assuming a component exists.
 
-## Implemented foundation and Phase 1/2.S/P3.1/P3.2 boundaries
+## Implemented foundation and Phase 1/2.S/P3.1-P3.3 boundaries
 
 Phase 0 is implemented as a side-effect-free foundation and is not yet wired
 into the deployed monitor:
@@ -194,11 +194,13 @@ signals failed exact-URL signature checks, the EMNLP proceedings false positive
 did not promote, JMLR stayed on its continuous policy, and no queue intent was
 returned. The live review also found conservative source-shape gaps; Phase 2
 is therefore `Shadow`, not `Implemented`. There remains no scheduled/deployed
-verifier, action store/dispatcher, notification service, job submission,
-scraper execution, GCS integration, or production-state migration.
+verifier, action store/dispatcher, deployed notification service or real
+transport, job submission, scraper execution, GCS integration, or
+production-state migration.
 
-P3.1 adds a local case domain and extends the same control repository; P3.2
-adds a separate pure reminder projection:
+P3.1 adds a local case domain and extends the same control repository, P3.2
+adds a separate pure reminder projection, and P3.3 adds a fake-only delivery
+boundary:
 
 - `automation/cases.py` derives the stable case identity from
   venue/year/blocker, preserves one case per key, separates ordinary checks
@@ -214,13 +216,24 @@ adds a separate pure reminder projection:
 - `automation/reminders.py` validates case/policy inputs, uses
   `last_meaningful_change_at` for clock-controlled aging, returns defensive
   `stalled`/`dormant` state projections and stable cadence slots, and groups
-  all due cases into deterministic weekly, monthly, and dormant digest data.
+  all due cases into deterministic weekly, monthly, and dormant digest data;
+  and
+- the strict notification-intent contract plus `automation/notifications.py`
+  build stable immediate or grouped-digest messages from explicitly supplied
+  sources, redact common credential forms before retention, preserve evidence
+  and run IDs, classify typed failures, and call only an injected transport
+  after a durable claim. Schema version 3 retains immutable intent/source and
+  numbered-attempt history under the existing lease.
 
 P3.1 accepts explicitly supplied observations and controls only. P3.2 accepts
 explicit case states, policy, and an aware clock only; it does not persist its
-aged copies or record a delivery. Neither package consumes P2.5 action intents,
-creates a notification intent, delivers email or another transport, or wires
-into the deployed monitor.
+aged copies. P3.3 accepts an explicit event or P3.2 digest and has no case or
+action-intent consumer. Its transport protocol has no concrete implementation;
+tests inject a fake. Delivered, permanent-failure, and unresolved in-flight
+records suppress replay, while a finalized retryable failure permits an
+explicit later attempt. No package wires into the deployed monitor or adds
+email, SMTP, HTTP, webhooks, Prefect, cloud notification, recipients, or live
+delivery.
 
 ## Design principles
 
@@ -422,21 +435,24 @@ is not the cloud state store or a GCS adapter. P2.4's
 state, an expiring singleton writer lease, atomic idempotent verification
 bundle retention, validated ordered replay, and optimistic conference-state
 revision history. P3.1 advances that database to schema version 2 with
-deduplicated case current/history/event storage under the same lease. It
+deduplicated case current/history/event storage under the same lease. P3.3
+advances it to schema version 3 with immutable notification sources/intents
+and numbered delivery attempts. It
 deliberately rejects a populated unversioned database and does not migrate or
 share the deployed monitor's database. `JobResultRegistry` is a pure executable
 model of the job protocol: an identical result replay is accepted as already
 seen, while a different result for the same job ID is rejected. P2.5 now
 composes retained verification replay with optimistic state updates locally.
 GCS generation preconditions, cloud restore/upload, deployed integration,
-case-intent consumption, and job-result consumption remain future work.
+case/action/reminder consumption, real notification delivery, and job-result
+consumption remain future work.
 
-Schema version 2 has no deployed migration or current operator action. A valid
-local version-1 control database migrates on open, preserving its verification
-and conference-state data. Before any future durable operator database is
-opened by version-2 code, stop overlapping writers and take a backup; rollback
-after migration requires restoring that backup because older code must reject,
-not downgrade or delete, a newer schema.
+Schema version 3 has no deployed migration or current operator action. Valid
+local version-1 and version-2 control databases migrate on open, preserving
+verification, conference, and case data. Before any future durable operator
+database is opened by version-3 code, stop overlapping writers and take a
+backup; rollback after migration requires restoring that backup because older
+code must reject, not downgrade or delete, a newer schema.
 
 Evaluate Firestore or PostgreSQL only after a concrete trigger: multiple
 control-plane writers, unavoidable overlapping state updates, a real-time
@@ -461,9 +477,10 @@ The `ActionType` vocabulary and strict job payload contracts are implemented.
 P2.5 now provides a pure router for stable immutable action intents. Its closed
 payload dataclasses cannot contain shell commands, and no router output is
 persisted, submitted, or executed. P3.1 can persist separately supplied case
-observations but is not an action consumer. Router-to-case integration,
-notification delivery, job creation/submission, and command selection remain
-their later packages.
+observations but is not an action consumer. P3.3 can deliver an explicitly
+supplied intent only through an injected fake; router-to-case/reminder/
+notification integration, real delivery, job creation/submission, and command
+selection remain their later packages.
 Job payload contracts continue to enumerate approved fields for existing
 scraper, validation, and Codex-diagnosis jobs and cannot contain arbitrary
 shell commands.
@@ -503,10 +520,15 @@ and expired snoozes resume at their age-appropriate cadence. The digest keeps
 stable case, evidence, and slot references and groups every due case in
 weekly/monthly/dormant urgency order.
 
-P3.2 records no last-delivery state, so replay produces the same due slot until
-the clock crosses the next slot. Persistent delivery idempotency, retries,
-redaction, immediate notifications, monthly override, won't-fix control,
-case/action integration, and all transports remain P3.3 or later work.
+P3.2 itself records no last-delivery state, so replay produces the same due
+slot until the clock crosses the next slot. P3.3 can claim that stable slot as
+an immutable notification source, persist an in-flight attempt before the
+injected fake is called, retain only bounded failure categories, and suppress
+delivered/permanent/in-flight replay. A retryable finalized attempt can be
+retried explicitly. A crash after transport acceptance stays in-flight for
+inspection instead of risking an automatic duplicate. Repository-driven slot
+filtering, immediate event integration, monthly override, won't-fix control,
+all real transports, and live fatigue review remain P3.4/P3.S or later work.
 
 ## Cost and execution guardrails
 

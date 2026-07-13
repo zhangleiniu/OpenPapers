@@ -41,6 +41,7 @@ automation/lifecycle.py
 automation/control_plane.py
 automation/cases.py
 automation/reminders.py
+automation/notifications.py
 automation/config/venue_catalog.v1.json
 automation/config/policies.v1.json
 ```
@@ -330,7 +331,29 @@ exact windows, `last_meaningful_change_at` aging, active and expired snoozes,
 closed/dormant cases, stable replay, grouping, and invalid clocks. The module
 does not persist state, create a notification intent, classify delivery
 retries, render/redact a message, or import a storage, orchestration, network,
-email, or other transport dependency. Those remain P3.3 and later work.
+email, or other transport dependency. P3.3 consumes this result only when a
+caller supplies it explicitly; repository-driven coordination remains P3.4.
+
+The P3.3 notification intent, redaction, and fake-delivery checks are:
+
+```bash
+python -m unittest automation.tests.test_notifications -v
+python -m unittest automation.tests.test_control_state -v
+python -m unittest automation.tests.test_contracts -v
+```
+
+`automation/notifications.py` accepts an explicitly supplied event or P3.2
+digest, builds a strict redacted intent with stable source/evidence/run IDs,
+and coordinates an injected transport only after `ControlStateRepository`
+schema version 3 has committed an in-flight attempt. The repository uniquely
+claims each event/reminder slot, suppresses delivered, permanent, and unresolved
+in-flight replay, and permits only an explicit retry after a typed retryable
+failure. Tests use fake transports, temporary databases, and fixed clocks;
+they cover migration from valid version 1/2 databases, redaction, retry
+classification, replay, source conflicts, corruption, lease loss, and
+ambiguous post-acceptance failure. There is no concrete transport, external
+request, recipient, Prefect integration, case/action/reminder consumer, or
+deployment change. Those remain P3.4/P3.S.
 
 Scheduling tests use an injected timezone-aware clock. Keep venue catalogs free
 of year-specific month/date assumptions; discovery records candidates, a

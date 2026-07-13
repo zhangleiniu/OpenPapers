@@ -152,9 +152,9 @@ notification is delivered, and no scraper runs. PDF evidence retention grants
 no redistribution authority. Phase 2 is `Shadow`, not deployed or
 implemented; live source-profile coverage remains conservative.
 
-Phase 3.1 persistent unresolved cases and P3.2 reminder/digest policy are
-implemented locally and are not wired into the deployed monitor or the P2.5
-action router:
+Phase 3.1 persistent unresolved cases, P3.2 reminder/digest policy, and P3.3's
+fake-only notification delivery boundary are implemented locally and are not
+wired into the deployed monitor or the P2.5 action router:
 
 - `automation/cases.py` derives one stable case per venue/year/blocker,
   distinguishes repeated checks from meaningful changes, retains new evidence,
@@ -168,17 +168,26 @@ action router:
 - `automation/reminders.py` deterministically ages validated case copies from
   `last_meaningful_change_at`, selects stable weekly, monthly, or dormant
   cadence slots, releases expired snoozes, excludes closed cases, and builds
-  one immutable in-memory digest grouped by urgency.
+  one immutable in-memory digest grouped by urgency; and
+- `automation/notifications.py` builds strict, stable immediate or grouped
+  digest intents from explicitly supplied data, redacts credential-shaped
+  message text, classifies bounded transport failures, and coordinates only an
+  injected transport after a durable in-flight claim. Control-state schema
+  version 3 adds immutable intent/source records and durable numbered-attempt
+  history, so delivered, permanent, or unresolved in-flight replay cannot make
+  a duplicate call.
 
-P3.2 does not persist aged state or delivery attempts, create a notification
-intent, consume case/action intents, call a transport, or change production
-state. Phase 3 is `In progress`; P3.3's delivery boundary is next.
+P3.3 tests use only fake transports and temporary SQLite databases. It adds no
+email/SMTP, webhook, Prefect, HTTP, cloud provider, recipient configuration, or
+live delivery. It also does not consume P2.5 or case events, query case state,
+schedule reminders, or change production state. Phase 3 remains `In progress`;
+P3.4 integration is next and P3.S remains the separately authorized canary.
 
 The following does **not** exist yet:
 
 - scheduled or deployed LLM discovery;
 - a scheduled or deployed HTML/PDF verifier and persistent reducer/router;
-- case-intent integration, persistent reminder coordination, or notification
+- case/action/reminder integration or any real notification transport and
   delivery;
 - automated routing from discovery to a scrape job;
 - a Mac mini Prefect worker;
@@ -274,9 +283,12 @@ confirmed that the known readiness false positives do not create queue
 intents. P3.1 can persist explicitly supplied case observations and human
 controls under the local lease, and P3.2 can project them through
 clock-controlled weekly/monthly/dormant policy into grouped digest data.
-Neither is connected to P2.5 intents. P3.3's delivery boundary is the next
-isolated package. No Phase 2 command can execute an action or write production
-state, and no Phase 3 code can deliver a notification.
+P3.3 can turn explicitly supplied event/digest data into a strict redacted
+intent and exercise durable delivery only through an injected fake. None is
+connected to P2.5 intents, repository-driven reminder coordination, or the
+deployed monitor. P3.4 integration is the next isolated package. No Phase 2
+command can execute an action or write production state, and no Phase 3 code
+has a real notification transport.
 
 Keep Phase 1 additive. It may report what a verified later phase could do, but
 must not create a job, write lifecycle state, invoke a scraper, or promote data.

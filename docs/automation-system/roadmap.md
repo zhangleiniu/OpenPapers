@@ -16,7 +16,7 @@ phase-level outcomes and status.
 | 0 | Contracts, policies, ownership, and safety boundaries | Implemented |
 | 1 | LLM search discovery in shadow mode | Shadow (15-venue live review, 2026-07-13) |
 | 2 | Evidence verification and lifecycle state | Shadow (P2.S 15-venue live review, 2026-07-13) |
-| 3 | Cases and fatigue-resistant notifications | In progress (P3.1-P3.2 complete, 2026-07-13) |
+| 3 | Cases and fatigue-resistant notifications | In progress (P3.1-P3.3 complete, 2026-07-13) |
 | 4 | Mac mini Prefect worker and immutable results | Planned |
 | 5 | Automatic execution of existing scrapers | Planned |
 | 6 | Budgeted Codex diagnosis and repair proposals | Planned |
@@ -311,9 +311,31 @@ Accepted P3.2 reminder-policy and digest implementation:
 
 P3.2 is not connected to the case repository, P2.5 intents, or the deployed
 monitor. It records no sent state, delivery attempt, immediate notification,
-retry, redaction, email, or other transport. Therefore Phase 3 is `In
-progress`, not `Implemented`; immediate/delivery/email acceptance criteria
-remain assigned to P3.3, P3.4, and P3.S.
+retry, redaction, email, or other transport.
+
+Accepted P3.3 notification-delivery-boundary implementation:
+
+- a strict version 1 notification-intent contract and pure builders produce
+  stable immediate or grouped-digest messages from explicit sources, retain
+  evidence/run references, bound message size, and redact common credential,
+  authorization, cookie, token, and signed-URL forms before persistence;
+- every upstream event or reminder-slot source may belong to only one immutable
+  intent. Control-state schema version 3 migrates valid v1/v2 local databases
+  and retains lease-protected intent/source rows plus numbered attempt history;
+- an attempt is committed as in-flight before the injected transport is called.
+  Delivered, permanent-failure, and unresolved in-flight replay makes no new
+  call; retryable typed failures permit an explicit later attempt; and raw
+  exception text is never stored; and
+- fixed-clock temporary-database tests use only a fake transport and cover
+  success replay, retries, permanent failure, source conflicts, redaction,
+  corruption, lease loss, and ambiguous post-acceptance failure.
+
+P3.3 does not consume P2.5 actions, case events, repository cases, or scheduled
+reminders and does not add email, SMTP, HTTP, webhooks, Prefect, a cloud
+provider, recipients, or live delivery. Therefore Phase 3 is still `In
+progress`, not `Implemented`: P3.4 owns integration and the one-event/one-intent
+proof, while P3.S owns any separately authorized real-delivery and fatigue
+canary.
 
 ## Phase 4: Mac mini execution plane
 

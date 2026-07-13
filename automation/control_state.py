@@ -32,10 +32,19 @@ from automation.domain import (
     assert_secret_free,
     assert_writer_allowed,
 )
+from automation.notifications import (
+    FailureCategory,
+    NotificationIntent,
+    TransportFailure,
+    classify_transport_failure,
+    notification_intent_from_payload,
+    validate_notification_intent,
+    validate_receipt_id,
+)
 from automation.verification import validate_verification_result
 
 
-CONTROL_SCHEMA_VERSION = 2
+CONTROL_SCHEMA_VERSION = 3
 DEFAULT_LEASE_TTL_SECONDS = 300
 MAX_LEASE_TTL_SECONDS = 86_400
 _CONTROL_LEASE_NAME = "control-state"
@@ -67,6 +76,14 @@ class StateRevisionConflictError(ControlStateError):
 
 class CaseEventConflictError(ControlStateError):
     """Raised when a stable case event ID changes meaning."""
+
+
+class NotificationIntentConflictError(ControlStateError):
+    """Raised when a notification or source identity changes meaning."""
+
+
+class NotificationDeliveryStateError(ControlStateError):
+    """Raised when a notification attempt violates its state machine."""
 
 
 class StoredDataError(ControlStateError):
@@ -153,6 +170,36 @@ class CaseWriteOutcome:
     event: CaseEventRecord
     applied: bool
     replayed: bool
+
+
+@dataclass(frozen=True)
+class NotificationRecord:
+    """Current durable delivery state for one immutable intent."""
+
+    notification_id: str
+    kind: str
+    status: str
+    registered_at: str
+    updated_at: str
+    attempt_count: int
+    delivered_at: str | None
+    last_failure_category: str | None
+    receipt_id: str | None
+    intent_fingerprint: str
+    intent: NotificationIntent
+
+
+@dataclass(frozen=True)
+class NotificationAttemptRecord:
+    """One immutable-numbered notification delivery attempt."""
+
+    notification_id: str
+    attempt_number: int
+    started_at: str
+    completed_at: str | None
+    outcome: str
+    failure_category: str | None
+    receipt_id: str | None
 
 
 _MIGRATION_1 = (
@@ -279,9 +326,64 @@ _MIGRATION_2 = (
     """,
 )
 
+_MIGRATION_3 = (
+    """
+    CREATE TABLE notification_intent (
+        notification_id TEXT PRIMARY KEY,
+        kind TEXT NOT NULL,
+        status TEXT NOT NULL,
+        registered_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        attempt_count INTEGER NOT NULL,
+        delivered_at TEXT,
+        last_failure_category TEXT,
+        receipt_id TEXT,
+        intent_fingerprint TEXT NOT NULL,
+        intent_json TEXT NOT NULL,
+        CHECK (kind IN ('immediate', 'digest')),
+        CHECK (status IN (
+            'pending', 'in_flight', 'retryable', 'delivered',
+            'permanent_failure'
+        )),
+        CHECK (attempt_count >= 0)
+    )
+    """,
+    """
+    CREATE TABLE notification_source (
+        source_id TEXT PRIMARY KEY,
+        notification_id TEXT NOT NULL,
+        FOREIGN KEY (notification_id)
+            REFERENCES notification_intent (notification_id)
+    )
+    """,
+    """
+    CREATE INDEX notification_source_intent
+    ON notification_source (notification_id, source_id)
+    """,
+    """
+    CREATE TABLE notification_attempt_history (
+        notification_id TEXT NOT NULL,
+        attempt_number INTEGER NOT NULL,
+        started_at TEXT NOT NULL,
+        completed_at TEXT,
+        outcome TEXT NOT NULL,
+        failure_category TEXT,
+        receipt_id TEXT,
+        PRIMARY KEY (notification_id, attempt_number),
+        FOREIGN KEY (notification_id)
+            REFERENCES notification_intent (notification_id),
+        CHECK (attempt_number >= 1),
+        CHECK (outcome IN (
+            'in_flight', 'retryable', 'delivered', 'permanent_failure'
+        ))
+    )
+    """,
+)
+
 _MIGRATIONS = {
     1: _MIGRATION_1,
     2: _MIGRATION_2,
+    3: _MIGRATION_3,
 }
 
 _REQUIRED_COLUMNS_V1 = {
@@ -321,9 +423,23 @@ _REQUIRED_COLUMNS_V2 = {
     },
 }
 
+_REQUIRED_COLUMNS_V3 = {
+    "notification_intent": {
+        "notification_id", "kind", "status", "registered_at", "updated_at",
+        "attempt_count", "delivered_at", "last_failure_category", "receipt_id",
+        "intent_fingerprint", "intent_json",
+    },
+    "notification_source": {"source_id", "notification_id"},
+    "notification_attempt_history": {
+        "notification_id", "attempt_number", "started_at", "completed_at",
+        "outcome", "failure_category", "receipt_id",
+    },
+}
+
 _REQUIRED_COLUMNS_BY_VERSION = {
     1: _REQUIRED_COLUMNS_V1,
     2: _REQUIRED_COLUMNS_V2,
+    3: _REQUIRED_COLUMNS_V3,
 }
 
 
@@ -1308,4 +1424,514 @@ class ControlStateRepository:
             meaningful_change=meaningful_change,
             reactivated=reactivated,
             event=deepcopy(event),
+        )
+
+    def prepare_notification_delivery(
+        self,
+        intent: NotificationIntent,
+        *,
+        lease: LeaseHandle,
+        started_at: datetime | str,
+    ) -> NotificationAttemptRecord | None:
+        """Register an immutable intent and claim its next explicit attempt.
+
+        Delivered, permanent-failure, and unresolved in-flight records return
+        no claim, so a caller cannot perform a stateless duplicate effect.
+        Retryable records may be claimed again by an explicit caller.
+        """
+        validate_notification_intent(intent)
+        payload = intent.to_payload()
+        assert_secret_free(payload)
+        intent_json = _canonical_json(payload)
+        fingerprint = artifact_fingerprint(payload)
+        started = _timestamp(started_at, field="notification attempt started_at")
+        started_time = _parse_timestamp(
+            started, field="notification attempt started_at"
+        )
+        if started_time < _parse_timestamp(
+            intent.created_at,
+            field="notification created_at",
+        ):
+            raise NotificationDeliveryStateError(
+                "notification attempt cannot precede intent creation"
+            )
+
+        with self._write_transaction() as connection:
+            self._require_lease(connection, lease, self._now())
+            row = connection.execute(
+                "SELECT * FROM notification_intent WHERE notification_id = ?",
+                (intent.notification_id,),
+            ).fetchone()
+            if row is None:
+                for source_id in intent.source_ids:
+                    source_row = connection.execute(
+                        "SELECT notification_id FROM notification_source "
+                        "WHERE source_id = ?",
+                        (source_id,),
+                    ).fetchone()
+                    if source_row is not None:
+                        raise NotificationIntentConflictError(
+                            "notification source already belongs to another intent"
+                        )
+                connection.execute(
+                    """
+                    INSERT INTO notification_intent (
+                        notification_id, kind, status, registered_at,
+                        updated_at, attempt_count, delivered_at,
+                        last_failure_category, receipt_id,
+                        intent_fingerprint, intent_json
+                    ) VALUES (?, ?, 'pending', ?, ?, 0, NULL, NULL, NULL, ?, ?)
+                    """,
+                    (
+                        intent.notification_id,
+                        intent.kind.value,
+                        started,
+                        started,
+                        fingerprint,
+                        intent_json,
+                    ),
+                )
+                connection.executemany(
+                    "INSERT INTO notification_source (source_id, notification_id) "
+                    "VALUES (?, ?)",
+                    (
+                        (source_id, intent.notification_id)
+                        for source_id in intent.source_ids
+                    ),
+                )
+            record = self._get_notification_from_connection(
+                connection, intent.notification_id
+            )
+            if record is None:
+                raise ControlStateError("notification registration disappeared")
+            if (
+                record.intent_fingerprint != fingerprint
+                or record.intent.to_payload() != payload
+            ):
+                raise NotificationIntentConflictError(
+                    "notification ID already has different meaning"
+                )
+            if record.status not in {"pending", "retryable"}:
+                return None
+            if started_time < _parse_timestamp(
+                record.updated_at,
+                field="notification updated_at",
+            ):
+                raise NotificationDeliveryStateError(
+                    "notification attempt time cannot regress"
+                )
+
+            attempt_number = record.attempt_count + 1
+            connection.execute(
+                """
+                INSERT INTO notification_attempt_history (
+                    notification_id, attempt_number, started_at, completed_at,
+                    outcome, failure_category, receipt_id
+                ) VALUES (?, ?, ?, NULL, 'in_flight', NULL, NULL)
+                """,
+                (intent.notification_id, attempt_number, started),
+            )
+            connection.execute(
+                """
+                UPDATE notification_intent
+                SET status = 'in_flight', updated_at = ?, attempt_count = ?,
+                    delivered_at = NULL, last_failure_category = NULL,
+                    receipt_id = NULL
+                WHERE notification_id = ?
+                """,
+                (started, attempt_number, intent.notification_id),
+            )
+            attempt_row = connection.execute(
+                "SELECT * FROM notification_attempt_history "
+                "WHERE notification_id = ? AND attempt_number = ?",
+                (intent.notification_id, attempt_number),
+            ).fetchone()
+            return self._notification_attempt_from_row(attempt_row)
+
+    def complete_notification_delivery(
+        self,
+        notification_id: str,
+        attempt_number: int,
+        *,
+        status: str,
+        lease: LeaseHandle,
+        completed_at: datetime | str,
+        failure_category: str | None = None,
+        receipt_id: str | None = None,
+    ) -> NotificationRecord:
+        """Finalize the current in-flight attempt with only safe metadata."""
+        if status not in {"retryable", "delivered", "permanent_failure"}:
+            raise NotificationDeliveryStateError(
+                "notification completion status is invalid"
+            )
+        if (
+            not isinstance(attempt_number, int)
+            or isinstance(attempt_number, bool)
+            or attempt_number < 1
+        ):
+            raise NotificationDeliveryStateError(
+                "notification attempt number must be a positive integer"
+            )
+        if status == "delivered":
+            if failure_category is not None or receipt_id is None:
+                raise NotificationDeliveryStateError(
+                    "delivered notification requires only a receipt ID"
+                )
+            validate_receipt_id(receipt_id)
+            resolved_category = None
+        else:
+            if failure_category is None or receipt_id is not None:
+                raise NotificationDeliveryStateError(
+                    "failed notification requires only a failure category"
+                )
+            try:
+                resolved_category = FailureCategory(failure_category)
+            except (TypeError, ValueError) as exc:
+                raise NotificationDeliveryStateError(
+                    "notification failure category is invalid"
+                ) from exc
+            decision = classify_transport_failure(TransportFailure(resolved_category))
+            expected_status = "retryable" if decision.retryable else "permanent_failure"
+            if status != expected_status:
+                raise NotificationDeliveryStateError(
+                    "notification failure status does not match its category"
+                )
+        completed = _timestamp(
+            completed_at, field="notification attempt completed_at"
+        )
+
+        with self._write_transaction() as connection:
+            self._require_lease(connection, lease, self._now())
+            record = self._get_notification_from_connection(
+                connection, notification_id
+            )
+            if record is None:
+                raise NotificationDeliveryStateError("notification does not exist")
+            if record.status != "in_flight" or record.attempt_count != attempt_number:
+                raise NotificationDeliveryStateError(
+                    "notification attempt is not the current in-flight claim"
+                )
+            attempt_row = connection.execute(
+                "SELECT * FROM notification_attempt_history "
+                "WHERE notification_id = ? AND attempt_number = ?",
+                (notification_id, attempt_number),
+            ).fetchone()
+            if attempt_row is None:
+                raise StoredDataError("current notification attempt is missing")
+            attempt = self._notification_attempt_from_row(attempt_row)
+            if attempt.outcome != "in_flight" or attempt.completed_at is not None:
+                raise NotificationDeliveryStateError(
+                    "notification attempt was already completed"
+                )
+            if _parse_timestamp(
+                completed,
+                field="notification completed_at",
+            ) < _parse_timestamp(
+                attempt.started_at,
+                field="notification started_at",
+            ):
+                raise NotificationDeliveryStateError(
+                    "notification completion time cannot regress"
+                )
+            connection.execute(
+                """
+                UPDATE notification_attempt_history
+                SET completed_at = ?, outcome = ?, failure_category = ?,
+                    receipt_id = ?
+                WHERE notification_id = ? AND attempt_number = ?
+                """,
+                (
+                    completed,
+                    status,
+                    resolved_category.value if resolved_category is not None else None,
+                    receipt_id,
+                    notification_id,
+                    attempt_number,
+                ),
+            )
+            connection.execute(
+                """
+                UPDATE notification_intent
+                SET status = ?, updated_at = ?, delivered_at = ?,
+                    last_failure_category = ?, receipt_id = ?
+                WHERE notification_id = ?
+                """,
+                (
+                    status,
+                    completed,
+                    completed if status == "delivered" else None,
+                    resolved_category.value if resolved_category is not None else None,
+                    receipt_id,
+                    notification_id,
+                ),
+            )
+            completed_record = self._get_notification_from_connection(
+                connection, notification_id
+            )
+            if completed_record is None:
+                raise ControlStateError("completed notification disappeared")
+            return completed_record
+
+    def get_notification(self, notification_id: str) -> NotificationRecord | None:
+        """Return one fully revalidated notification delivery record."""
+        return self._get_notification_from_connection(
+            self._connection, notification_id
+        )
+
+    def _get_notification_from_connection(
+        self,
+        connection: sqlite3.Connection,
+        notification_id: str,
+    ) -> NotificationRecord | None:
+        row = connection.execute(
+            "SELECT * FROM notification_intent WHERE notification_id = ?",
+            (notification_id,),
+        ).fetchone()
+        if row is None:
+            return None
+        record = self._notification_from_row(row)
+        sources = tuple(
+            str(source_row["source_id"])
+            for source_row in connection.execute(
+                "SELECT source_id FROM notification_source "
+                "WHERE notification_id = ? ORDER BY source_id",
+                (notification_id,),
+            ).fetchall()
+        )
+        if sources != record.intent.source_ids:
+            raise StoredDataError("stored notification sources do not match intent")
+        attempts = self._notification_attempts_from_connection(
+            connection, notification_id
+        )
+        if len(attempts) != record.attempt_count:
+            raise StoredDataError("notification attempt count does not match history")
+        if attempts:
+            if attempts[-1].outcome != record.status:
+                raise StoredDataError(
+                    "notification status does not match latest attempt"
+                )
+        elif record.status != "pending":
+            raise StoredDataError("notification without attempts must be pending")
+        return record
+
+    def notification_attempt_history(
+        self,
+        notification_id: str,
+    ) -> tuple[NotificationAttemptRecord, ...]:
+        """Return validated attempts in ascending attempt order."""
+        record = self.get_notification(notification_id)
+        if record is None:
+            return ()
+        return self._notification_attempts_from_connection(
+            self._connection, notification_id
+        )
+
+    def _notification_attempts_from_connection(
+        self,
+        connection: sqlite3.Connection,
+        notification_id: str,
+    ) -> tuple[NotificationAttemptRecord, ...]:
+        rows = connection.execute(
+            "SELECT * FROM notification_attempt_history "
+            "WHERE notification_id = ? ORDER BY attempt_number",
+            (notification_id,),
+        ).fetchall()
+        attempts = tuple(self._notification_attempt_from_row(row) for row in rows)
+        if [item.attempt_number for item in attempts] != list(
+            range(1, len(attempts) + 1)
+        ):
+            raise StoredDataError("notification attempt history is not contiguous")
+        previous_completed: str | None = None
+        for attempt in attempts:
+            if previous_completed is not None and _parse_timestamp(
+                attempt.started_at, field="notification attempt started_at"
+            ) < _parse_timestamp(
+                previous_completed, field="notification prior completed_at"
+            ):
+                raise StoredDataError("notification attempt history regresses")
+            previous_completed = attempt.completed_at
+        return attempts
+
+    def _notification_from_row(self, row: sqlite3.Row) -> NotificationRecord:
+        registered_at = _timestamp(
+            str(row["registered_at"]), field="stored notification registered_at"
+        )
+        updated_at = _timestamp(
+            str(row["updated_at"]), field="stored notification updated_at"
+        )
+        if registered_at != row["registered_at"] or updated_at != row["updated_at"]:
+            raise StoredDataError("stored notification timestamps are not canonical")
+        if _parse_timestamp(
+            updated_at,
+            field="notification updated_at",
+        ) < _parse_timestamp(
+            registered_at,
+            field="notification registered_at",
+        ):
+            raise StoredDataError("stored notification timestamp regresses")
+        attempt_count = int(row["attempt_count"])
+        if attempt_count < 0:
+            raise StoredDataError("stored notification attempt count is invalid")
+        payload = _decode_json(row["intent_json"], label="notification intent")
+        fingerprint = artifact_fingerprint(payload)
+        if fingerprint != row["intent_fingerprint"]:
+            raise StoredDataError("stored notification fingerprint does not match")
+        try:
+            intent = notification_intent_from_payload(payload)
+        except Exception as exc:
+            raise StoredDataError(
+                f"stored notification intent is invalid: {exc}"
+            ) from exc
+        if (
+            intent.notification_id != row["notification_id"]
+            or intent.kind.value != row["kind"]
+        ):
+            raise StoredDataError("stored notification identity does not match")
+        if _parse_timestamp(
+            registered_at,
+            field="notification registered_at",
+        ) < _parse_timestamp(
+            intent.created_at,
+            field="notification created_at",
+        ):
+            raise StoredDataError("notification was registered before creation")
+
+        status = str(row["status"])
+        delivered_at = row["delivered_at"]
+        failure_category = row["last_failure_category"]
+        receipt_id = row["receipt_id"]
+        if delivered_at is not None:
+            canonical_delivered = _timestamp(
+                str(delivered_at), field="stored notification delivered_at"
+            )
+            if canonical_delivered != delivered_at or canonical_delivered != updated_at:
+                raise StoredDataError("stored delivery timestamp is inconsistent")
+            delivered_at = canonical_delivered
+        if status == "delivered":
+            if (
+                delivered_at is None
+                or failure_category is not None
+                or receipt_id is None
+            ):
+                raise StoredDataError("stored delivered notification is inconsistent")
+            try:
+                validate_receipt_id(str(receipt_id))
+            except Exception as exc:
+                raise StoredDataError("stored notification receipt is invalid") from exc
+        elif status in {"retryable", "permanent_failure"}:
+            if (
+                delivered_at is not None
+                or failure_category is None
+                or receipt_id is not None
+            ):
+                raise StoredDataError("stored failed notification is inconsistent")
+            try:
+                decision = classify_transport_failure(
+                    TransportFailure(str(failure_category))
+                )
+            except Exception as exc:
+                raise StoredDataError(
+                    "stored notification failure category is invalid"
+                ) from exc
+            expected = "retryable" if decision.retryable else "permanent_failure"
+            if status != expected:
+                raise StoredDataError(
+                    "stored notification failure category contradicts status"
+                )
+        elif status in {"pending", "in_flight"}:
+            if (
+                delivered_at is not None
+                or failure_category is not None
+                or receipt_id is not None
+            ):
+                raise StoredDataError("stored open notification is inconsistent")
+        else:
+            raise StoredDataError("stored notification status is invalid")
+        return NotificationRecord(
+            notification_id=intent.notification_id,
+            kind=intent.kind.value,
+            status=status,
+            registered_at=registered_at,
+            updated_at=updated_at,
+            attempt_count=attempt_count,
+            delivered_at=delivered_at,
+            last_failure_category=(
+                str(failure_category) if failure_category is not None else None
+            ),
+            receipt_id=str(receipt_id) if receipt_id is not None else None,
+            intent_fingerprint=fingerprint,
+            intent=intent,
+        )
+
+    def _notification_attempt_from_row(
+        self,
+        row: sqlite3.Row,
+    ) -> NotificationAttemptRecord:
+        attempt_number = int(row["attempt_number"])
+        if attempt_number < 1:
+            raise StoredDataError("stored notification attempt number is invalid")
+        started_at = _timestamp(
+            str(row["started_at"]), field="stored notification attempt started_at"
+        )
+        if started_at != row["started_at"]:
+            raise StoredDataError("stored attempt start is not canonical")
+        completed_at = row["completed_at"]
+        if completed_at is not None:
+            canonical_completed = _timestamp(
+                str(completed_at), field="stored notification attempt completed_at"
+            )
+            if canonical_completed != completed_at or _parse_timestamp(
+                canonical_completed, field="notification attempt completed_at"
+            ) < _parse_timestamp(started_at, field="notification attempt started_at"):
+                raise StoredDataError("stored attempt completion is invalid")
+            completed_at = canonical_completed
+        outcome = str(row["outcome"])
+        failure_category = row["failure_category"]
+        receipt_id = row["receipt_id"]
+        if outcome == "in_flight":
+            if (
+                completed_at is not None
+                or failure_category is not None
+                or receipt_id is not None
+            ):
+                raise StoredDataError("stored in-flight attempt is inconsistent")
+        elif outcome == "delivered":
+            if (
+                completed_at is None
+                or failure_category is not None
+                or receipt_id is None
+            ):
+                raise StoredDataError("stored delivered attempt is inconsistent")
+            try:
+                validate_receipt_id(str(receipt_id))
+            except Exception as exc:
+                raise StoredDataError("stored attempt receipt is invalid") from exc
+        elif outcome in {"retryable", "permanent_failure"}:
+            if (
+                completed_at is None
+                or failure_category is None
+                or receipt_id is not None
+            ):
+                raise StoredDataError("stored failed attempt is inconsistent")
+            try:
+                decision = classify_transport_failure(
+                    TransportFailure(str(failure_category))
+                )
+            except Exception as exc:
+                raise StoredDataError("stored attempt category is invalid") from exc
+            expected = "retryable" if decision.retryable else "permanent_failure"
+            if outcome != expected:
+                raise StoredDataError("stored attempt category contradicts outcome")
+        else:
+            raise StoredDataError("stored notification attempt outcome is invalid")
+        return NotificationAttemptRecord(
+            notification_id=str(row["notification_id"]),
+            attempt_number=attempt_number,
+            started_at=started_at,
+            completed_at=(str(completed_at) if completed_at is not None else None),
+            outcome=outcome,
+            failure_category=(
+                str(failure_category) if failure_category is not None else None
+            ),
+            receipt_id=str(receipt_id) if receipt_id is not None else None,
         )
