@@ -74,9 +74,10 @@ P2.1R through P2.5 have completed the local verification, persistence,
 lifecycle, scheduling, and inert-routing slices. P2.S has completed the
 explicitly authorized 15-venue live shadow review using isolated roots and no
 production action. Phase 2 is now `Shadow`. P3.1 has completed the persistent
-case slice, P3.2 has completed reminder aging and grouped digest data, and P3.3
-has completed the fake-only durable delivery boundary. P3.4 is the only current
-`Ready` package.
+case slice, P3.2 has completed reminder aging and grouped digest data, P3.3 has
+completed the fake-only durable delivery boundary, and P3.4 has completed
+pending shadow-output integration. P3.S is the only current `Ready` package
+and requires separate authorization.
 
 ### P2.1R — harden verifier contract semantics
 
@@ -300,8 +301,8 @@ The package does not persist aged state or delivery attempts, consume P2.5
 case/action intents, create immediate or digest notification intents, classify
 delivery retries, redact/render messages, call email or another transport,
 synchronize GCS, use Prefect, or change the deployed monitor. P3.3 now owns the
-isolated fake-only delivery boundary; P3.4/P3.S retain integration and all
-live-canary work.
+isolated fake-only delivery boundary; P3.4 now owns pending integration and
+P3.S retains all live-canary work.
 
 ### P3.3 — idempotent notification delivery boundary
 
@@ -330,16 +331,47 @@ Tests use only fake transports, fixed clocks, and temporary SQLite databases.
 The package does not consume P2.5 action intents or case events, query case
 state, coordinate reminder slots, use Prefect, provide email/SMTP/HTTP/webhook
 or cloud adapters, configure recipients, synchronize GCS, call an external
-service, or change the deployed monitor. P3.4 retains integration and shadow
+service, or change the deployed monitor. P3.4 now owns integration and shadow
 output; P3.S retains all authorized real-delivery and fatigue review work.
+
+### P3.4 — persistent shadow notification integration
+
+Status: `Complete`
+
+Depends on: P3.3
+
+Completed boundary: `automation/notification_integration.py` consumes only
+typed P2.5 transition and create/update-case actions. A transition action maps
+to one immediate source. A case action derives one stable observation per
+blocker, commits it through the P3.1 repository, and registers immediate output
+only when the retained event is meaningful. Case persistence and notification
+registration are separate lease-protected transactions, so a forced output
+failure leaves the case durable and exact replay fills the missing output
+without another case revision.
+
+The reminder coordinator lists unresolved repository cases, applies P3.2's
+clock-controlled projection, filters reminder-slot sources already claimed by
+an immutable intent, and groups every remaining due case into one digest.
+`ControlStateRepository.register_notification_intent` persists strict pending
+schema-v3 intent/source records without creating an attempt; exact replay is a
+no-op and conflicting source meaning fails closed. Reopen tests prove each
+transition, case event, and reminder slot belongs to at most one notification.
+
+Tests use fixed clocks and temporary SQLite databases. Every P3.4 output has
+status `pending`, attempt count zero, and empty attempt history. The package
+does not call the P3.3 fake protocol or any real email/SMTP/HTTP/webhook,
+Prefect, cloud provider, recipient, credential, scheduler, deployed monitor,
+GCS synchronization, action executor, scraper, Mac worker, Codex, promotion,
+or deployment path. P3.S and all later packages remain separate and
+unimplemented.
 
 | ID | Status | Depends on | Objective and completion boundary |
 |---|---|---|---|
 | P3.1 | Complete | Phase 2 gate | Persistent unresolved-case domain and repository with deduplication plus resolve, snooze, ignore, and reactivate controls. No reminder or notification generation and no transport. |
 | P3.2 | Complete | P3.1 | Clock-controlled weekly, monthly, and dormant reminder policy plus grouped digest generation. No persisted delivery state, notification intent, or transport adapter. |
 | P3.3 | Complete | P3.2 | Strict immediate/digest intents, unique source claims, persistent idempotent attempts, bounded retry classification, redaction, and fake-only transport tests. No real transport or integration. |
-| P3.4 | Ready | P3.3 | Integrate transitions, cases, reminders, and notification intents; prove one event creates at most one notification. Shadow output before any live delivery. |
-| P3.S | Planned | P3.4 | Separately authorized delivery canary and fatigue review using non-sensitive test events. Record results and rollback without changing case semantics. |
+| P3.4 | Complete | P3.3 | Typed transition/case actions plus repository reminders produce uniquely claimed pending immediate/grouped shadow intents with zero delivery attempts. Case and output commits remain independently replayable. |
+| P3.S | Ready | P3.4 | Separately authorized delivery canary and fatigue review using non-sensitive test events. Record results and rollback without changing case semantics. |
 
 Case creation and message delivery remain separate effects. A transport failure
 must not erase or duplicate the durable case.

@@ -152,9 +152,10 @@ notification is delivered, and no scraper runs. PDF evidence retention grants
 no redistribution authority. Phase 2 is `Shadow`, not deployed or
 implemented; live source-profile coverage remains conservative.
 
-Phase 3.1 persistent unresolved cases, P3.2 reminder/digest policy, and P3.3's
-fake-only notification delivery boundary are implemented locally and are not
-wired into the deployed monitor or the P2.5 action router:
+Phase 3.1 persistent unresolved cases, P3.2 reminder/digest policy, P3.3's
+fake-only notification delivery boundary, and P3.4's persistent shadow-output
+integration are implemented locally and are not wired into the deployed
+monitor:
 
 - `automation/cases.py` derives one stable case per venue/year/blocker,
   distinguishes repeated checks from meaningful changes, retains new evidence,
@@ -175,20 +176,28 @@ wired into the deployed monitor or the P2.5 action router:
   injected transport after a durable in-flight claim. Control-state schema
   version 3 adds immutable intent/source records and durable numbered-attempt
   history, so delivered, permanent, or unresolved in-flight replay cannot make
-  a duplicate call.
+  a duplicate call; and
+- `automation/notification_integration.py` converts P2.5 transition and case
+  actions into stable case events and immediate intents, queries unresolved
+  repository cases for due reminders, filters already claimed slots, and
+  registers one grouped digest for all remaining due cases. Registration
+  retains `pending` intent/source records with zero delivery attempts.
 
-P3.3 tests use only fake transports and temporary SQLite databases. It adds no
-email/SMTP, webhook, Prefect, HTTP, cloud provider, recipient configuration, or
-live delivery. It also does not consume P2.5 or case events, query case state,
-schedule reminders, or change production state. Phase 3 remains `In progress`;
-P3.4 integration is next and P3.S remains the separately authorized canary.
+P3.3 tests use only fake transports and temporary SQLite databases. P3.4 calls
+no transport at all: its temporary-database tests persist only pending shadow
+output and prove that exact event replay cannot create a second intent. Case
+events commit separately from notification registration, so registration
+failure cannot erase a case and replay can recover the missing output. These
+packages add no email/SMTP, webhook, Prefect, HTTP, cloud provider, recipient
+configuration, live delivery, or production-state change. Phase 3 remains `In
+progress`; P3.S is the separately authorized delivery/fatigue canary.
 
 The following does **not** exist yet:
 
 - scheduled or deployed LLM discovery;
 - a scheduled or deployed HTML/PDF verifier and persistent reducer/router;
-- case/action/reminder integration or any real notification transport and
-  delivery;
+- scheduled or deployed case/action/reminder integration, or any real
+  notification transport and delivery;
 - automated routing from discovery to a scrape job;
 - a Mac mini Prefect worker;
 - a Codex execution adapter;
@@ -284,11 +293,12 @@ intents. P3.1 can persist explicitly supplied case observations and human
 controls under the local lease, and P3.2 can project them through
 clock-controlled weekly/monthly/dormant policy into grouped digest data.
 P3.3 can turn explicitly supplied event/digest data into a strict redacted
-intent and exercise durable delivery only through an injected fake. None is
-connected to P2.5 intents, repository-driven reminder coordination, or the
-deployed monitor. P3.4 integration is the next isolated package. No Phase 2
-command can execute an action or write production state, and no Phase 3 code
-has a real notification transport.
+intent and exercise durable delivery only through an injected fake. P3.4 can
+consume P2.5 transition/case action data, persist cases independently, filter
+repository reminder slots, and retain pending immediate/digest shadow output
+without claiming a delivery attempt. None is connected to the deployed
+monitor. No Phase 2 command can execute an action or write production state,
+and no Phase 3 integration code has or calls a real notification transport.
 
 Keep Phase 1 additive. It may report what a verified later phase could do, but
 must not create a job, write lifecycle state, invoke a scraper, or promote data.

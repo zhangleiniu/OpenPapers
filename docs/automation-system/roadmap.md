@@ -16,7 +16,7 @@ phase-level outcomes and status.
 | 0 | Contracts, policies, ownership, and safety boundaries | Implemented |
 | 1 | LLM search discovery in shadow mode | Shadow (15-venue live review, 2026-07-13) |
 | 2 | Evidence verification and lifecycle state | Shadow (P2.S 15-venue live review, 2026-07-13) |
-| 3 | Cases and fatigue-resistant notifications | In progress (P3.1-P3.3 complete, 2026-07-13) |
+| 3 | Cases and fatigue-resistant notifications | In progress (P3.1-P3.4 complete, 2026-07-13) |
 | 4 | Mac mini Prefect worker and immutable results | Planned |
 | 5 | Automatic execution of existing scrapers | Planned |
 | 6 | Budgeted Codex diagnosis and repair proposals | Planned |
@@ -332,10 +332,28 @@ Accepted P3.3 notification-delivery-boundary implementation:
 
 P3.3 does not consume P2.5 actions, case events, repository cases, or scheduled
 reminders and does not add email, SMTP, HTTP, webhooks, Prefect, a cloud
-provider, recipients, or live delivery. Therefore Phase 3 is still `In
-progress`, not `Implemented`: P3.4 owns integration and the one-event/one-intent
-proof, while P3.S owns any separately authorized real-delivery and fatigue
-canary.
+provider, recipients, or live delivery.
+
+Accepted P3.4 shadow-integration implementation:
+
+- typed P2.5 transition actions register one immediate shadow intent, while
+  create/update-case actions derive one stable observation per blocker and
+  register immediate output only for a meaningful retained case event;
+- case events commit before notification registration in a separate
+  transaction. A registration failure cannot erase the case, and exact replay
+  can register the missing output without another case revision;
+- unresolved repository cases feed the P3.2 clock projection. Reminder slots
+  already owned by an immutable intent are filtered, and every remaining due
+  item is grouped into one digest intent; and
+- registration-only persistence retains strict schema-v3 intents and unique
+  sources as `pending` with zero attempts. Fixed-clock temporary-database tests
+  prove replay/reopen, one-event/one-intent conflicts, partial-failure
+  recovery, closed-case omission, grouped urgency, and claimed-slot filtering.
+
+P3.4 calls no transport and adds no recipient, credential, external request,
+Prefect/deployment wiring, production-state migration, or action execution.
+Phase 3 is still `In progress`, not `Implemented`: P3.S owns the separately
+authorized delivery/fatigue canary. P3.S and later work remain unimplemented.
 
 ## Phase 4: Mac mini execution plane
 

@@ -36,12 +36,16 @@ reactivate controls. P3.2 adds local clock-controlled case aging and grouped
 weekly/monthly/dormant digest data. P3.3 adds a strict redacted notification
 intent and control-state schema version 3 for unique sources and immutable
 intents plus durable numbered-attempt history, exercised only through injected
-fake transports. These local Phase 3 packages are not wired to P2.5 intents or
-this deployment. They add no
-real email/SMTP, HTTP/webhook, Prefect, cloud-notification adapter, recipients,
-or external delivery. A production-integrated verifier/case/reminder flow,
-notification integration and real delivery, the Mac mini worker, Codex repair
-execution, and MustCite deployment are not implemented.
+fake transports. P3.4 adds a local coordinator that consumes typed P2.5
+transition/case action data, persists case events independently, queries due
+repository reminders, filters already claimed slots, and retains only pending
+immediate/grouped shadow intents with zero attempts. It has no command,
+scheduler, or transport call. These local Phase 3 packages are not wired to
+this deployment and add no real email/SMTP, HTTP/webhook, Prefect,
+cloud-notification adapter, recipients, or external delivery. A
+production-integrated verifier/case/reminder flow, real notification delivery,
+the Mac mini worker, Codex repair execution, and MustCite deployment are not
+implemented.
 
 Start at the [automation system development guide](./automation-system/README.md) for
 the implemented foundation, target architecture, roadmap, and zero-context

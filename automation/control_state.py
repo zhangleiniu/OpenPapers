@@ -190,6 +190,14 @@ class NotificationRecord:
 
 
 @dataclass(frozen=True)
+class NotificationWriteOutcome:
+    """Result of registering one immutable notification intent as output."""
+
+    record: NotificationRecord
+    applied: bool
+
+
+@dataclass(frozen=True)
 class NotificationAttemptRecord:
     """One immutable-numbered notification delivery attempt."""
 
@@ -1426,6 +1434,111 @@ class ControlStateRepository:
             event=deepcopy(event),
         )
 
+    def register_notification_intent(
+        self,
+        intent: NotificationIntent,
+        *,
+        lease: LeaseHandle,
+        registered_at: datetime | str,
+    ) -> NotificationWriteOutcome:
+        """Persist an immutable pending intent without claiming delivery.
+
+        This registration-only boundary is suitable for shadow output. It
+        creates no attempt row and grants no authority to call a transport.
+        """
+        validate_notification_intent(intent)
+        payload = intent.to_payload()
+        assert_secret_free(payload)
+        intent_json = _canonical_json(payload)
+        fingerprint = artifact_fingerprint(payload)
+        registered = _timestamp(
+            registered_at, field="notification registered_at"
+        )
+        if _parse_timestamp(
+            registered, field="notification registered_at"
+        ) < _parse_timestamp(intent.created_at, field="notification created_at"):
+            raise NotificationDeliveryStateError(
+                "notification registration cannot precede intent creation"
+            )
+
+        with self._write_transaction() as connection:
+            self._require_lease(connection, lease, self._now())
+            record, applied = self._register_notification_in_connection(
+                connection,
+                intent=intent,
+                payload=payload,
+                intent_json=intent_json,
+                fingerprint=fingerprint,
+                registered_at=registered,
+            )
+        return NotificationWriteOutcome(record=record, applied=applied)
+
+    def _register_notification_in_connection(
+        self,
+        connection: sqlite3.Connection,
+        *,
+        intent: NotificationIntent,
+        payload: Mapping[str, Any],
+        intent_json: str,
+        fingerprint: str,
+        registered_at: str,
+    ) -> tuple[NotificationRecord, bool]:
+        row = connection.execute(
+            "SELECT * FROM notification_intent WHERE notification_id = ?",
+            (intent.notification_id,),
+        ).fetchone()
+        applied = row is None
+        if applied:
+            for source_id in intent.source_ids:
+                source_row = connection.execute(
+                    "SELECT notification_id FROM notification_source "
+                    "WHERE source_id = ?",
+                    (source_id,),
+                ).fetchone()
+                if source_row is not None:
+                    raise NotificationIntentConflictError(
+                        "notification source already belongs to another intent"
+                    )
+            connection.execute(
+                """
+                INSERT INTO notification_intent (
+                    notification_id, kind, status, registered_at,
+                    updated_at, attempt_count, delivered_at,
+                    last_failure_category, receipt_id,
+                    intent_fingerprint, intent_json
+                ) VALUES (?, ?, 'pending', ?, ?, 0, NULL, NULL, NULL, ?, ?)
+                """,
+                (
+                    intent.notification_id,
+                    intent.kind.value,
+                    registered_at,
+                    registered_at,
+                    fingerprint,
+                    intent_json,
+                ),
+            )
+            connection.executemany(
+                "INSERT INTO notification_source (source_id, notification_id) "
+                "VALUES (?, ?)",
+                (
+                    (source_id, intent.notification_id)
+                    for source_id in intent.source_ids
+                ),
+            )
+        record = self._get_notification_from_connection(
+            connection, intent.notification_id
+        )
+        if record is None:
+            raise ControlStateError("notification registration disappeared")
+        if (
+            record.intent_fingerprint != fingerprint
+            or record.intent.to_payload() != dict(payload)
+        ):
+            raise NotificationIntentConflictError(
+                "notification ID already has different meaning"
+            )
+        return record, applied
+
     def prepare_notification_delivery(
         self,
         intent: NotificationIntent,
@@ -1458,59 +1571,14 @@ class ControlStateRepository:
 
         with self._write_transaction() as connection:
             self._require_lease(connection, lease, self._now())
-            row = connection.execute(
-                "SELECT * FROM notification_intent WHERE notification_id = ?",
-                (intent.notification_id,),
-            ).fetchone()
-            if row is None:
-                for source_id in intent.source_ids:
-                    source_row = connection.execute(
-                        "SELECT notification_id FROM notification_source "
-                        "WHERE source_id = ?",
-                        (source_id,),
-                    ).fetchone()
-                    if source_row is not None:
-                        raise NotificationIntentConflictError(
-                            "notification source already belongs to another intent"
-                        )
-                connection.execute(
-                    """
-                    INSERT INTO notification_intent (
-                        notification_id, kind, status, registered_at,
-                        updated_at, attempt_count, delivered_at,
-                        last_failure_category, receipt_id,
-                        intent_fingerprint, intent_json
-                    ) VALUES (?, ?, 'pending', ?, ?, 0, NULL, NULL, NULL, ?, ?)
-                    """,
-                    (
-                        intent.notification_id,
-                        intent.kind.value,
-                        started,
-                        started,
-                        fingerprint,
-                        intent_json,
-                    ),
-                )
-                connection.executemany(
-                    "INSERT INTO notification_source (source_id, notification_id) "
-                    "VALUES (?, ?)",
-                    (
-                        (source_id, intent.notification_id)
-                        for source_id in intent.source_ids
-                    ),
-                )
-            record = self._get_notification_from_connection(
-                connection, intent.notification_id
+            record, _ = self._register_notification_in_connection(
+                connection,
+                intent=intent,
+                payload=payload,
+                intent_json=intent_json,
+                fingerprint=fingerprint,
+                registered_at=started,
             )
-            if record is None:
-                raise ControlStateError("notification registration disappeared")
-            if (
-                record.intent_fingerprint != fingerprint
-                or record.intent.to_payload() != payload
-            ):
-                raise NotificationIntentConflictError(
-                    "notification ID already has different meaning"
-                )
             if record.status not in {"pending", "retryable"}:
                 return None
             if started_time < _parse_timestamp(
@@ -1677,6 +1745,25 @@ class ControlStateRepository:
         return self._get_notification_from_connection(
             self._connection, notification_id
         )
+
+    def get_notification_by_source(
+        self, source_id: str
+    ) -> NotificationRecord | None:
+        """Return the one validated intent that immutably claims a source."""
+        row = self._connection.execute(
+            "SELECT notification_id FROM notification_source WHERE source_id = ?",
+            (source_id,),
+        ).fetchone()
+        if row is None:
+            return None
+        record = self._get_notification_from_connection(
+            self._connection, str(row["notification_id"])
+        )
+        if record is None or source_id not in record.intent.source_ids:
+            raise StoredDataError(
+                "notification source does not reference a valid intent"
+            )
+        return record
 
     def _get_notification_from_connection(
         self,

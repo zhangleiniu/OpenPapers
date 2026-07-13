@@ -42,6 +42,7 @@ automation/control_plane.py
 automation/cases.py
 automation/reminders.py
 automation/notifications.py
+automation/notification_integration.py
 automation/config/venue_catalog.v1.json
 automation/config/policies.v1.json
 ```
@@ -332,7 +333,8 @@ closed/dormant cases, stable replay, grouping, and invalid clocks. The module
 does not persist state, create a notification intent, classify delivery
 retries, render/redact a message, or import a storage, orchestration, network,
 email, or other transport dependency. P3.3 consumes this result only when a
-caller supplies it explicitly; repository-driven coordination remains P3.4.
+caller supplies it explicitly; P3.4 now provides the separate repository-driven
+shadow coordination boundary.
 
 The P3.3 notification intent, redaction, and fake-delivery checks are:
 
@@ -353,7 +355,33 @@ they cover migration from valid version 1/2 databases, redaction, retry
 classification, replay, source conflicts, corruption, lease loss, and
 ambiguous post-acceptance failure. There is no concrete transport, external
 request, recipient, Prefect integration, case/action/reminder consumer, or
-deployment change. Those remain P3.4/P3.S.
+deployment change. P3.4 composes this boundary without calling a transport;
+P3.S retains every delivery-canary action.
+
+The P3.4 persistent shadow-integration checks are:
+
+```bash
+python -m unittest automation.tests.test_notification_integration -v
+python -m unittest automation.tests.test_notifications -v
+python -m unittest automation.tests.test_control_state -v
+```
+
+`automation/notification_integration.py` consumes typed P2.5 transition and
+case actions, commits stable case observations separately, and registers
+immediate output only for transition or meaningful case events. It also lists
+unresolved repository cases, applies P3.2's injected-clock projection, filters
+already claimed reminder slots, and registers one grouped digest for every
+remaining due item. Registration reuses schema version 3's strict intent/source
+tables but creates no attempt row: tests require every output to remain
+`pending` with `attempt_count == 0`, including after reopen. Exact replay is a
+no-op, a stable source cannot move to a different intent, and an output failure
+cannot roll back a previously committed case event.
+
+P3.4 has no command or scheduler and must not import or invoke the P3.3
+transport protocol, Prefect, email/SMTP, HTTP/webhooks, a cloud notification
+provider, recipients, credentials, or any external service. P3.S is the only
+package that may add a separately authorized non-sensitive delivery/fatigue
+canary; that authority is not inherited by P3.4 tests or callers.
 
 Scheduling tests use an injected timezone-aware clock. Keep venue catalogs free
 of year-specific month/date assumptions; discovery records candidates, a

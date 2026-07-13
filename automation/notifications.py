@@ -420,10 +420,28 @@ def build_immediate_notification(
     return intent
 
 
-def _digest_source_id(case_id: str, cadence: str, slot: int, due_at: datetime) -> str:
+def reminder_source_id(
+    case_id: str,
+    cadence: ReminderCadence | str,
+    slot: int,
+    due_at: datetime,
+) -> str:
+    """Return the stable source claim for one case reminder slot."""
+    try:
+        resolved_cadence = ReminderCadence(cadence)
+    except (TypeError, ValueError) as exc:
+        raise NotificationError("reminder cadence is invalid") from exc
+    _validated_ids((case_id,), field="case_id", required=True, maximum=1)
+    if not isinstance(slot, int) or isinstance(slot, bool) or slot < 1:
+        raise NotificationError("reminder slot must be a positive integer")
     return _stable_id(
         "reminder",
-        (case_id, cadence, str(slot), _utc_timestamp(due_at, field="due_at")),
+        (
+            case_id,
+            resolved_cadence.value,
+            str(slot),
+            _utc_timestamp(due_at, field="due_at"),
+        ),
     )
 
 
@@ -506,9 +524,9 @@ def build_digest_notification(
     runs = _validated_ids(run_ids, field="run_ids", required=False, maximum=100)
     sources = tuple(
         sorted(
-            _digest_source_id(
+            reminder_source_id(
                 item.case_id,
-                item.cadence.value,
+                item.cadence,
                 item.slot,
                 item.due_at,
             )
