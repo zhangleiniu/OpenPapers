@@ -88,28 +88,33 @@ Phase 1 is `Shadow`; the review matrix is
 [`phase1-live-review-2026-07-13.md`](./phase1-live-review-2026-07-13.md).
 Deterministic readiness and identity verification remains Phase 2.
 
-Phase 2.1's initial verifier foundation is committed locally and is also not
-wired into the deployed monitor flow:
+Phase 2.1's verifier foundation and P2.1R contract hardening are implemented
+locally and are also not wired into the deployed monitor flow:
 
-- strict verification request/result contracts keep discovery evidence
-  separate from deterministic findings and reject executable action fields;
+- version 2 verification request/result contracts keep discovery evidence
+  separate from deterministic findings, bind each target to its derived kind,
+  and reject executable action fields. Compatibility-aware validation can
+  replay semantically consistent version 1 fixtures;
 - `automation/verification.py` classifies catalog source trust separately from
   crawl permission, and its crawl-policy gate defaults unknown domains to
   review before an injected fetcher can be called;
+- cross-artifact validation rejects evidence-free or status-inconsistent
+  results, dangling evidence, kind drift, fetched observations without allowed
+  policy provenance, and credential-bearing or signed retained URLs;
 - the fetch interface requires one HTTPS request with automatic redirects
-  disabled so Phase 2.2 can policy-check every redirect before following it;
-  and
+  disabled, derives one sanitized redirect edge, and never requests its target,
+  so Phase 2.2 can policy-check every hop before following it; and
 - the snapshot interface has a local content-addressed, immutable,
-  secret-safe implementation proven with fake responses and temporary fixture
-  storage.
+  secret-safe implementation that retains a replayable redirect edge and is
+  proven with fake responses and temporary fixture storage.
 
 This foundation does not inspect HTML or PDFs and makes no live request.
 Redirect, venue/year identity, list, metadata, and proceedings verification is
 Phase 2.2; PDF permission, status, size, signature, and sampling is Phase 2.3.
-Review found semantic contract and retained-redirect/URL-redaction gaps in the
-initial P2.1 implementation. P2.1R in `work-packages.md` must close them before
-P2.2 or P2.3 begins; no consumer should yet treat a verification result as
-authoritative.
+P2.1R closed the initial semantic, redirect-retention, and URL-safety review
+findings. P2.2 and P2.3 may now build on the interface in separate packages,
+but no current result proves HTML or PDF readiness, and no result may affect
+state or actions before P2.5.
 
 The following does **not** exist yet:
 

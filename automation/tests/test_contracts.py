@@ -35,8 +35,8 @@ def load_fixture(name: str) -> dict:
 class ContractTests(unittest.TestCase):
     VALID_FIXTURES = {
         ContractName.DISCOVERY_RESULT: "discovery-result.v1.json",
-        ContractName.VERIFICATION_REQUEST: "verification-request.v1.json",
-        ContractName.VERIFICATION_RESULT: "verification-result.v1.json",
+        ContractName.VERIFICATION_REQUEST: "verification-request.v2.json",
+        ContractName.VERIFICATION_RESULT: "verification-result.v2.json",
         ContractName.CONFERENCE_STATE: "conference-state.v1.json",
         ContractName.CASE_STATE: "case-state.v1.json",
         ContractName.JOB: "scrape-job.v1.json",
@@ -51,6 +51,14 @@ class ContractTests(unittest.TestCase):
                                  "https://json-schema.org/draft/2020-12/schema")
         for contract, fixture_name in self.VALID_FIXTURES.items():
             with self.subTest(contract=contract.value):
+                validate_contract(contract, load_fixture(fixture_name))
+        for contract, fixture_name in (
+            (ContractName.VERIFICATION_REQUEST, "verification-request.v1.json"),
+            (ContractName.VERIFICATION_RESULT, "verification-result.v1.json"),
+        ):
+            with self.subTest(contract=contract.value, version=1):
+                self.assertEqual(load_schema(contract, 2)["$schema"],
+                                 "https://json-schema.org/draft/2020-12/schema")
                 validate_contract(contract, load_fixture(fixture_name))
 
     def test_missing_and_unknown_execution_fields_are_rejected(self):

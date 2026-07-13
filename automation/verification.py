@@ -13,13 +13,13 @@ import os
 import tempfile
 import threading
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Mapping, Protocol, Sequence
-from urllib.parse import parse_qsl, urlparse
+from urllib.parse import parse_qsl, urljoin, urlparse
 
 from automation.contracts import (
     ContractName,
@@ -29,9 +29,10 @@ from automation.contracts import (
 from automation.domain import Permission, SecretBoundaryError, assert_secret_free
 
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 MAX_FETCH_BYTES = 100 * 1024 * 1024
 MAX_FETCH_TIMEOUT_SECONDS = 120.0
+_REDIRECT_STATUSES = frozenset({301, 302, 303, 307, 308})
 _VERIFICATION_KIND_ORDER = (
     "source_identity",
     "conference_milestone",
@@ -55,6 +56,34 @@ _SNAPSHOT_HEADER_ALLOWLIST = frozenset({
     "last-modified",
     "retry-after",
 })
+_SIGNED_QUERY_KEYS = frozenset({
+    "access_token",
+    "auth",
+    "authorization",
+    "credential",
+    "googleaccessid",
+    "id_token",
+    "key_pair_id",
+    "password",
+    "policy",
+    "refresh_token",
+    "sig",
+    "signature",
+    "token",
+    "x_amz_credential",
+    "x_amz_security_token",
+    "x_amz_signature",
+    "x_goog_credential",
+    "x_goog_signature",
+})
+_SIGNED_QUERY_SUFFIXES = (
+    "_access_token",
+    "_credential",
+    "_id_token",
+    "_security_token",
+    "_signature",
+    "_token",
+)
 
 
 class VerificationError(RuntimeError):
@@ -171,6 +200,15 @@ class FetchRequest:
 
 
 @dataclass(frozen=True)
+class RedirectHop:
+    """One sanitized redirect edge retained without requesting its target."""
+
+    source_url: str
+    target_url: str
+    status_code: int
+
+
+@dataclass(frozen=True)
 class FetchResponse:
     """One response to one exact request; no redirect chain is implied."""
 
@@ -179,6 +217,7 @@ class FetchResponse:
     headers: Mapping[str, str]
     body: bytes
     fetched_at: str
+    redirect_hop: RedirectHop | None = field(init=False, default=None)
 
     def __post_init__(self) -> None:
         _https_domain(self.requested_url)
@@ -190,9 +229,28 @@ class FetchResponse:
         for key, value in self.headers.items():
             if not isinstance(key, str) or not isinstance(value, str):
                 raise FetchBoundaryError("fetch response headers must be strings")
-            normalized_headers[key.lower()] = value
+            normalized_key = key.lower()
+            if normalized_key in normalized_headers:
+                raise FetchBoundaryError(
+                    "fetch response contains a duplicate normalized header")
+            normalized_headers[normalized_key] = value
         object.__setattr__(self, "headers", MappingProxyType(normalized_headers))
         _parse_datetime(self.fetched_at)
+        if self.status_code in _REDIRECT_STATUSES:
+            location = normalized_headers.get("location")
+            if not location or len(location) > 4096:
+                raise FetchBoundaryError(
+                    "redirect response requires a bounded Location header")
+            try:
+                target_url = _artifact_url(urljoin(self.requested_url, location))
+            except SourceClassificationError as exc:
+                raise FetchBoundaryError(
+                    "redirect Location is not safe to retain") from exc
+            object.__setattr__(self, "redirect_hop", RedirectHop(
+                source_url=_artifact_url(self.requested_url),
+                target_url=target_url,
+                status_code=self.status_code,
+            ))
 
 
 class EvidenceFetcher(Protocol):
@@ -249,20 +307,41 @@ def _format_datetime(value: datetime | str) -> str:
     return parsed.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
-def _https_domain(url: str) -> str:
+def _normalized_query_key(key: str) -> str:
+    return key.strip().lower().replace("-", "_").replace(".", "_")
+
+
+def _artifact_url(url: str) -> str:
+    """Return an exact replay-safe HTTPS URL or reject it before retention."""
     if not isinstance(url, str) or not url or len(url) > 4096:
         raise SourceClassificationError("source URL must be a bounded string")
+    if any(character.isspace() or ord(character) < 0x20 for character in url):
+        raise SourceClassificationError(
+            "source URL cannot contain whitespace or control characters")
     parsed = urlparse(url)
     if parsed.scheme != "https" or not parsed.hostname:
         raise SourceClassificationError("source URL must use HTTPS")
     if parsed.username is not None or parsed.password is not None:
         raise SourceClassificationError("source URL cannot contain credentials")
+    if parsed.fragment:
+        raise SourceClassificationError(
+            "source URL fragments cannot enter retained artifacts")
+    query_keys = [
+        _normalized_query_key(key)
+        for key, _ in parse_qsl(parsed.query, keep_blank_values=True)
+    ]
     try:
-        assert_secret_free({key: "" for key, _ in parse_qsl(
-            parsed.query, keep_blank_values=True)})
+        assert_secret_free({key: "" for key in query_keys})
     except SecretBoundaryError as exc:
         raise SourceClassificationError(
             "source URL cannot contain credential-shaped query fields") from exc
+    if any(
+        key in _SIGNED_QUERY_KEYS
+        or key.endswith(_SIGNED_QUERY_SUFFIXES)
+        for key in query_keys
+    ):
+        raise SourceClassificationError(
+            "source URL cannot contain credential-bearing or signed query data")
     try:
         port = parsed.port
     except ValueError as exc:
@@ -272,6 +351,14 @@ def _https_domain(url: str) -> str:
     domain = parsed.hostname.lower().rstrip(".")
     if not domain or any(character.isspace() for character in domain):
         raise SourceClassificationError("source URL has an invalid hostname")
+    return url
+
+
+def _https_domain(url: str) -> str:
+    _artifact_url(url)
+    parsed = urlparse(url)
+    assert parsed.hostname is not None
+    domain = parsed.hostname.lower().rstrip(".")
     return domain
 
 
@@ -419,6 +506,79 @@ class CrawlPolicyGate:
             return self._request_counts.get(policy_domain, 0)
 
 
+def _discovery_targets(
+    discovery: Mapping[str, Any],
+) -> tuple[dict[str, dict[str, str]], dict[str, dict[str, str]]]:
+    claims: dict[str, dict[str, str]] = {}
+    for claim in discovery["claims"]:
+        claim_id = claim["claim_id"]
+        if claim_id in claims:
+            raise VerificationError("discovery claim IDs must be unique")
+        claims[claim_id] = {
+            "target_kind": "claim",
+            "target_id": claim_id,
+            "verification_kind": _CLAIM_KIND_TO_VERIFICATION_KIND[
+                claim.get("claim_kind", "other")
+            ],
+        }
+    milestones: dict[str, dict[str, str]] = {}
+    for milestone in discovery.get("candidate_milestones", []):
+        milestone_id = milestone["milestone_id"]
+        if milestone_id in milestones:
+            raise VerificationError(
+                "discovery candidate milestone IDs must be unique")
+        milestones[milestone_id] = {
+            "target_kind": "candidate_milestone",
+            "target_id": milestone_id,
+            "verification_kind": "conference_milestone",
+        }
+    if set(claims) & set(milestones):
+        raise VerificationError(
+            "discovery claim and milestone IDs must not overlap")
+    return claims, milestones
+
+
+def _selected_targets(
+    discovery: Mapping[str, Any],
+    claim_ids: Sequence[str],
+    milestone_ids: Sequence[str],
+) -> list[dict[str, str]]:
+    claims, milestones = _discovery_targets(discovery)
+    unknown_claims = sorted(set(claim_ids) - set(claims))
+    unknown_milestones = sorted(set(milestone_ids) - set(milestones))
+    if unknown_claims or unknown_milestones:
+        raise VerificationError(
+            "verification targets are absent from discovery: "
+            f"claims={unknown_claims}, milestones={unknown_milestones}")
+    targets = [claims[claim_id] for claim_id in claim_ids]
+    targets.extend(milestones[milestone_id] for milestone_id in milestone_ids)
+    return sorted(
+        targets,
+        key=lambda target: (target["target_kind"], target["target_id"]),
+    )
+
+
+def _verification_kinds(targets: Sequence[Mapping[str, str]]) -> list[str]:
+    kinds = {target["verification_kind"] for target in targets}
+    return [kind for kind in _VERIFICATION_KIND_ORDER if kind in kinds]
+
+
+def _request_identity(request: Mapping[str, Any]) -> dict[str, Any]:
+    fields = [
+        "schema_version",
+        "discovery_id",
+        "discovery_evidence_fingerprint",
+        "venue_id",
+        "year",
+        "claim_ids",
+        "candidate_milestone_ids",
+    ]
+    if request["schema_version"] >= 2:
+        fields.append("targets")
+    fields.append("verification_kinds")
+    return {field: deepcopy(request[field]) for field in fields}
+
+
 def build_verification_request(
     discovery: Mapping[str, Any],
     *,
@@ -428,11 +588,7 @@ def build_verification_request(
 ) -> dict[str, Any]:
     """Build a strict request referencing selected discovery evidence."""
     validate_contract(ContractName.DISCOVERY_RESULT, discovery)
-    claims = {item["claim_id"]: item for item in discovery["claims"]}
-    milestones = {
-        item["milestone_id"]: item
-        for item in discovery.get("candidate_milestones", [])
-    }
+    claims, milestones = _discovery_targets(discovery)
     selected_claims = list(claims) if claim_ids is None else list(claim_ids)
     selected_milestones = (
         list(milestones)
@@ -443,23 +599,10 @@ def build_verification_request(
         raise VerificationError("claim IDs must be unique")
     if len(set(selected_milestones)) != len(selected_milestones):
         raise VerificationError("candidate milestone IDs must be unique")
-    unknown_claims = sorted(set(selected_claims) - set(claims))
-    unknown_milestones = sorted(set(selected_milestones) - set(milestones))
-    if unknown_claims or unknown_milestones:
-        raise VerificationError(
-            "verification targets are absent from discovery: "
-            f"claims={unknown_claims}, milestones={unknown_milestones}")
     if not selected_claims and not selected_milestones:
         raise VerificationError("verification request needs at least one target")
-
-    kinds = {
-        _CLAIM_KIND_TO_VERIFICATION_KIND[claims[claim_id].get(
-            "claim_kind", "other")]
-        for claim_id in selected_claims
-    }
-    if selected_milestones:
-        kinds.add("conference_milestone")
-    ordered_kinds = [kind for kind in _VERIFICATION_KIND_ORDER if kind in kinds]
+    targets = _selected_targets(
+        discovery, selected_claims, selected_milestones)
     identity = {
         "schema_version": SCHEMA_VERSION,
         "discovery_id": discovery["discovery_id"],
@@ -468,7 +611,8 @@ def build_verification_request(
         "year": discovery["year"],
         "claim_ids": sorted(selected_claims),
         "candidate_milestone_ids": sorted(selected_milestones),
-        "verification_kinds": ordered_kinds,
+        "targets": targets,
+        "verification_kinds": _verification_kinds(targets),
     }
     request_fingerprint = artifact_fingerprint(identity)
     request = {
@@ -498,21 +642,240 @@ def validate_request_against_discovery(
         if request[field] != expected:
             raise VerificationError(
                 f"verification request {field} does not match discovery")
-    claim_ids = {item["claim_id"] for item in discovery["claims"]}
-    milestone_ids = {
-        item["milestone_id"]
-        for item in discovery.get("candidate_milestones", [])
+    expected_targets = _selected_targets(
+        discovery,
+        request["claim_ids"],
+        request["candidate_milestone_ids"],
+    )
+    expected_kinds = _verification_kinds(expected_targets)
+    if request["verification_kinds"] != expected_kinds:
+        raise VerificationError(
+            "verification request kinds do not match discovery targets")
+    if request["schema_version"] >= 2 and request["targets"] != expected_targets:
+        raise VerificationError(
+            "verification request target bindings do not match discovery")
+    expected_fingerprint = artifact_fingerprint(_request_identity(request))
+    if request["request_id"] != f"verify-request:{expected_fingerprint[:32]}":
+        raise VerificationError(
+            "verification request ID does not match its semantic identity")
+
+
+_FACET_VERIFICATION_KINDS = {
+    "conference_status": frozenset({
+        "source_identity", "conference_milestone"}),
+    "paper_list_status": frozenset({"paper_list"}),
+    "metadata_status": frozenset({"metadata"}),
+    "pdf_status": frozenset({"pdf"}),
+    "proceedings_status": frozenset({"proceedings"}),
+}
+
+
+def _result_evidence(result: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        field: deepcopy(result[field])
+        for field in (
+            "request_id",
+            "discovery_id",
+            "venue_id",
+            "year",
+            "overall_status",
+            "source_observations",
+            "findings",
+            "verified_facets",
+            "verified_milestones",
+            "uncertainties",
+        )
     }
-    if not set(request["claim_ids"]).issubset(claim_ids):
+
+
+def _derive_overall_status(
+    result: Mapping[str, Any],
+) -> str:
+    finding_statuses = {
+        finding["status"] for finding in result["findings"]
+    }
+    has_positive = (
+        "verified" in finding_statuses
+        or any(value is not None for value in result["verified_facets"].values())
+        or bool(result["verified_milestones"])
+    )
+    observation_statuses = {
+        observation["policy_decision"]
+        for observation in result["source_observations"]
+        if observation["policy_decision"] != "allowed"
+    }
+    has_error = (
+        "error" in finding_statuses
+        or any(
+            observation["fetch_status"] == "failed"
+            for observation in result["source_observations"]
+        )
+    )
+    has_rejection = (
+        "rejected" in finding_statuses or "denied" in observation_statuses)
+    has_review = (
+        "review_required" in finding_statuses
+        or bool(observation_statuses - {"denied"})
+        or bool(result["uncertainties"])
+    )
+    has_conflict = "conflicting" in finding_statuses
+    if has_conflict:
+        return "conflicting"
+    if has_positive and (has_error or has_rejection or has_review):
+        return "partially_verified"
+    if has_positive:
+        return "verified"
+    if has_error:
+        return "error"
+    if has_rejection:
+        return "rejected"
+    if has_review:
+        return "review_required"
+    raise VerificationError(
+        "verification result has no semantic outcome to summarize")
+
+
+def validate_verification_result(
+    result: Mapping[str, Any],
+    request: Mapping[str, Any],
+    discovery: Mapping[str, Any],
+) -> None:
+    """Validate a v1/v2 result across its request and discovery evidence."""
+    validate_contract(ContractName.VERIFICATION_RESULT, result)
+    validate_request_against_discovery(request, discovery)
+    for field, expected in (
+        ("request_id", request["request_id"]),
+        ("discovery_id", request["discovery_id"]),
+        ("venue_id", request["venue_id"]),
+        ("year", request["year"]),
+    ):
+        if result[field] != expected:
+            raise VerificationError(
+                f"verification result {field} does not match its request")
+
+    targets = _selected_targets(
+        discovery,
+        request["claim_ids"],
+        request["candidate_milestone_ids"],
+    )
+    target_map = {target["target_id"]: target for target in targets}
+    requested_kinds = set(request["verification_kinds"])
+
+    source_ids: set[str] = set()
+    snapshot_ids: set[str] = set()
+    for observation in result["source_observations"]:
+        source_id = observation["source_id"]
+        if source_id in source_ids:
+            raise VerificationError("source observation IDs must be unique")
+        source_ids.add(source_id)
+        _artifact_url(observation["url"])
+        redirect_target = observation.get("redirect_target_url")
+        if redirect_target is not None:
+            _artifact_url(redirect_target)
+        is_redirect = observation["http_status"] in _REDIRECT_STATUSES
+        if is_redirect != (redirect_target is not None):
+            raise VerificationError(
+                "source observation redirect edge does not match HTTP status")
+        if observation["fetch_status"] in {"fetched", "failed"}:
+            if (observation["policy_decision"] != "allowed"
+                    or not observation["policy_domain"]):
+                raise VerificationError(
+                    "attempted fetch observation requires allowed policy domain")
+            if not _domain_matches(
+                    _https_domain(observation["url"]),
+                    observation["policy_domain"]):
+                raise VerificationError(
+                    "source observation URL is outside its policy domain")
+        snapshot_id = observation["snapshot_id"]
+        if snapshot_id is not None:
+            if snapshot_id in snapshot_ids:
+                raise VerificationError("snapshot IDs must be unique per result")
+            snapshot_ids.add(snapshot_id)
+
+    retained_evidence_ids = source_ids | snapshot_ids
+    finding_ids: set[str] = set()
+    for finding in result["findings"]:
+        if finding["finding_id"] in finding_ids:
+            raise VerificationError("finding IDs must be unique")
+        finding_ids.add(finding["finding_id"])
+        expected_target = target_map.get(finding["target_id"])
+        if expected_target is None:
+            raise VerificationError(
+                "finding target is absent from the verification request")
+        if finding["target_kind"] != expected_target["target_kind"]:
+            raise VerificationError(
+                "finding target kind does not match discovery target")
+        if finding["verification_kind"] != expected_target["verification_kind"]:
+            raise VerificationError(
+                "finding verification kind does not match discovery target")
+        if not set(finding["source_ids"]).issubset(source_ids):
+            raise VerificationError(
+                "finding references an unknown source observation")
+        if not set(finding["evidence_ids"]).issubset(retained_evidence_ids):
+            raise VerificationError(
+                "finding references evidence absent from retained observations")
+        if finding["status"] == "verified" and not finding["evidence_ids"]:
+            raise VerificationError("verified finding requires retained evidence")
+
+    for facet_name, facet in result["verified_facets"].items():
+        if facet is None:
+            continue
+        if not (_FACET_VERIFICATION_KINDS[facet_name] & requested_kinds):
+            raise VerificationError(
+                f"verified facet {facet_name} was not requested")
+        if not set(facet["evidence_ids"]).issubset(retained_evidence_ids):
+            raise VerificationError(
+                "verified facet references evidence absent from observations")
+
+    discovery_milestones = {
+        milestone["milestone_id"]: milestone
+        for milestone in discovery.get("candidate_milestones", [])
+    }
+    verified_milestone_ids: set[str] = set()
+    for milestone in result["verified_milestones"]:
+        milestone_id = milestone["candidate_milestone_id"]
+        if milestone_id in verified_milestone_ids:
+            raise VerificationError("verified milestone IDs must be unique")
+        verified_milestone_ids.add(milestone_id)
+        target = target_map.get(milestone_id)
+        if target is None or target["target_kind"] != "candidate_milestone":
+            raise VerificationError(
+                "verified milestone is absent from the verification request")
+        candidate = discovery_milestones[milestone_id]
+        expected_scope = candidate.get("scope", (
+            "main_track"
+            if candidate["milestone_type"] == "acceptance_notification"
+            else "conference"
+        ))
+        if (
+            milestone["milestone_type"] != candidate["milestone_type"]
+            or milestone["date"] != candidate["date"]
+            or milestone["scope"] != expected_scope
+        ):
+            raise VerificationError(
+                "verified milestone content does not match discovery target")
+        _artifact_url(milestone["source_url"])
+        if not set(milestone["evidence_ids"]).issubset(retained_evidence_ids):
+            raise VerificationError(
+                "verified milestone references evidence absent from observations")
+
+    expected_status = _derive_overall_status(result)
+    if result["overall_status"] != expected_status:
         raise VerificationError(
-            "verification request references an unknown discovery claim")
-    if not set(request["candidate_milestone_ids"]).issubset(milestone_ids):
+            "verification overall status is inconsistent with its outcomes")
+    fingerprint = artifact_fingerprint(_result_evidence(result))
+    if result["evidence_fingerprint"] != fingerprint:
         raise VerificationError(
-            "verification request references an unknown candidate milestone")
+            "verification result evidence fingerprint does not match content")
+    if result["verification_id"] != f"verification:{fingerprint[:32]}":
+        raise VerificationError(
+            "verification result ID does not match its semantic evidence")
+    assert_secret_free(result)
 
 
 def build_verification_result(
     request: Mapping[str, Any],
+    discovery: Mapping[str, Any],
     *,
     overall_status: str,
     verified_at: datetime | str,
@@ -523,8 +886,10 @@ def build_verification_result(
     uncertainties: Sequence[str] = (),
 ) -> dict[str, Any]:
     """Build a strict verifier result without applying state or actions."""
-    validate_contract(ContractName.VERIFICATION_REQUEST, request)
+    validate_request_against_discovery(request, discovery)
     observations = [deepcopy(dict(item)) for item in source_observations]
+    for observation in observations:
+        observation.setdefault("redirect_target_url", None)
     finding_items = [deepcopy(dict(item)) for item in findings]
     milestones = [deepcopy(dict(item)) for item in verified_milestones]
     facets = deepcopy(dict(verified_facets)) if verified_facets is not None else {
@@ -534,29 +899,6 @@ def build_verification_result(
         "pdf_status": None,
         "proceedings_status": None,
     }
-    source_ids = [item.get("source_id") for item in observations]
-    if len(source_ids) != len(set(source_ids)):
-        raise VerificationError("source observation IDs must be unique")
-    allowed_targets = (
-        set(request["claim_ids"]) | set(request["candidate_milestone_ids"])
-    )
-    for finding in finding_items:
-        if finding.get("target_id") not in allowed_targets:
-            raise VerificationError(
-                "finding target is absent from the verification request")
-        if finding.get("verification_kind") not in set(
-                request["verification_kinds"]):
-            raise VerificationError(
-                "finding kind is absent from the verification request")
-        if not set(finding.get("source_ids", [])).issubset(set(source_ids)):
-            raise VerificationError(
-                "finding references an unknown source observation")
-    for milestone in milestones:
-        if milestone.get("candidate_milestone_id") not in set(
-                request["candidate_milestone_ids"]):
-            raise VerificationError(
-                "verified milestone is absent from the verification request")
-
     evidence = {
         "request_id": request["request_id"],
         "discovery_id": request["discovery_id"],
@@ -579,6 +921,7 @@ def build_verification_result(
     }
     assert_secret_free(result)
     validate_contract(ContractName.VERIFICATION_RESULT, result)
+    validate_verification_result(result, request, discovery)
     return result
 
 
@@ -633,8 +976,9 @@ class FileSnapshotStore:
         permission = Permission(provenance.permission)
         if not provenance.venue_id or not provenance.discovery_id:
             raise VerificationError("snapshot provenance identity is required")
+        requested_url = _artifact_url(response.requested_url)
         if not _domain_matches(
-                _https_domain(response.requested_url), provenance.policy_domain):
+                _https_domain(requested_url), provenance.policy_domain):
             raise VerificationError(
                 "snapshot URL falls outside its authorized policy domain")
 
@@ -645,9 +989,17 @@ class FileSnapshotStore:
         }
         content_sha256 = hashlib.sha256(response.body).hexdigest()
         manifest = {
-            "snapshot_version": 1,
-            "requested_url": response.requested_url,
+            "snapshot_version": 2,
+            "requested_url": requested_url,
             "status_code": response.status_code,
+            "redirect_hop": (
+                {
+                    "source_url": response.redirect_hop.source_url,
+                    "target_url": response.redirect_hop.target_url,
+                    "status_code": response.redirect_hop.status_code,
+                }
+                if response.redirect_hop is not None else None
+            ),
             "fetched_at": _format_datetime(response.fetched_at),
             "headers": headers,
             "content_sha256": content_sha256,

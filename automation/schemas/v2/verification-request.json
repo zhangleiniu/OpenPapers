@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openpapers.local/schemas/v2/verification-request.json",
+  "title": "OpenPapers verification request v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "request_id",
+    "discovery_id",
+    "discovery_evidence_fingerprint",
+    "venue_id",
+    "year",
+    "claim_ids",
+    "candidate_milestone_ids",
+    "targets",
+    "verification_kinds",
+    "requested_at"
+  ],
+  "properties": {
+    "schema_version": {"const": 2},
+    "request_id": {"$ref": "#/$defs/id"},
+    "discovery_id": {"$ref": "#/$defs/id"},
+    "discovery_evidence_fingerprint": {"$ref": "#/$defs/sha256"},
+    "venue_id": {"$ref": "#/$defs/venue_id"},
+    "year": {"type": "integer", "minimum": 1900, "maximum": 2200},
+    "claim_ids": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/id"},
+      "uniqueItems": true
+    },
+    "candidate_milestone_ids": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/id"},
+      "uniqueItems": true
+    },
+    "targets": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/target"},
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "verification_kinds": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/verification_kind"},
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "requested_at": {"type": "string", "format": "date-time"}
+  },
+  "anyOf": [
+    {"properties": {"claim_ids": {"minItems": 1}}},
+    {"properties": {"candidate_milestone_ids": {"minItems": 1}}}
+  ],
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._:-]{2,127}$"
+    },
+    "venue_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]{1,31}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "verification_kind": {
+      "enum": [
+        "source_identity",
+        "conference_milestone",
+        "paper_list",
+        "metadata",
+        "proceedings",
+        "pdf"
+      ]
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["target_kind", "target_id", "verification_kind"],
+      "properties": {
+        "target_kind": {"enum": ["claim", "candidate_milestone"]},
+        "target_id": {"$ref": "#/$defs/id"},
+        "verification_kind": {"$ref": "#/$defs/verification_kind"}
+      }
+    }
+  }
+}

@@ -1,16 +1,16 @@
 {
-  "schema_version": 1,
-  "verification_id": "verification:3314405ea0b49c6e99e88d05b9844892",
-  "request_id": "verify-request:bf3644fa892a5fed63ea2f5fd3eb4c80",
+  "schema_version": 2,
+  "verification_id": "verification:fc81bc2b13da1ec1278df2112a21c5ef",
+  "request_id": "verify-request:ea24c4caa35dd0018954b00df3095932",
   "discovery_id": "discovery:icml:2026:001",
   "venue_id": "icml",
   "year": 2026,
-  "verified_at": "2026-07-13T17:31:00Z",
   "overall_status": "verified",
   "source_observations": [
     {
       "source_id": "source:icml:2026:001",
       "url": "https://icml.cc/virtual/2026/calendar",
+      "redirect_target_url": null,
       "source_trust": "official",
       "policy_decision": "allowed",
       "policy_domain": "icml.cc",
@@ -24,7 +24,7 @@
   ],
   "findings": [
     {
-      "finding_id": "finding:icml:2026:list",
+      "finding_id": "finding:icml:2026:identity",
       "target_kind": "claim",
       "target_id": "claim:icml:2026:list",
       "verification_kind": "source_identity",
@@ -32,7 +32,7 @@
       "source_ids": ["source:icml:2026:001"],
       "evidence_ids": ["snapshot:33333333333333333333333333333333"],
       "reason_code": "supported",
-      "metrics": {"paper_count": 3}
+      "metrics": null
     }
   ],
   "verified_facets": {
@@ -42,17 +42,8 @@
     "pdf_status": null,
     "proceedings_status": null
   },
-  "verified_milestones": [
-    {
-      "candidate_milestone_id": "milestone:icml:2026:end",
-      "milestone_type": "conference_end",
-      "scope": "conference",
-      "date": "2026-07-18",
-      "source_type": "official",
-      "source_url": "https://icml.cc/virtual/2026/calendar",
-      "evidence_ids": ["snapshot:33333333333333333333333333333333"]
-    }
-  ],
+  "verified_milestones": [],
   "uncertainties": [],
-  "evidence_fingerprint": "3314405ea0b49c6e99e88d05b9844892abc00013279ee28fa2bcb794616a9cae"
+  "verified_at": "2026-07-13T17:31:00Z",
+  "evidence_fingerprint": "fc81bc2b13da1ec1278df2112a21c5ef84f89280b8120409cfa82a695e8d59b2"
 }

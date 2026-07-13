@@ -1,12 +1,24 @@
 {
-  "schema_version": 1,
-  "request_id": "verify-request:bf3644fa892a5fed63ea2f5fd3eb4c80",
+  "schema_version": 2,
   "discovery_id": "discovery:icml:2026:001",
   "discovery_evidence_fingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   "venue_id": "icml",
   "year": 2026,
   "claim_ids": ["claim:icml:2026:list"],
   "candidate_milestone_ids": ["milestone:icml:2026:end"],
+  "targets": [
+    {
+      "target_kind": "candidate_milestone",
+      "target_id": "milestone:icml:2026:end",
+      "verification_kind": "conference_milestone"
+    },
+    {
+      "target_kind": "claim",
+      "target_id": "claim:icml:2026:list",
+      "verification_kind": "source_identity"
+    }
+  ],
   "verification_kinds": ["source_identity", "conference_milestone"],
+  "request_id": "verify-request:ea24c4caa35dd0018954b00df3095932",
   "requested_at": "2026-07-13T17:30:00Z"
 }

@@ -15,7 +15,7 @@ phase-level outcomes and status.
 | Existing baseline | Deterministic monitor, Cloud Run/Prefect/GCS, email | Implemented |
 | 0 | Contracts, policies, ownership, and safety boundaries | Implemented |
 | 1 | LLM search discovery in shadow mode | Shadow (15-venue live review, 2026-07-13) |
-| 2 | Evidence verification and lifecycle state | In progress (P2.1 foundation, 2026-07-13) |
+| 2 | Evidence verification and lifecycle state | In progress (P2.1/P2.1R accepted, 2026-07-13) |
 | 3 | Cases and fatigue-resistant notifications | Planned |
 | 4 | Mac mini Prefect worker and immutable results | Planned |
 | 5 | Automatic execution of existing scrapers | Planned |
@@ -155,26 +155,30 @@ Acceptance:
 - JMLR follows a continuous-publication policy;
 - replaying artifacts produces the same state.
 
-Initial P2.1 verifier-foundation implementation:
+Accepted P2.1 verifier-foundation implementation:
 
-- strict version 1 verification request/result contracts bind selected
-  discovery targets to one discovery/evidence identity and reject unknown or
-  executable fields;
+- version 2 verification request/result contracts bind selected targets and
+  exact derived kinds to one discovery/evidence identity and reject unknown or
+  executable fields; semantic compatibility validation preserves consistent
+  version 1 fixture replay;
 - catalog source trust is classified independently from crawl permission;
 - the crawl-policy gate returns review/deny/missing-permission decisions before
   an injected fetch can run, enforces a per-run domain request budget, and
   carries the approved crawl constraints into a one-request,
   no-auto-redirect fetch interface;
-- a local `SnapshotStore` implementation retains fake response bytes and
-  allowlisted metadata immutably by content/evidence fingerprint; and
+- a local `SnapshotStore` implementation retains fake response bytes,
+  allowlisted metadata, and sanitized redirect edges immutably by
+  content/evidence fingerprint; and
 - fixture tests prove exact/subdomain trust, suffix-confusion rejection,
   closed policy behavior, fake fetch call ordering, byte bounds, secret-safe
-  snapshots, replay, and cloud ownership of verification results.
+  snapshots, replay, cloud ownership of verification results, target/kind
+  binding, retained evidence references, overall-status consistency, policy
+  provenance, redirect retention, and signed-query rejection.
 
 P2.1 does not complete any content-readiness acceptance criterion and is not
-deployed. Review also found semantic result, target/evidence binding,
-redirect-retention, and URL-redaction gaps; the P2.1R package must close them
-before the interface is accepted. Remaining slices are P2.2 HTML evidence
+deployed. P2.1R closed the initial semantic result, target/evidence binding,
+redirect-retention, and URL-safety findings, so the interface is accepted for
+the next separate packages. Remaining slices are P2.2 HTML evidence
 verification (redirect, identity, list, metadata, proceedings), P2.3 PDF
 verification, P2.4 persistent SQLite state/history/lease and replay, and P2.5
 reducer/scheduling/typed-router integration plus 15-venue shadow replay. A

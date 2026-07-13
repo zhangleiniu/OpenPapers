@@ -45,6 +45,14 @@ _SCHEMA_FILES = {
     ContractName.POLICY_CONFIG: "policy-config.json",
 }
 
+_SUPPORTED_SCHEMA_VERSIONS = {
+    contract: ({1, 2} if contract in {
+        ContractName.VERIFICATION_REQUEST,
+        ContractName.VERIFICATION_RESULT,
+    } else {1})
+    for contract in ContractName
+}
+
 
 class ContractValidationError(ValueError):
     """Raised when a versioned automation artifact violates its contract."""
@@ -59,7 +67,7 @@ def _contract_name(name: ContractName | str) -> ContractName:
 
 @lru_cache(maxsize=None)
 def _load_schema_cached(contract: ContractName, version: int) -> dict[str, Any]:
-    if version != 1:
+    if version not in _SUPPORTED_SCHEMA_VERSIONS[contract]:
         raise ContractValidationError(
             f"unsupported {contract.value} schema version: {version}")
     path = SCHEMA_ROOT / f"v{version}" / _SCHEMA_FILES[contract]

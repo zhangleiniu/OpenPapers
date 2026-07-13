@@ -68,15 +68,16 @@ Independent packages may both become ready after their shared interface is
 stable, but they should use separate branches/worktrees if developed in
 parallel.
 
-## Current package
+## Current packages
 
-P2.1 has an initial implementation commit, but review found semantic contract
-gaps that must be closed before its interfaces are consumed. `P2.1R` is the
-current ready package. P2.2 and P2.3 remain blocked until P2.1R is accepted.
+P2.1R has closed the initial verifier-contract review findings. P2.2 and P2.3
+are now independent `Ready` packages over the accepted interface. Select
+exactly one per thread; use separate branches/worktrees if they are developed
+in parallel.
 
 ### P2.1R — harden verifier contract semantics
 
-Status: `Ready`
+Status: `Complete`
 
 Depends on: the initial P2.1 implementation
 
@@ -115,10 +116,12 @@ Acceptance:
 - focused, automation, repository, compilation, statistics, dependency, and
   diff checks pass.
 
-Expected handoff: create a clearly named verifier-contract hardening commit.
-Mark P2.1R complete and make P2.2/P2.3 ready only after review.
+Completed boundary: version 2 request/result contracts add exact target-kind
+and redirect representation while semantic validators retain compatible v1
+replay and reject all listed counterexamples. The package changes no live or
+deployed component. P2.2/P2.3 remain responsible for content verification.
 
-Minimal new-thread prompt:
+Historical package prompt:
 
 ```text
 Execute P2.1R from docs/automation-system/work-packages.md. Follow local
@@ -133,9 +136,9 @@ network observations occur only in P2.S and remain isolated from production.
 
 | ID | Status | Depends on | Objective and completion boundary |
 |---|---|---|---|
-| P2.1 | Review fix required | Phase 1 | Verifier contracts, source trust, crawl gate, one-request fetch boundary, and immutable local snapshots. The initial implementation closes only with P2.1R. |
-| P2.2 | Blocked | P2.1R | Deterministic redirect, venue/year identity, HTML list-count, metadata, and proceedings-index verification. Reproduce EMNLP, NAACL/ACL, and IJCAI false positives with sanitized fixtures. No PDF verification, state write, action, or live run. |
-| P2.3 | Blocked | P2.1R | PDF permission, URL/status, size, `%PDF-` signature, and deterministic sampling. No HTML identity logic, state write, redistribution grant, or live run. |
+| P2.1 | Complete | Phase 1 | Verifier contracts, source trust, crawl gate, one-request fetch boundary, immutable local snapshots, and P2.1R semantic hardening. |
+| P2.2 | Ready | P2.1R | Deterministic redirect, venue/year identity, HTML list-count, metadata, and proceedings-index verification. Reproduce EMNLP, NAACL/ACL, and IJCAI false positives with sanitized fixtures. No PDF verification, state write, action, or live run. |
+| P2.3 | Ready | P2.1R | PDF permission, URL/status, size, `%PDF-` signature, and deterministic sampling. No HTML identity logic, state write, redistribution grant, or live run. |
 | P2.4 | Planned | P2.2, P2.3 | Single-writer SQLite repository, schema/migration, evidence history, lease, idempotent consumption, and replay. Temporary databases in tests; no deployed migration. |
 | P2.5 | Planned | P2.4 | Verified evidence to state reducer, milestone scheduling, and typed action routing. Actions are returned as data and never executed. Replay all catalog venue/lifecycle shapes with fixtures. |
 | P2.S | Planned | P2.5 | Explicitly authorized 15-venue shadow review using approved crawl policy and isolated state/artifact roots. Record agreement and false positives; perform no job, scraper, notification, or production-state write. |

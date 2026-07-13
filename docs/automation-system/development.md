@@ -182,16 +182,19 @@ ledger, and does not update state or call a scraper. This exception applies
 only to the explicit manual development CLI; future scheduled or automatic
 discovery must use the configured budgets and circuit breakers.
 
-The Phase 2.1 verifier-foundation checks are:
+The Phase 2.1/P2.1R verifier-foundation checks are:
 
 ```bash
 python -m unittest automation.tests.test_verification -v
 ```
 
-They use only fake fetchers and temporary fixture storage. P2.1's
-`EvidenceFetcher` contract performs one request with automatic redirects
-disabled; a future P2.2 adapter must return each redirect response so the next
-URL is independently classified and policy-gated. Do not add HTML/list/
+They use only fake fetchers and temporary fixture storage. New builders emit
+version 2 verification contracts; `validate_request_against_discovery` and
+`validate_verification_result` also provide semantic compatibility reads for
+consistent version 1 artifacts. P2.1's `EvidenceFetcher` contract performs one
+request with automatic redirects disabled and retains a sanitized redirect
+edge without requesting its target. A P2.2 adapter must independently classify
+and policy-gate the next URL before another request. Do not add HTML/list/
 metadata/proceedings checks to the foundation module while developing P2.2,
 and keep PDF sampling in the separate P2.3 slice. A live fetch adapter must add
 transport-level DNS/SSRF protections and operational crawl controls before use;

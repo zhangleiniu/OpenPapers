@@ -41,32 +41,39 @@ manual review now cover all 15 catalog venues, but they remain unverified
 discovery evidence. No persistent conference/case store, content verifier,
 action router, Mac worker, or Codex adapter consumes discovery output.
 
-The initial Phase 2.1 implementation adds verifier contracts and effect
-boundaries without claiming content verification:
+Phase 2.1 plus its P2.1R hardening add verifier contracts and effect boundaries
+without claiming content verification:
 
-- `verification-request.json` binds selected claim/milestone IDs to one exact
-  discovery ID and evidence fingerprint;
-- `verification-result.json` can carry typed source observations, findings,
-  verified facets/milestones, and evidence identities, but cannot carry an
-  action, command, job, or transition;
+- version 2 `verification-request.json` binds each selected claim/milestone ID
+  and derived verification kind to one exact discovery ID and evidence
+  fingerprint; semantic readers continue to validate consistent version 1
+  artifacts against their discovery source;
+- version 2 `verification-result.json` carries typed source observations,
+  sanitized redirect targets, findings, verified facets/milestones, and
+  evidence identities, but cannot carry an action, command, job, or transition;
+- cross-artifact semantic validation recomputes request/result identities and
+  rejects kind drift, dangling evidence, evidence-free positive results,
+  inconsistent overall status, missing fetch-policy provenance, and unsafe
+  retained URLs;
 - `automation/verification.py` classifies official/archival catalog domains
   without granting fetch permission, and `CrawlPolicyGate` requires a separate
   approved domain permission before calling an injected fetcher;
 - `EvidenceFetcher` receives one no-auto-redirect request plus the reviewed
-  crawl constraints, leaving each redirect for Phase 2.2 to authorize; and
+  crawl constraints, derives and retains a sanitized edge without requesting
+  its target, and leaves each next hop for Phase 2.2 to authorize; and
 - `SnapshotStore` defines immutable evidence retention, with a local
-  content-addressed implementation that stores allowlisted headers and reuses
-  identical fake/fixture observations.
+  content-addressed implementation that stores allowlisted headers, a replayable
+  redirect edge, and reuses identical fake/fixture observations.
 
 P2.1 contains no live HTTP adapter and does not parse HTML or PDFs, persist
 conference state, apply transitions, compute actions, or change the deployed
 monitor. Those capabilities remain in P2.2 through P2.5.
 
-Review of the initial P2.1 commit found that schema-valid results can still be
-semantically inconsistent, redirect evidence is not yet replayable, and URL
-redaction is incomplete. P2.1R in `work-packages.md` is therefore a required
-interface-hardening gate before P2.2/P2.3. No downstream component may treat
-the current verification result as state-transition authority.
+P2.1R closed the initial schema/semantic drift, redirect-loss, and unsafe URL
+retention findings. P2.2/P2.3 can consume the hardened interface independently.
+They still cannot grant state-transition authority: content verification is
+not implemented yet, and only P2.5 may connect verified findings to state and
+typed actions.
 
 ## Design principles
 
