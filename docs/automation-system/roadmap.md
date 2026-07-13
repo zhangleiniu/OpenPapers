@@ -4,6 +4,10 @@ This roadmap describes planned work, not a claim that the target system is
 already implemented. Update the status table and the relevant acceptance
 criteria in the same change that completes a phase.
 
+Thread-sized task boundaries, dependencies, and the current next package live
+in [`work-packages.md`](./work-packages.md). Keep this roadmap focused on
+phase-level outcomes and status.
+
 ## Status
 
 | Phase | Scope | Status |
@@ -151,7 +155,7 @@ Acceptance:
 - JMLR follows a continuous-publication policy;
 - replaying artifacts produces the same state.
 
-Implemented in P2.1 verifier foundation:
+Initial P2.1 verifier-foundation implementation:
 
 - strict version 1 verification request/result contracts bind selected
   discovery targets to one discovery/evidence identity and reject unknown or
@@ -168,11 +172,14 @@ Implemented in P2.1 verifier foundation:
   snapshots, replay, and cloud ownership of verification results.
 
 P2.1 does not complete any content-readiness acceptance criterion and is not
-deployed. Remaining slices are P2.2 HTML evidence verification (redirect,
-identity, list, metadata, proceedings), P2.3 PDF verification, P2.4 persistent
-SQLite state/history/lease and replay, and P2.5 reducer/scheduling/typed-router
-integration plus 15-venue shadow replay. A separate short thread performs the
-Phase 2 live shadow review and status update after those slices.
+deployed. Review also found semantic result, target/evidence binding,
+redirect-retention, and URL-redaction gaps; the P2.1R package must close them
+before the interface is accepted. Remaining slices are P2.2 HTML evidence
+verification (redirect, identity, list, metadata, proceedings), P2.3 PDF
+verification, P2.4 persistent SQLite state/history/lease and replay, and P2.5
+reducer/scheduling/typed-router integration plus 15-venue shadow replay. A
+separate short thread performs the Phase 2 live shadow review and status update
+after those slices.
 
 ## Phase 3: cases and notifications
 

@@ -20,6 +20,7 @@ AGENTS.md
 docs/automation-system/README.md
 docs/automation-system/architecture.md
 docs/automation-system/roadmap.md
+docs/automation-system/work-packages.md
 docs/automation.md
 automation/deployment/README.md
 automation/conferences.json
@@ -39,6 +40,12 @@ automation/config/policies.v1.json
 
 Do not infer live GCP, Prefect, email, Mac, or Codex health solely from files.
 Use read-only runtime checks when the task requires current deployment facts.
+
+Select exactly one `Ready` package from `work-packages.md`. The package is the
+default thread and commit boundary. Investigation, implementation, tests,
+review fixes, documentation, and commit stay in that thread; the next package
+starts a new thread. Do not begin a blocked package or silently absorb work
+from an adjacent package.
 
 ## Establish scope before editing
 

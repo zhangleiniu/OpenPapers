@@ -7,6 +7,7 @@
 - [Automation system development](./automation-system/README.md)
   - [Target architecture](./automation-system/architecture.md)
   - [Implementation roadmap](./automation-system/roadmap.md)
+  - [Thread-sized work packages](./automation-system/work-packages.md)
   - [Development and handoff runbook](./automation-system/development.md)
 - [Validation and generated statistics](./validation.md)
 - [Google Cloud / Vertex AI setup](./GOOGLE_CLOUD_SETUP.md)

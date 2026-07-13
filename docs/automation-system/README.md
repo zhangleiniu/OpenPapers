@@ -88,8 +88,8 @@ Phase 1 is `Shadow`; the review matrix is
 [`phase1-live-review-2026-07-13.md`](./phase1-live-review-2026-07-13.md).
 Deterministic readiness and identity verification remains Phase 2.
 
-Phase 2.1's verifier foundation is implemented locally and is also not wired
-into the deployed monitor flow:
+Phase 2.1's initial verifier foundation is committed locally and is also not
+wired into the deployed monitor flow:
 
 - strict verification request/result contracts keep discovery evidence
   separate from deterministic findings and reject executable action fields;
@@ -106,6 +106,10 @@ into the deployed monitor flow:
 This foundation does not inspect HTML or PDFs and makes no live request.
 Redirect, venue/year identity, list, metadata, and proceedings verification is
 Phase 2.2; PDF permission, status, size, signature, and sampling is Phase 2.3.
+Review found semantic contract and retained-redirect/URL-redaction gaps in the
+initial P2.1 implementation. P2.1R in `work-packages.md` must close them before
+P2.2 or P2.3 begins; no consumer should yet treat a verification result as
+authoritative.
 
 The following does **not** exist yet:
 
@@ -164,9 +168,11 @@ Read in this order for a new automation task:
    boundaries;
 4. [roadmap.md](./roadmap.md) for implemented versus planned work and phase
    acceptance criteria;
-5. [development.md](./development.md) for commands, change workflow, and
+5. [work-packages.md](./work-packages.md) to select one thread-sized task and
+   its dependency, scope, and completion boundary;
+6. [development.md](./development.md) for commands, change workflow, and
    handoff requirements;
-6. `docs/automation.md` and `automation/deployment/README.md` for the current
+7. `docs/automation.md` and `automation/deployment/README.md` for the current
    production implementation.
 
 For a venue-specific scrape, also read `docs/<venue>.md`, `docs/pipeline.md`,
@@ -228,6 +234,8 @@ document:
 - Core scraper completion contract: repository `AGENTS.md`.
 - Current automation behavior: executable code and its tests.
 - Target automation behavior: this directory.
+- Current thread-sized execution boundary:
+  [`work-packages.md`](./work-packages.md).
 - Runtime credentials and secrets: their external secret stores, never docs or
   version control.
 - External deployment state: GCP and Prefect themselves. Repository docs may

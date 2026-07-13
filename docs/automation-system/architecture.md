@@ -41,8 +41,8 @@ manual review now cover all 15 catalog venues, but they remain unverified
 discovery evidence. No persistent conference/case store, content verifier,
 action router, Mac worker, or Codex adapter consumes discovery output.
 
-Phase 2.1 adds verifier contracts and effect boundaries without claiming
-content verification:
+The initial Phase 2.1 implementation adds verifier contracts and effect
+boundaries without claiming content verification:
 
 - `verification-request.json` binds selected claim/milestone IDs to one exact
   discovery ID and evidence fingerprint;
@@ -61,6 +61,12 @@ content verification:
 P2.1 contains no live HTTP adapter and does not parse HTML or PDFs, persist
 conference state, apply transitions, compute actions, or change the deployed
 monitor. Those capabilities remain in P2.2 through P2.5.
+
+Review of the initial P2.1 commit found that schema-valid results can still be
+semantically inconsistent, redirect evidence is not yet replayable, and URL
+redaction is incomplete. P2.1R in `work-packages.md` is therefore a required
+interface-hardening gate before P2.2/P2.3. No downstream component may treat
+the current verification result as state-transition authority.
 
 ## Design principles
 
@@ -154,7 +160,7 @@ Before an action can be queued, deterministic code checks applicable facts:
 Ambiguous or conflicting evidence creates/rechecks a case. It does not trigger
 an execution job.
 
-The implemented P2.1 boundary stops before these content checks. P2.2 owns
+The initial P2.1 boundary stops before these content checks. P2.2 owns
 redirect, venue/year identity, list-count, metadata, and proceedings-index
 verification, including the known EMNLP future-index and NAACL/ACL identity
 false positives. P2.3 owns PDF permission, URL, status, size, signature, and
