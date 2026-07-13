@@ -15,7 +15,7 @@ phase-level outcomes and status.
 | Existing baseline | Deterministic monitor, Cloud Run/Prefect/GCS, email | Implemented |
 | 0 | Contracts, policies, ownership, and safety boundaries | Implemented |
 | 1 | LLM search discovery in shadow mode | Shadow (15-venue live review, 2026-07-13) |
-| 2 | Evidence verification and lifecycle state | In progress (P2.1/P2.1R accepted, 2026-07-13) |
+| 2 | Evidence verification and lifecycle state | In progress (P2.1/P2.1R/P2.2 accepted, 2026-07-13) |
 | 3 | Cases and fatigue-resistant notifications | Planned |
 | 4 | Mac mini Prefect worker and immutable results | Planned |
 | 5 | Automatic execution of existing scrapers | Planned |
@@ -175,15 +175,27 @@ Accepted P2.1 verifier-foundation implementation:
   binding, retained evidence references, overall-status consistency, policy
   provenance, redirect retention, and signed-query rejection.
 
-P2.1 does not complete any content-readiness acceptance criterion and is not
-deployed. P2.1R closed the initial semantic result, target/evidence binding,
-redirect-retention, and URL-safety findings, so the interface is accepted for
-the next separate packages. Remaining slices are P2.2 HTML evidence
-verification (redirect, identity, list, metadata, proceedings), P2.3 PDF
-verification, P2.4 persistent SQLite state/history/lease and replay, and P2.5
-reducer/scheduling/typed-router integration plus 15-venue shadow replay. A
-separate short thread performs the Phase 2 live shadow review and status update
-after those slices.
+Accepted P2.2 HTML evidence implementation:
+
+- every redirect target is independently classified and crawl-policy-gated
+  before an injected fake fetcher may request it; loops, hop limits, and closed
+  targets retain prior immutable evidence and fail closed;
+- a bounded standard-library parser with explicit source profiles verifies
+  token-bounded venue/year identity, exact candidate dates, plausible distinct
+  paper counts, title/author/abstract completeness, and current proceedings
+  index entries;
+- strict v2 results associate evidence only with exact cited target URLs,
+  preserve replay-stable observations, reject PDF targets, and report
+  authoritative source disagreement as conflicting; and
+- sanitized fixtures reproduce the EMNLP future publication promise,
+  NAACL/ACL identity contamination, and IJCAI list-without-PDF cases without a
+  live request.
+
+P2.1/P2.1R/P2.2 are not deployed and cannot write lifecycle state or create an
+action. Remaining slices are P2.3 PDF verification, P2.4 persistent SQLite
+state/history/lease and replay, and P2.5 reducer/scheduling/typed-router
+integration. A separate P2.S thread performs the 15-venue live shadow review
+and phase-status update after those slices.
 
 ## Phase 3: cases and notifications
 

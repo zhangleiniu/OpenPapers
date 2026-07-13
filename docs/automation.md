@@ -13,9 +13,11 @@ in the repository. Its 15-venue live review is complete and the phase is in
 shadow status, but it is not deployed or scheduled. Phase 2.1/P2.1R supplies
 versioned verification request/result schemas, cross-artifact semantic
 validation, catalog trust and crawl-policy gates, and fake-tested
-fetch/snapshot interfaces with sanitized redirect retention. It has no live
-HTTP adapter or HTML/PDF validators and is likewise not deployed; no result is
-wired to lifecycle state or actions.
+fetch/snapshot interfaces with sanitized redirect retention. P2.2 adds a
+fake/fixture-only redirect coordinator and bounded HTML verifier for exact
+identity, dates, list counts, metadata, and current proceedings indexes. These
+components have no live HTTP adapter or PDF verifier and are not deployed; no
+result is wired to lifecycle state or actions.
 Persistent lifecycle/case state, reminder delivery, the Mac mini worker, Codex
 repair execution, and MustCite deployment are not implemented.
 

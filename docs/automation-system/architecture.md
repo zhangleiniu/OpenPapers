@@ -4,7 +4,7 @@ This document defines the target boundaries and safety invariants. Most of the
 components described here are planned; consult [roadmap.md](./roadmap.md) and
 the executable code before assuming a component exists.
 
-## Implemented foundation and Phase 1/2.1 boundaries
+## Implemented foundation and Phase 1/2.2 boundaries
 
 Phase 0 is implemented as a side-effect-free foundation and is not yet wired
 into the deployed monitor:
@@ -38,8 +38,9 @@ Phase 1 now adds an optional, shadow-only discovery path:
 
 This path is not deployed or scheduled. Contract-valid live artifacts and a
 manual review now cover all 15 catalog venues, but they remain unverified
-discovery evidence. No persistent conference/case store, content verifier,
-action router, Mac worker, or Codex adapter consumes discovery output.
+discovery evidence until replayed by a deterministic verifier. No scheduled or
+deployed content verifier, persistent conference/case store, action router, Mac
+worker, or Codex adapter consumes discovery output.
 
 Phase 2.1 plus its P2.1R hardening add verifier contracts and effect boundaries
 without claiming content verification:
@@ -67,13 +68,30 @@ without claiming content verification:
 
 P2.1 contains no live HTTP adapter and does not parse HTML or PDFs, persist
 conference state, apply transitions, compute actions, or change the deployed
-monitor. Those capabilities remain in P2.2 through P2.5.
+monitor. P2.1R closed the initial schema/semantic drift, redirect-loss, and
+unsafe URL retention findings.
 
-P2.1R closed the initial schema/semantic drift, redirect-loss, and unsafe URL
-retention findings. P2.2/P2.3 can consume the hardened interface independently.
-They still cannot grant state-transition authority: content verification is
-not implemented yet, and only P2.5 may connect verified findings to state and
-typed actions.
+P2.2 consumes that interface in `automation/html_verification.py`:
+
+- `fetch_html_evidence` composes only the injected one-request fetcher and
+  snapshot store. It classifies and policy-gates every exact redirect URL,
+  bounds loops and hops, and retains partial evidence when a later target is
+  closed by policy;
+- `ElementSelector` and `HtmlVerificationProfile` describe reviewed source
+  shapes without embedding a general selector engine or venue scraper;
+- the bounded parser requires venue aliases/display name and event year in one
+  title/heading region, matches exact candidate dates, counts distinct titles
+  and title/author/abstract completeness, and requires actual proceedings
+  index entries rather than future-looking prose; and
+- `verify_html_evidence` accepts only cited P2.2 targets, rejects PDF targets,
+  records conflicts conservatively, and delegates final v2 artifact semantics
+  to the hardened P2.1R result builder.
+
+P2.2 uses only fakes, sanitized fixtures, explicit profiles, and temporary
+snapshot roots. It adds no live transport, default crawl permission, PDF
+inspection, lifecycle-state writer, reducer, action, or deployment path. P2.3
+remains the independent PDF slice, and only P2.5 may connect verified findings
+to state and typed actions.
 
 ## Design principles
 
@@ -167,13 +185,14 @@ Before an action can be queued, deterministic code checks applicable facts:
 Ambiguous or conflicting evidence creates/rechecks a case. It does not trigger
 an execution job.
 
-The initial P2.1 boundary stops before these content checks. P2.2 owns
-redirect, venue/year identity, list-count, metadata, and proceedings-index
-verification, including the known EMNLP future-index and NAACL/ACL identity
-false positives. P2.3 owns PDF permission, URL, status, size, signature, and
-sampling. P2.4 owns persistent SQLite history, migrations, leases, and replay;
-P2.5 alone connects verified findings to transitions, scheduling, and typed
-actions without executing those actions.
+P2.2 implements redirect, venue/year identity, candidate-date, list-count,
+metadata, and proceedings-index verification, including fixture regressions
+for the known EMNLP future-index, NAACL/ACL identity, and IJCAI no-PDF false
+positives. It does not prove that all 15 live venue shapes are configured or
+healthy. P2.3 owns PDF permission, URL, status, size, signature, and sampling.
+P2.4 owns persistent SQLite history, migrations, leases, and replay; P2.5 alone
+connects verified findings to transitions, scheduling, and typed actions
+without executing those actions.
 
 ## Conference-year state
 

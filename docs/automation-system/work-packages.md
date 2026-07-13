@@ -70,10 +70,9 @@ parallel.
 
 ## Current packages
 
-P2.1R has closed the initial verifier-contract review findings. P2.2 and P2.3
-are now independent `Ready` packages over the accepted interface. Select
-exactly one per thread; use separate branches/worktrees if they are developed
-in parallel.
+P2.1R has closed the initial verifier-contract review findings, and P2.2 has
+completed deterministic HTML evidence verification. P2.3 is the only current
+`Ready` package; it must remain an independent PDF-verification thread.
 
 ### P2.1R — harden verifier contract semantics
 
@@ -129,6 +128,28 @@ AGENTS.md and .agent/PLANS.md, keep P2.2/P2.3 out of scope, run all required
 checks, update durable docs, and commit the completed package.
 ```
 
+### P2.2 — deterministic HTML evidence verification
+
+Status: `Complete`
+
+Depends on: P2.1R
+
+Completed boundary: `automation/html_verification.py` composes the accepted
+one-request fetch and snapshot interfaces into a bounded redirect chain whose
+every target is independently classified and policy-gated. A bounded parser
+and explicit source profiles verify title/heading venue-year identity, exact
+candidate dates, plausible distinct paper counts, required metadata, and
+actual current proceedings entries. Strict v2 results remain cited,
+evidence-backed, replayable, and unable to carry an action.
+
+Sanitized fixtures reject the EMNLP 2026 future proceedings promise and the
+ACL 2026 page used as NAACL evidence. The IJCAI fixture verifies a distinct
+accepted list and complete metadata while producing no PDF finding or facet.
+Redirect denials, loops, limits, malformed/non-HTML input, uncited evidence,
+incomplete metadata, and conflicting counts fail closed. The package adds no
+live transport, PDF verification, persistent state, reducer, action, job, or
+deployment behavior.
+
 ## Phase 2 packages — verification and lifecycle state
 
 Phase gate: no verified result may affect state or actions until P2.5. Live
@@ -137,7 +158,7 @@ network observations occur only in P2.S and remain isolated from production.
 | ID | Status | Depends on | Objective and completion boundary |
 |---|---|---|---|
 | P2.1 | Complete | Phase 1 | Verifier contracts, source trust, crawl gate, one-request fetch boundary, immutable local snapshots, and P2.1R semantic hardening. |
-| P2.2 | Ready | P2.1R | Deterministic redirect, venue/year identity, HTML list-count, metadata, and proceedings-index verification. Reproduce EMNLP, NAACL/ACL, and IJCAI false positives with sanitized fixtures. No PDF verification, state write, action, or live run. |
+| P2.2 | Complete | P2.1R | Deterministic redirect, venue/year identity, HTML list-count, metadata, and proceedings-index verification. Sanitized EMNLP, NAACL/ACL, and IJCAI regressions; no PDF verification, state write, action, or live run. |
 | P2.3 | Ready | P2.1R | PDF permission, URL/status, size, `%PDF-` signature, and deterministic sampling. No HTML identity logic, state write, redistribution grant, or live run. |
 | P2.4 | Planned | P2.2, P2.3 | Single-writer SQLite repository, schema/migration, evidence history, lease, idempotent consumption, and replay. Temporary databases in tests; no deployed migration. |
 | P2.5 | Planned | P2.4 | Verified evidence to state reducer, milestone scheduling, and typed action routing. Actions are returned as data and never executed. Replay all catalog venue/lifecycle shapes with fixtures. |

@@ -34,6 +34,7 @@ automation/discovery.py
 automation/providers/gemini.py
 automation/run_discovery.py
 automation/verification.py
+automation/html_verification.py
 automation/config/venue_catalog.v1.json
 automation/config/policies.v1.json
 ```
@@ -194,11 +195,26 @@ version 2 verification contracts; `validate_request_against_discovery` and
 consistent version 1 artifacts. P2.1's `EvidenceFetcher` contract performs one
 request with automatic redirects disabled and retains a sanitized redirect
 edge without requesting its target. A P2.2 adapter must independently classify
-and policy-gate the next URL before another request. Do not add HTML/list/
-metadata/proceedings checks to the foundation module while developing P2.2,
-and keep PDF sampling in the separate P2.3 slice. A live fetch adapter must add
-transport-level DNS/SSRF protections and operational crawl controls before use;
-the existence of the injected interface is not permission to make live calls.
+and policy-gate the next URL before another request; the implemented P2.2
+coordinator does so without changing the P2.1 foundation module.
+
+The P2.2 deterministic HTML checks are:
+
+```bash
+python -m unittest automation.tests.test_html_verification -v
+```
+
+`automation/html_verification.py` keeps HTML/list/metadata/proceedings checks
+outside the foundation module. Tests use only explicit source profiles,
+sanitized fixtures, fake no-redirect responses, and temporary snapshots. Every
+redirect hop is classified and policy-gated; fixture results cover exact
+venue/year and date identity, distinct counts, metadata completeness, current
+proceedings indexes, replay, conflicts, and the P2.2 scope boundary. Keep PDF
+permission, fetching, status, size, signature, and sampling in P2.3.
+
+A live fetch adapter must add transport-level DNS/SSRF protections and
+operational crawl controls before use; the existence of the injected interface
+is not permission to make live calls.
 
 Scheduling tests use an injected timezone-aware clock. Keep venue catalogs free
 of year-specific month/date assumptions; discovery records candidates, a
