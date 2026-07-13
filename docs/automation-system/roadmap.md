@@ -11,7 +11,7 @@ criteria in the same change that completes a phase.
 | Existing baseline | Deterministic monitor, Cloud Run/Prefect/GCS, email | Implemented |
 | 0 | Contracts, policies, ownership, and safety boundaries | Implemented |
 | 1 | LLM search discovery in shadow mode | Shadow (15-venue live review, 2026-07-13) |
-| 2 | Evidence verification and lifecycle state | Planned |
+| 2 | Evidence verification and lifecycle state | In progress (P2.1 foundation, 2026-07-13) |
 | 3 | Cases and fatigue-resistant notifications | Planned |
 | 4 | Mac mini Prefect worker and immutable results | Planned |
 | 5 | Automatic execution of existing scrapers | Planned |
@@ -128,8 +128,8 @@ status downgrades, cross-year annual milestones, continuous-publication
 handling, and deterministic ended-date derivation. The review matrix is in
 `phase1-live-review-2026-07-13.md`. Phase 1 is now `Shadow`, not `Implemented`:
 repeat observations and operational integration remain future work, and Phase
-2 must fetch cited resources and verify list, metadata, PDF, proceedings, and
-venue identity before any state transition.
+2.2/2.3 must fetch cited resources and verify list, metadata, PDF,
+proceedings, and venue identity before any state transition.
 
 ## Phase 2: verification and state transitions
 
@@ -150,6 +150,29 @@ Acceptance:
 - a new domain defaults to review rather than unrestricted crawling;
 - JMLR follows a continuous-publication policy;
 - replaying artifacts produces the same state.
+
+Implemented in P2.1 verifier foundation:
+
+- strict version 1 verification request/result contracts bind selected
+  discovery targets to one discovery/evidence identity and reject unknown or
+  executable fields;
+- catalog source trust is classified independently from crawl permission;
+- the crawl-policy gate returns review/deny/missing-permission decisions before
+  an injected fetch can run, enforces a per-run domain request budget, and
+  carries the approved crawl constraints into a one-request,
+  no-auto-redirect fetch interface;
+- a local `SnapshotStore` implementation retains fake response bytes and
+  allowlisted metadata immutably by content/evidence fingerprint; and
+- fixture tests prove exact/subdomain trust, suffix-confusion rejection,
+  closed policy behavior, fake fetch call ordering, byte bounds, secret-safe
+  snapshots, replay, and cloud ownership of verification results.
+
+P2.1 does not complete any content-readiness acceptance criterion and is not
+deployed. Remaining slices are P2.2 HTML evidence verification (redirect,
+identity, list, metadata, proceedings), P2.3 PDF verification, P2.4 persistent
+SQLite state/history/lease and replay, and P2.5 reducer/scheduling/typed-router
+integration plus 15-venue shadow replay. A separate short thread performs the
+Phase 2 live shadow review and status update after those slices.
 
 ## Phase 3: cases and notifications
 

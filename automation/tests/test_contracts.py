@@ -21,16 +21,22 @@ from automation.contracts import (
 
 
 FIXTURES = Path(__file__).with_name("fixtures") / "phase0"
+PHASE2_FIXTURES = Path(__file__).with_name("fixtures") / "phase2"
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def load_fixture(name: str) -> dict:
-    return json.loads((FIXTURES / name).read_text(encoding="utf-8"))
+    path = FIXTURES / name
+    if not path.exists():
+        path = PHASE2_FIXTURES / name
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 class ContractTests(unittest.TestCase):
     VALID_FIXTURES = {
         ContractName.DISCOVERY_RESULT: "discovery-result.v1.json",
+        ContractName.VERIFICATION_REQUEST: "verification-request.v1.json",
+        ContractName.VERIFICATION_RESULT: "verification-result.v1.json",
         ContractName.CONFERENCE_STATE: "conference-state.v1.json",
         ContractName.CASE_STATE: "case-state.v1.json",
         ContractName.JOB: "scrape-job.v1.json",
@@ -82,6 +88,17 @@ class ContractTests(unittest.TestCase):
         candidate["candidate_milestones"][0]["verified"] = True
         with self.assertRaises(ContractValidationError):
             validate_contract(ContractName.DISCOVERY_RESULT, candidate)
+
+        for contract, fixture_name in (
+            (ContractName.VERIFICATION_REQUEST, "verification-request.v1.json"),
+            (ContractName.VERIFICATION_RESULT, "verification-result.v1.json"),
+        ):
+            for field in ("action", "command", "job", "transition"):
+                candidate = load_fixture(fixture_name)
+                candidate[field] = "queue_existing_scraper"
+                with self.subTest(contract=contract, field=field), \
+                        self.assertRaises(ContractValidationError):
+                    validate_contract(contract, candidate)
 
     def test_invalid_datetime_and_unknown_schema_version_are_rejected(self):
         discovery = load_fixture("discovery-result.v1.json")

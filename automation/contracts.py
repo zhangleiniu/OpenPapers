@@ -21,6 +21,8 @@ class ContractName(str, Enum):
     """Stable names for artifacts crossing automation component boundaries."""
 
     DISCOVERY_RESULT = "discovery_result"
+    VERIFICATION_REQUEST = "verification_request"
+    VERIFICATION_RESULT = "verification_result"
     CONFERENCE_STATE = "conference_state"
     CASE_STATE = "case_state"
     JOB = "job"
@@ -32,6 +34,8 @@ class ContractName(str, Enum):
 
 _SCHEMA_FILES = {
     ContractName.DISCOVERY_RESULT: "discovery-result.json",
+    ContractName.VERIFICATION_REQUEST: "verification-request.json",
+    ContractName.VERIFICATION_RESULT: "verification-result.json",
     ContractName.CONFERENCE_STATE: "conference-state.json",
     ContractName.CASE_STATE: "case-state.json",
     ContractName.JOB: "job.json",

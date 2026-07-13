@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "request_id": "verify-request:11111111111111111111111111111111",
+  "discovery_id": "discovery:icml:2026:001",
+  "discovery_evidence_fingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "venue_id": "icml",
+  "year": 2026,
+  "claim_ids": ["claim:icml:2026:list"],
+  "candidate_milestone_ids": ["milestone:icml:2026:end"],
+  "verification_kinds": ["conference_milestone", "paper_list"],
+  "requested_at": "2026-07-13T17:30:00Z"
+}

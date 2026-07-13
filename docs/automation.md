@@ -10,9 +10,13 @@ exist in the repository, including evidence-driven `next_check_at` scheduling,
 but are not wired into this deployment. A Phase 1 Gemini Search Grounding
 adapter, cache/budget controls, and an explicit shadow-only command also exist
 in the repository. Its 15-venue live review is complete and the phase is in
-shadow status, but it is not deployed or scheduled. Persistent lifecycle/case
-state, reminder delivery, the Mac mini worker, Codex repair execution, and
-MustCite deployment are not implemented.
+shadow status, but it is not deployed or scheduled. Phase 2.1 now supplies
+strict verification request/result contracts, catalog trust and crawl-policy
+gates, and fake-tested fetch/snapshot interfaces; it has no live HTTP adapter
+or HTML/PDF validators and is likewise not deployed.
+Persistent lifecycle/case state, reminder delivery, the Mac mini worker, Codex
+repair execution, and MustCite deployment are not implemented.
+
 Start at the [automation system development guide](./automation-system/README.md) for
 the implemented foundation, target architecture, roadmap, and zero-context
 development workflow.

@@ -88,10 +88,30 @@ Phase 1 is `Shadow`; the review matrix is
 [`phase1-live-review-2026-07-13.md`](./phase1-live-review-2026-07-13.md).
 Deterministic readiness and identity verification remains Phase 2.
 
+Phase 2.1's verifier foundation is implemented locally and is also not wired
+into the deployed monitor flow:
+
+- strict verification request/result contracts keep discovery evidence
+  separate from deterministic findings and reject executable action fields;
+- `automation/verification.py` classifies catalog source trust separately from
+  crawl permission, and its crawl-policy gate defaults unknown domains to
+  review before an injected fetcher can be called;
+- the fetch interface requires one HTTPS request with automatic redirects
+  disabled so Phase 2.2 can policy-check every redirect before following it;
+  and
+- the snapshot interface has a local content-addressed, immutable,
+  secret-safe implementation proven with fake responses and temporary fixture
+  storage.
+
+This foundation does not inspect HTML or PDFs and makes no live request.
+Redirect, venue/year identity, list, metadata, and proceedings verification is
+Phase 2.2; PDF permission, status, size, signature, and sampling is Phase 2.3.
+
 The following does **not** exist yet:
 
 - scheduled or deployed LLM discovery;
-- a persistent evidence verifier/state reducer wired to the runtime;
+- HTML/PDF evidence validators and a persistent state reducer wired to the
+  runtime;
 - unresolved cases and reminder decay;
 - automated routing from discovery to a scrape job;
 - a Mac mini Prefect worker;
@@ -175,9 +195,10 @@ objects.
 The initial Phase 1 review across every registered venue family is complete.
 Repeat observations remain useful for measuring drift and missed sources.
 Do not weaken citation or venue/year validation merely to make a provider
-sample pass. Phase 2, not Phase 1, will deterministically verify supported
-candidate dates and may then promote them into conference state for
-`next_check_at` computation.
+sample pass. Phase 2.2/2.3, not Phase 1 or the P2.1 interface foundation, will
+deterministically verify supported candidate dates and readiness. Phase 2.5
+may then promote verified findings into conference state for `next_check_at`
+computation.
 
 Keep Phase 1 additive. It may report what a verified later phase could do, but
 must not create a job, write lifecycle state, invoke a scraper, or promote data.

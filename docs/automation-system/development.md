@@ -32,6 +32,7 @@ automation/scheduling.py
 automation/discovery.py
 automation/providers/gemini.py
 automation/run_discovery.py
+automation/verification.py
 automation/config/venue_catalog.v1.json
 automation/config/policies.v1.json
 ```
@@ -173,6 +174,21 @@ artifacts outside tracked source, does not read or write the canonical budget
 ledger, and does not update state or call a scraper. This exception applies
 only to the explicit manual development CLI; future scheduled or automatic
 discovery must use the configured budgets and circuit breakers.
+
+The Phase 2.1 verifier-foundation checks are:
+
+```bash
+python -m unittest automation.tests.test_verification -v
+```
+
+They use only fake fetchers and temporary fixture storage. P2.1's
+`EvidenceFetcher` contract performs one request with automatic redirects
+disabled; a future P2.2 adapter must return each redirect response so the next
+URL is independently classified and policy-gated. Do not add HTML/list/
+metadata/proceedings checks to the foundation module while developing P2.2,
+and keep PDF sampling in the separate P2.3 slice. A live fetch adapter must add
+transport-level DNS/SSRF protections and operational crawl controls before use;
+the existence of the injected interface is not permission to make live calls.
 
 Scheduling tests use an injected timezone-aware clock. Keep venue catalogs free
 of year-specific month/date assumptions; discovery records candidates, a

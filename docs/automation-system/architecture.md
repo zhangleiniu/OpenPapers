@@ -4,7 +4,7 @@ This document defines the target boundaries and safety invariants. Most of the
 components described here are planned; consult [roadmap.md](./roadmap.md) and
 the executable code before assuming a component exists.
 
-## Implemented foundation and Phase 1 boundary
+## Implemented foundation and Phase 1/2.1 boundaries
 
 Phase 0 is implemented as a side-effect-free foundation and is not yet wired
 into the deployed monitor:
@@ -38,8 +38,29 @@ Phase 1 now adds an optional, shadow-only discovery path:
 
 This path is not deployed or scheduled. Contract-valid live artifacts and a
 manual review now cover all 15 catalog venues, but they remain unverified
-discovery evidence. No persistent conference/case store, verifier, action
-router, Mac worker, or Codex adapter consumes discovery output.
+discovery evidence. No persistent conference/case store, content verifier,
+action router, Mac worker, or Codex adapter consumes discovery output.
+
+Phase 2.1 adds verifier contracts and effect boundaries without claiming
+content verification:
+
+- `verification-request.json` binds selected claim/milestone IDs to one exact
+  discovery ID and evidence fingerprint;
+- `verification-result.json` can carry typed source observations, findings,
+  verified facets/milestones, and evidence identities, but cannot carry an
+  action, command, job, or transition;
+- `automation/verification.py` classifies official/archival catalog domains
+  without granting fetch permission, and `CrawlPolicyGate` requires a separate
+  approved domain permission before calling an injected fetcher;
+- `EvidenceFetcher` receives one no-auto-redirect request plus the reviewed
+  crawl constraints, leaving each redirect for Phase 2.2 to authorize; and
+- `SnapshotStore` defines immutable evidence retention, with a local
+  content-addressed implementation that stores allowlisted headers and reuses
+  identical fake/fixture observations.
+
+P2.1 contains no live HTTP adapter and does not parse HTML or PDFs, persist
+conference state, apply transitions, compute actions, or change the deployed
+monitor. Those capabilities remain in P2.2 through P2.5.
 
 ## Design principles
 
@@ -133,6 +154,14 @@ Before an action can be queued, deterministic code checks applicable facts:
 Ambiguous or conflicting evidence creates/rechecks a case. It does not trigger
 an execution job.
 
+The implemented P2.1 boundary stops before these content checks. P2.2 owns
+redirect, venue/year identity, list-count, metadata, and proceedings-index
+verification, including the known EMNLP future-index and NAACL/ACL identity
+false positives. P2.3 owns PDF permission, URL, status, size, signature, and
+sampling. P2.4 owns persistent SQLite history, migrations, leases, and replay;
+P2.5 alone connects verified findings to transitions, scheduling, and typed
+actions without executing those actions.
+
 ## Conference-year state
 
 The lifecycle vocabulary is:
@@ -218,12 +247,14 @@ Requirements:
 
 Phase 0 expresses the ownership and write-once rules in
 `automation/domain.py`: the cloud control plane owns mutable control state and
-cloud evidence/discovery objects, while the Mac worker owns immutable job
-results, manifests, and Codex results. `JobResultRegistry` is a pure executable
-model of the protocol: an identical result replay is accepted as already seen,
-while a different result for the same job ID is rejected. GCS generation
-preconditions, leases, durable consumption, and SQLite integration remain
-future implementation work.
+cloud evidence/discovery/verification objects, while the Mac worker owns
+immutable job results, manifests, and Codex results. P2.1's
+`FileSnapshotStore` proves local content-addressed source snapshot replay but
+is not the cloud state store or a GCS adapter. `JobResultRegistry` is a pure
+executable model of the job protocol: an identical result replay is accepted
+as already seen, while a different result for the same job ID is rejected.
+GCS generation preconditions, leases, durable consumption, and SQLite
+integration remain future implementation work.
 
 Evaluate Firestore or PostgreSQL only after a concrete trigger: multiple
 control-plane writers, unavoidable overlapping state updates, a real-time

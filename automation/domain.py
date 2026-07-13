@@ -80,6 +80,7 @@ class ArtifactKind(str, Enum):
     CONTROL_STATE = "control_state"
     SOURCE_SNAPSHOT = "source_snapshot"
     DISCOVERY_RESULT = "discovery_result"
+    VERIFICATION_RESULT = "verification_result"
     JOB_RESULT = "job_result"
     MANIFEST = "manifest"
     CODEX_RESULT = "codex_result"
@@ -154,6 +155,7 @@ _WRITER_OWNERSHIP: dict[ArtifactKind, frozenset[Writer]] = {
     ArtifactKind.CONTROL_STATE: frozenset({Writer.CLOUD_CONTROL_PLANE}),
     ArtifactKind.SOURCE_SNAPSHOT: frozenset({Writer.CLOUD_CONTROL_PLANE}),
     ArtifactKind.DISCOVERY_RESULT: frozenset({Writer.CLOUD_CONTROL_PLANE}),
+    ArtifactKind.VERIFICATION_RESULT: frozenset({Writer.CLOUD_CONTROL_PLANE}),
     ArtifactKind.JOB_RESULT: frozenset({Writer.MAC_WORKER}),
     ArtifactKind.MANIFEST: frozenset({Writer.MAC_WORKER}),
     ArtifactKind.CODEX_RESULT: frozenset({Writer.MAC_WORKER}),

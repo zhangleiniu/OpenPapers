@@ -152,12 +152,17 @@ class ResultAndBoundaryTests(unittest.TestCase):
     def test_storage_ownership_enforces_the_single_writer_boundary(self):
         assert_writer_allowed(
             Writer.CLOUD_CONTROL_PLANE, ArtifactKind.CONTROL_STATE)
+        assert_writer_allowed(
+            Writer.CLOUD_CONTROL_PLANE, ArtifactKind.VERIFICATION_RESULT)
         assert_writer_allowed(Writer.MAC_WORKER, ArtifactKind.JOB_RESULT)
         with self.assertRaisesRegex(OwnershipError, "cannot write"):
             assert_writer_allowed(Writer.MAC_WORKER, ArtifactKind.CONTROL_STATE)
         with self.assertRaisesRegex(OwnershipError, "cannot write"):
             assert_writer_allowed(
                 Writer.CLOUD_CONTROL_PLANE, ArtifactKind.JOB_RESULT)
+        with self.assertRaisesRegex(OwnershipError, "cannot write"):
+            assert_writer_allowed(
+                Writer.MAC_WORKER, ArtifactKind.VERIFICATION_RESULT)
 
     def test_credential_shaped_fields_are_rejected_recursively(self):
         assert_secret_free({
