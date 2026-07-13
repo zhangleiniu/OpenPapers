@@ -15,7 +15,7 @@ phase-level outcomes and status.
 | Existing baseline | Deterministic monitor, Cloud Run/Prefect/GCS, email | Implemented |
 | 0 | Contracts, policies, ownership, and safety boundaries | Implemented |
 | 1 | LLM search discovery in shadow mode | Shadow (15-venue live review, 2026-07-13) |
-| 2 | Evidence verification and lifecycle state | In progress (P2.1/P2.1R/P2.2 accepted, 2026-07-13) |
+| 2 | Evidence verification and lifecycle state | In progress (P2.1/P2.1R/P2.2/P2.3 accepted, 2026-07-13) |
 | 3 | Cases and fatigue-resistant notifications | Planned |
 | 4 | Mac mini Prefect worker and immutable results | Planned |
 | 5 | Automatic execution of existing scrapers | Planned |
@@ -191,8 +191,23 @@ Accepted P2.2 HTML evidence implementation:
   NAACL/ACL identity contamination, and IJCAI list-without-PDF cases without a
   live request.
 
-P2.1/P2.1R/P2.2 are not deployed and cannot write lifecycle state or create an
-action. Remaining slices are P2.3 PDF verification, P2.4 persistent SQLite
+Accepted P2.3 PDF evidence implementation:
+
+- exact PDF claim citations are sampled deterministically and within a hard
+  bound, independent of provider URL ordering;
+- every initial or redirected URL is separately catalog-classified and must
+  have separate `pdf_fetch_for_processing` and `store_internal_copy`
+  permissions before the injected fake fetcher is called and evidence is
+  retained;
+- final responses require HTTP 200, a configurable minimum actual size aligned
+  with canonical validation, consistent Content-Length when present, and a
+  `%PDF-` signature; and
+- strict v2 findings distinguish ready, partial, invalid, incomplete, unsafe,
+  and untrusted samples while retaining replay-stable evidence and never
+  granting redistribution permission.
+
+P2.1/P2.1R/P2.2/P2.3 are not deployed and cannot write lifecycle state or
+create an action. Remaining slices are P2.4 persistent SQLite
 state/history/lease and replay, and P2.5 reducer/scheduling/typed-router
 integration. A separate P2.S thread performs the 15-venue live shadow review
 and phase-status update after those slices.

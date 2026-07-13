@@ -209,8 +209,22 @@ outside the foundation module. Tests use only explicit source profiles,
 sanitized fixtures, fake no-redirect responses, and temporary snapshots. Every
 redirect hop is classified and policy-gated; fixture results cover exact
 venue/year and date identity, distinct counts, metadata completeness, current
-proceedings indexes, replay, conflicts, and the P2.2 scope boundary. Keep PDF
-permission, fetching, status, size, signature, and sampling in P2.3.
+proceedings indexes, replay, conflicts, and the P2.2 scope boundary.
+
+The P2.3 deterministic PDF checks are:
+
+```bash
+python -m unittest automation.tests.test_pdf_verification -v
+```
+
+`automation/pdf_verification.py` remains independent of the HTML module. It
+uses stable bounded sampling, the injected one-request fetcher, explicit
+`pdf_fetch_for_processing` and `store_internal_copy` permissions, sanitized
+fixtures, and temporary snapshot roots. Tests cover per-hop redirects and
+policy closure, exact cited sample selection, final HTTP status, minimum/actual
+size, Content-Length, `%PDF-` signature, replay, forged provenance, and P2.3
+scope boundaries. Keep persistent history, migrations, leases, and replay
+repositories in P2.4.
 
 A live fetch adapter must add transport-level DNS/SSRF protections and
 operational crawl controls before use; the existence of the injected interface

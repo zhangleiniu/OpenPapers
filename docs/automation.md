@@ -15,9 +15,12 @@ versioned verification request/result schemas, cross-artifact semantic
 validation, catalog trust and crawl-policy gates, and fake-tested
 fetch/snapshot interfaces with sanitized redirect retention. P2.2 adds a
 fake/fixture-only redirect coordinator and bounded HTML verifier for exact
-identity, dates, list counts, metadata, and current proceedings indexes. These
-components have no live HTTP adapter or PDF verifier and are not deployed; no
-result is wired to lifecycle state or actions.
+identity, dates, list counts, metadata, and current proceedings indexes. P2.3
+adds fake/fixture-only, permission-gated deterministic PDF sampling with
+status, size, Content-Length, and `%PDF-` checks. These components have no live
+HTTP adapter and are not deployed; no result is wired to lifecycle state or
+actions. PDF processing and internal-copy permissions remain separate, and
+verification grants no redistribution authority.
 Persistent lifecycle/case state, reminder delivery, the Mac mini worker, Codex
 repair execution, and MustCite deployment are not implemented.
 

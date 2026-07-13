@@ -88,9 +88,9 @@ Phase 1 is `Shadow`; the review matrix is
 [`phase1-live-review-2026-07-13.md`](./phase1-live-review-2026-07-13.md).
 Deterministic readiness and identity verification remains Phase 2.
 
-Phase 2.1's verifier foundation, P2.1R contract hardening, and P2.2 HTML
-evidence verifier are implemented locally and are not wired into the deployed
-monitor flow:
+Phase 2.1's verifier foundation, P2.1R contract hardening, P2.2 HTML verifier,
+and P2.3 PDF verifier are implemented locally and are not wired into the
+deployed monitor flow:
 
 - version 2 verification request/result contracts keep discovery evidence
   separate from deterministic findings, bind each target to its derived kind,
@@ -115,13 +115,18 @@ monitor flow:
   verifies venue/year identity, exact candidate dates, plausible distinct list
   counts, required metadata, and current proceedings entries. Sanitized
   fixtures reproduce the EMNLP future-index, NAACL/ACL identity, and IJCAI
-  no-PDF false positives.
+  no-PDF false positives; and
+- `automation/pdf_verification.py` deterministically selects a bounded subset
+  of exact cited PDF URLs, requires separate `pdf_fetch_for_processing` and
+  `store_internal_copy` permissions for every redirect hop, and verifies final
+  HTTP status, actual/minimum size, optional Content-Length consistency, and
+  the `%PDF-` signature.
 
-Neither verifier module contains a live HTTP adapter. P2.2 can produce strict
-fixture-backed v2 HTML findings, but those results are not scheduled, persisted
-as lifecycle state, or authorized to create an action. PDF permission, status,
-size, signature, and sampling remains P2.3. P2.4/P2.5 remain responsible for
-durable history and state/reducer/router integration.
+Neither content-verifier module contains a live HTTP adapter. P2.2 and P2.3 can
+produce strict fixture-backed v2 HTML or PDF findings, but those results are not
+scheduled, persisted as lifecycle state, or authorized to create an action.
+PDF evidence retention grants no redistribution authority. P2.4/P2.5 remain
+responsible for durable history and state/reducer/router integration.
 
 The following does **not** exist yet:
 
@@ -213,9 +218,9 @@ The initial Phase 1 review across every registered venue family is complete.
 Repeat observations remain useful for measuring drift and missed sources.
 Do not weaken citation or venue/year validation merely to make a provider
 sample pass. P2.2 now provides fixture-backed deterministic candidate-date and
-HTML-readiness verification; P2.3 remains responsible for PDF readiness.
-Phase 2.5 may later promote verified findings into conference state for
-`next_check_at` computation.
+HTML-readiness verification, while P2.3 provides fixture-backed PDF permission,
+status, size, signature, and sampling verification. Phase 2.5 may later promote
+verified findings into conference state for `next_check_at` computation.
 
 Keep Phase 1 additive. It may report what a verified later phase could do, but
 must not create a job, write lifecycle state, invoke a scraper, or promote data.

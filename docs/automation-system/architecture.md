@@ -4,7 +4,7 @@ This document defines the target boundaries and safety invariants. Most of the
 components described here are planned; consult [roadmap.md](./roadmap.md) and
 the executable code before assuming a component exists.
 
-## Implemented foundation and Phase 1/2.2 boundaries
+## Implemented foundation and Phase 1/2.3 boundaries
 
 Phase 0 is implemented as a side-effect-free foundation and is not yet wired
 into the deployed monitor:
@@ -89,9 +89,33 @@ P2.2 consumes that interface in `automation/html_verification.py`:
 
 P2.2 uses only fakes, sanitized fixtures, explicit profiles, and temporary
 snapshot roots. It adds no live transport, default crawl permission, PDF
-inspection, lifecycle-state writer, reducer, action, or deployment path. P2.3
-remains the independent PDF slice, and only P2.5 may connect verified findings
-to state and typed actions.
+inspection, lifecycle-state writer, reducer, action, or deployment path.
+
+P2.3 consumes the same accepted foundation independently in
+`automation/pdf_verification.py`:
+
+- `build_pdf_sample_plan` ranks each PDF claim's exact cited URLs by an
+  immutable request/target/URL hash and selects at most three by default, with
+  a hard bound of ten, so input ordering and ambient randomness cannot alter a
+  replay;
+- `fetch_pdf_evidence` independently classifies and policy-gates every exact
+  redirect hop for `pdf_fetch_for_processing` and separately requires
+  `store_internal_copy` before retaining sanitized observations and immutable
+  fixture/fake snapshots. It stops before a denied target, loop, or redirect
+  limit;
+- final responses must have HTTP 200, at least 1024 actual bytes by default,
+  a matching numeric Content-Length when present, and `%PDF-` at byte zero;
+  file extensions and Content-Type labels are not treated as proof; and
+- `verify_pdf_evidence` accepts only selected URLs from requested PDF claims,
+  recomputes catalog classification, records sampled/valid counts, and emits
+  `pdf_status=ready` only when every selected sample passes. A supported subset
+  may be `partial`, but missing, unsafe, untrusted, or invalid evidence cannot
+  produce readiness.
+
+P2.3 uses no live transport or HTML identity inference and grants no
+`redistribute_pdf` permission. P2.2/P2.3 findings remain data only; P2.4 owns
+durable history, and only P2.5 may connect verified findings to state and typed
+actions.
 
 ## Design principles
 
@@ -189,10 +213,11 @@ P2.2 implements redirect, venue/year identity, candidate-date, list-count,
 metadata, and proceedings-index verification, including fixture regressions
 for the known EMNLP future-index, NAACL/ACL identity, and IJCAI no-PDF false
 positives. It does not prove that all 15 live venue shapes are configured or
-healthy. P2.3 owns PDF permission, URL, status, size, signature, and sampling.
-P2.4 owns persistent SQLite history, migrations, leases, and replay; P2.5 alone
-connects verified findings to transitions, scheduling, and typed actions
-without executing those actions.
+healthy. P2.3 now implements deterministic PDF permission, exact cited-URL,
+status, size, signature, and bounded-sampling verification with fake responses
+and sanitized fixtures. P2.4 owns persistent SQLite history, migrations,
+leases, and replay; P2.5 alone connects verified findings to transitions,
+scheduling, and typed actions without executing those actions.
 
 ## Conference-year state
 
