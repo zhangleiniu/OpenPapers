@@ -70,12 +70,11 @@ parallel.
 
 ## Current packages
 
-P2.1R has closed the initial verifier-contract review findings, P2.2 and P2.3
-have completed deterministic HTML and PDF verification, P2.4 has completed the
-independent persistent-state slice, and P2.5 has completed local lifecycle
-reduction, scheduling, and inert typed routing. P2.S is the only current
-`Ready` package. It requires separate live authorization and must use isolated
-state/artifact roots without any production action.
+P2.1R through P2.5 have completed the local verification, persistence,
+lifecycle, scheduling, and inert-routing slices. P2.S has completed the
+explicitly authorized 15-venue live shadow review using isolated roots and no
+production action. Phase 2 is now `Shadow`; P3.1 is the only current `Ready`
+package.
 
 ### P2.1R — harden verifier contract semantics
 
@@ -239,17 +238,18 @@ occur only in P2.S and remain isolated from production.
 | P2.3 | Complete | P2.1R | PDF permission, URL/status, size, `%PDF-` signature, and deterministic sampling. No HTML identity logic, state write, redistribution grant, or live run. |
 | P2.4 | Complete | P2.2, P2.3 | Single-writer SQLite repository, schema/migration, evidence history, lease, idempotent consumption, and replay. Temporary databases in tests; no deployed migration. |
 | P2.5 | Complete | P2.4 | Verified evidence to state reducer, milestone scheduling, and typed action routing. Actions are returned as data and never executed. Replay all catalog venue/lifecycle shapes with fixtures. |
-| P2.S | Ready | P2.5 | Explicitly authorized 15-venue shadow review using approved crawl policy and isolated state/artifact roots. Record agreement and false positives; perform no job, scraper, notification, or production-state write. |
+| P2.S | Complete | P2.5 | Opt-in DNS/SSRF-safe live adapter and explicitly authorized 15-venue shadow review using reviewed crawl policy and isolated state/artifact roots. The record contains 28 targets, rejects the known readiness false positives, returns no queue intent, and performs no job, scraper, notification, or production-state write. |
 
-Phase 2 closes only when the roadmap acceptance criteria pass and P2.S has a
-reviewed record. Change the phase to `Shadow` before `Implemented` when live
-observation exists but production action remains disabled.
+Phase 2 has passed its shadow gate with the reviewed record in
+`phase2-live-review-2026-07-13.md`. It remains `Shadow`, not `Implemented`,
+because live observation has no production action authority and source-shape
+coverage remains conservative.
 
 ## Phase 3 packages — cases and notifications
 
 | ID | Status | Depends on | Objective and completion boundary |
 |---|---|---|---|
-| P3.1 | Planned | Phase 2 gate | Persistent unresolved-case domain and repository with deduplication plus resolve, snooze, ignore, and reactivate controls. No email delivery. |
+| P3.1 | Ready | Phase 2 gate | Persistent unresolved-case domain and repository with deduplication plus resolve, snooze, ignore, and reactivate controls. No email delivery. |
 | P3.2 | Planned | P3.1 | Clock-controlled weekly, monthly, and dormant reminder policy plus grouped digest generation. No transport adapter. |
 | P3.3 | Planned | P3.2 | Immediate/digest delivery boundary with idempotency, retry classification, redaction, and fake transport tests. No real email without explicit authorization. |
 | P3.4 | Planned | P3.3 | Integrate transitions, cases, reminders, and notification intents; prove one event creates at most one notification. Shadow output before any live delivery. |

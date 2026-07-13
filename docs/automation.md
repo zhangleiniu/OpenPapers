@@ -17,18 +17,21 @@ fetch/snapshot interfaces with sanitized redirect retention. P2.2 adds a
 fake/fixture-only redirect coordinator and bounded HTML verifier for exact
 identity, dates, list counts, metadata, and current proceedings indexes. P2.3
 adds fake/fixture-only, permission-gated deterministic PDF sampling with
-status, size, Content-Length, and `%PDF-` checks. These components have no live
-HTTP adapter and are not deployed. P2.4 adds a separate local, versioned
-single-writer SQLite repository with an expiring lease, atomic replayable
+status, size, Content-Length, and `%PDF-` checks. P2.4 adds a separate local,
+versioned single-writer SQLite repository with an expiring lease, atomic replayable
 verification history, and optimistic conference-state revisions. It is not
 wired into this deployment. P2.5 adds a local pure lifecycle reducer,
 evidence-time scheduling, inert typed action intents, and a thin P2.4
 composition boundary; fixture replay covers all catalog venues, but none of
 this code is scheduled or deployed and no intent is persisted, submitted, or
-executed. PDF processing and internal-copy permissions remain separate, and
-verification grants no redistribution authority. A live integrated verifier,
-persistent case state, reminder delivery, the Mac mini worker, Codex repair
-execution, and MustCite deployment are not implemented.
+executed. P2.S adds an explicit `--live` manual shadow command with
+public-address-only DNS checks, pinned hostname-verified HTTPS, a separately
+reviewed crawl policy, immutable snapshots, and isolated state. Its 15-venue
+review is complete, but it is not scheduled or deployed and cannot dispatch
+an intent. PDF processing and internal-copy permissions remain separate, and
+verification grants no redistribution authority. A production-integrated
+verifier, persistent case state, reminder delivery, the Mac mini worker, Codex
+repair execution, and MustCite deployment are not implemented.
 
 Start at the [automation system development guide](./automation-system/README.md) for
 the implemented foundation, target architecture, roadmap, and zero-context

@@ -259,11 +259,44 @@ composition layer over P2.4. Tests replay compatible v1 artifacts and every
 catalog venue/lifecycle shape through temporary repositories. They also prove
 that untrusted, conflicting, continuous-conference, stale-readiness, and lost
 lease paths cannot return or persist an executable effect. P2.S live review is
-not part of these tests and requires separate authorization.
+not part of the P2.5 tests; its separate authorization and reviewed result are
+recorded in `phase2-live-review-2026-07-13.md`.
 
 A live fetch adapter must add transport-level DNS/SSRF protections and
 operational crawl controls before use; the existence of the injected interface
 is not permission to make live calls.
+
+P2.S implements that adapter and its isolated manual composition. Focused
+checks and the mandatory non-live refusal are:
+
+```bash
+python -m unittest automation.tests.test_live_fetch -v
+python -m unittest automation.tests.test_verification_shadow -v
+python -m unittest automation.tests.test_run_verification_shadow -v
+python -m automation.run_verification_shadow \
+  --discovery-root /nonexistent --output-root /tmp/openpapers-p2s-shadow-refusal
+```
+
+The last command must fail before constructing a transport because `--live`
+is absent. An authorized manual review requires the retained discovery root
+and a fresh or previously marked shadow root to be explicit:
+
+```bash
+python -m automation.run_verification_shadow --live \
+  --discovery-root "$SCRAPER_DATA_ROOT/automation/discovery" \
+  --output-root "$SCRAPER_DATA_ROOT/automation/verification-shadow/<review-id>" \
+  --year 2026
+```
+
+The command uses `automation/config/p2s_shadow_policy.v1.json`, never the
+default empty crawl policy as an implicit grant. It rejects IP-literal,
+private, reserved, or mixed DNS targets; pins HTTPS to a reviewed public
+address while retaining original-hostname TLS verification; follows redirects
+only through the existing per-hop gate; and writes only snapshots, strict
+artifacts, an isolated SQLite database, and inert summaries. A completed root
+replays its first summary without a new network call. It is not a scheduler,
+production state writer, dispatcher, or deployment surface. The first
+15-venue record is `phase2-live-review-2026-07-13.md`.
 
 Scheduling tests use an injected timezone-aware clock. Keep venue catalogs free
 of year-specific month/date assumptions; discovery records candidates, a
@@ -271,8 +304,9 @@ deterministic verifier promotes supported dates into conference-year
 milestones, and only then may `automation/scheduling.py` compute
 `next_check_at`.
 
-Live tests must be opt-in and must respect the same crawl policy as production.
-They cannot be the only proof of correctness.
+Live tests must be opt-in and must respect a reviewed crawl policy. Shadow-only
+policy does not grant a future production caller permission. Live observation
+cannot be the only proof of correctness.
 
 ## Documentation updates
 

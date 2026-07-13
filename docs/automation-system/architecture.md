@@ -4,7 +4,7 @@ This document defines the target boundaries and safety invariants. Most of the
 components described here are planned; consult [roadmap.md](./roadmap.md) and
 the executable code before assuming a component exists.
 
-## Implemented foundation and Phase 1/2.5 boundaries
+## Implemented foundation and Phase 1/2.S boundaries
 
 Phase 0 is implemented as a side-effect-free foundation and is not yet wired
 into the deployed monitor:
@@ -167,6 +167,36 @@ submission, scraper invocation, GCS adapter, Prefect wiring, or deployed
 migration. Returning a queue intent does not claim `ingestion_queued` and does
 not perform an effect.
 
+P2.S adds the live transport only at a separate manual shadow boundary:
+
+- `automation/live_fetch.py` rejects IP-literal targets and DNS answers that
+  are empty, malformed, non-global, or mixed public/private; connects directly
+  to one reviewed public IP; and verifies TLS with the original hostname;
+- the adapter performs one bounded GET, retains only allowlisted response
+  headers, follows no redirect automatically, serializes this manual sample,
+  and honors policy delay, 403/429, Retry-After, and CAPTCHA stop semantics;
+- `automation/config/p2s_shadow_policy.v1.json` is separately reviewed and
+  shadow-only. It grants metadata fetch and bounded PDF processing/internal
+  retention, but no redistribution permission, and leaves `ecva.net` in
+  review;
+- `automation/verification_shadow.py` selects catalog-bounded citations from
+  retained grounding metadata, then independently reclassifies and gates every
+  actual redirect hop. It writes only content-addressed snapshots, strict
+  verification bundles, isolated SQLite state, and inert action previews below
+  an explicit shadow root; and
+- `automation/run_verification_shadow.py` refuses remote access without
+  `--live`, requires explicit non-overlapping roots, and is not imported by the
+  monitor or any scheduled/deployed path.
+
+The reviewed 2026 sample covered all 15 catalog venues and 28 targets. Two
+exact future milestones verified, seven discovery `partial`/`ready` PDF
+signals failed exact-URL signature checks, the EMNLP proceedings false positive
+did not promote, JMLR stayed on its continuous policy, and no queue intent was
+returned. The live review also found conservative source-shape gaps; Phase 2
+is therefore `Shadow`, not `Implemented`. There remains no scheduled/deployed
+verifier, action store/dispatcher, case/notification service, job submission,
+scraper execution, GCS integration, or production-state migration.
+
 ## Design principles
 
 1. **Discovery is not proof.** An LLM can find candidate facts and URLs, but a
@@ -268,7 +298,9 @@ status, size, signature, and bounded-sampling verification with fake responses
 and sanitized fixtures. P2.4 persistently retains already validated bundles
 and state revisions behind a lease. P2.5 connects authoritative retained
 findings to transitions, scheduling, and typed action data without executing
-those actions. P2.S remains responsible for live shape review.
+those actions. P2.S supplies the bounded live shadow observation recorded in
+`phase2-live-review-2026-07-13.md`; its source-profile gaps remain inputs to
+the later venue-family rollout, not permission to weaken the verifier.
 
 ## Conference-year state
 

@@ -15,7 +15,7 @@ phase-level outcomes and status.
 | Existing baseline | Deterministic monitor, Cloud Run/Prefect/GCS, email | Implemented |
 | 0 | Contracts, policies, ownership, and safety boundaries | Implemented |
 | 1 | LLM search discovery in shadow mode | Shadow (15-venue live review, 2026-07-13) |
-| 2 | Evidence verification and lifecycle state | In progress (P2.1-P2.5 accepted; P2.S pending, 2026-07-13) |
+| 2 | Evidence verification and lifecycle state | Shadow (P2.S 15-venue live review, 2026-07-13) |
 | 3 | Cases and fatigue-resistant notifications | Planned |
 | 4 | Mac mini Prefect worker and immutable results | Planned |
 | 5 | Automatic execution of existing scrapers | Planned |
@@ -235,9 +235,25 @@ Accepted P2.5 lifecycle reduction and typed-routing implementation:
   fixture repositories prove deterministic replay for all 15 catalog venues,
   annual/continuous shapes, and compatible v1 artifacts.
 
-P2.1 through P2.5 are not deployed. There is no live verifier runtime or
-action dispatcher. The remaining Phase 2 slice is the separately authorized
-P2.S 15-venue live shadow review using isolated roots and no production action.
+P2.S is accepted at the shadow boundary:
+
+- a standard-library live adapter rejects non-global/mixed DNS answers, pins
+  the connection to the reviewed public IP while verifying the original TLS
+  hostname, performs one bounded no-auto-redirect GET, and applies conservative
+  delay/status/CAPTCHA stops;
+- a separate reviewed shadow crawl policy grants no redistribution permission,
+  and the opt-in command requires `--live` plus explicit isolated roots;
+- the 15-venue sample retained 28 strict targets and isolated local state. It
+  verified two exact future milestones, rejected 22 targets, left four for
+  review, rejected eight exact PDF citations for invalid signatures, returned
+  no queue intent, and performed no job, scraper, notification, or production
+  state write; and
+- the replayable review is recorded in
+  `phase2-live-review-2026-07-13.md`. Conservative live source-shape gaps remain
+  for later venue-family rollout.
+
+Phase 2 is `Shadow`, not `Implemented`. P2.1 through P2.5 and the P2.S manual
+runtime are not deployed or scheduled, and there is no action dispatcher.
 
 ## Phase 3: cases and notifications
 

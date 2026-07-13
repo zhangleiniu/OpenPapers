@@ -89,9 +89,9 @@ Phase 1 is `Shadow`; the review matrix is
 Deterministic readiness and identity verification remains Phase 2.
 
 Phase 2.1's verifier foundation, P2.1R contract hardening, P2.2 HTML verifier,
-P2.3 PDF verifier, P2.4 control-state repository, and P2.5 lifecycle reducer
-and typed router are implemented locally and are not wired into the deployed
-monitor flow:
+P2.3 PDF verifier, P2.4 control-state repository, P2.5 lifecycle reducer, and
+the P2.S opt-in live shadow boundary are implemented locally and are not wired
+into the deployed monitor flow:
 
 - version 2 verification request/result contracts keep discovery evidence
   separate from deterministic findings, bind each target to its derived kind,
@@ -132,21 +132,30 @@ monitor flow:
   evidence-backed transition reducer, computes `next_check_at` from the
   retained verification time, and returns stable typed action intents as data.
   `automation/control_plane.py` is the thin lease/revision-aware composition
-  boundary that persists that pure result.
+  boundary that persists that pure result; and
+- `automation/live_fetch.py` adds public-address-only DNS validation, pinned
+  HTTPS with original-hostname TLS verification, bounded reads, no automatic
+  redirects, safe headers, and conservative crawl delays/stops.
+  `automation/run_verification_shadow.py` requires `--live` plus explicit,
+  non-overlapping discovery/output roots and uses a separate reviewed
+  shadow-only crawl policy.
 
-Neither content-verifier module contains a live HTTP adapter. P2.2 and P2.3 can
-produce strict fixture-backed v2 HTML or PDF findings, P2.4 can persist and
-replay those validated artifacts, and P2.5 can reduce explicitly supplied
-retained records into local state revisions. Actions are returned only as
-inert data: no intent is persisted, submitted, notified, or executed. PDF evidence
-retention grants no redistribution authority. Fixture replay covers all 15
-catalog venues and both annual and continuous lifecycle shapes; live shape
-review remains P2.S.
+The deterministic content-verifier modules still contain no transport. P2.S
+injects the opt-in adapter, retains results in an isolated local root, and can
+exercise P2.4/P2.5 without production authority. Its reviewed 15-venue 2026
+sample produced 28 strict targets: 2 verified milestones, 22 rejections, 4
+review-required results, 8 invalid PDF signatures, and no scraper-queue
+intent. The record is
+[`phase2-live-review-2026-07-13.md`](./phase2-live-review-2026-07-13.md).
+Actions remain inert data: no intent is persisted or dispatched, no
+notification is delivered, and no scraper runs. PDF evidence retention grants
+no redistribution authority. Phase 2 is `Shadow`, not deployed or
+implemented; live source-profile coverage remains conservative.
 
 The following does **not** exist yet:
 
 - scheduled or deployed LLM discovery;
-- a live HTML/PDF verification runtime or deployed persistent reducer/router;
+- a scheduled or deployed HTML/PDF verifier and persistent reducer/router;
 - unresolved cases and reminder decay;
 - automated routing from discovery to a scrape job;
 - a Mac mini Prefect worker;
@@ -209,7 +218,7 @@ Read in this order for a new automation task:
 For a venue-specific scrape, also read `docs/<venue>.md`, `docs/pipeline.md`,
 and `docs/validation.md`.
 
-## Current Phase 1 operation and next slice
+## Current manual shadow operations and next slice
 
 Install the optional automation dependencies separately. The first command
 below proves the remote-call gate; the second permits an unmetered manual
@@ -236,9 +245,11 @@ sample pass. P2.2 now provides fixture-backed deterministic candidate-date and
 HTML-readiness verification, while P2.3 provides fixture-backed PDF permission,
 status, size, signature, and sampling verification. P2.4 can retain those
 artifacts locally for replay, and P2.5 can promote authoritative findings into
-local conference state and inert action intents. P2.S is the next isolated
-package and requires separate authorization for its 15-venue live shadow
-review; it still cannot execute an action or write production state.
+local conference state and inert action intents. The explicitly authorized
+P2.S review is complete; it observed all 15 venues through isolated roots and
+confirmed that the known readiness false positives do not create queue
+intents. P3.1 persistent case state is the next isolated package. No Phase 2
+command can execute an action or write production state.
 
 Keep Phase 1 additive. It may report what a verified later phase could do, but
 must not create a job, write lifecycle state, invoke a scraper, or promote data.
