@@ -152,9 +152,9 @@ Prefect, container, and cloud deployment support is an optional component kept
 under [`automation/deployment`](./automation/deployment/README.md). The core
 scrapers do not require those dependencies.
 
-Development of the next automation control plane—including LLM-assisted source
-discovery, evidence-gated actions, Mac mini execution, and bounded Codex repair
-workflows—is specified separately in the
+Development of the next local-first automation control plane—including
+LLM-assisted source discovery, evidence-gated actions, Mac mini execution, and
+bounded Codex repair workflows—is specified separately in the
 [automation system development guide](./docs/automation-system/README.md).
 
 

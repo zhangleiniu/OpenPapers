@@ -86,9 +86,11 @@ supervision, duplicate suppression, and offline policy over injected fakes.
 P4.4 has completed strict immutable manifests/results, create-only
 GCS-compatible publication, exact-generation reads, and lease-protected
 exactly-once logical cloud consumption using injected fakes and temporary
-state. Phase 4 remains `Planned`; P4.O is the next ready package, and no worker
-installation, command execution, external resource change, or live result
-publication is authorized by P4.4.
+state. P4.O is `Paused`: its live feasibility gate failed before resource
+creation because the acceptable Prefect Cloud plan cannot create the required
+hybrid process pool. The accepted local-first redesign preserves reusable P4
+contracts and makes P4.L1 the only next `Ready` package. Phase 4 remains
+`Planned`, and the existing Cloud Run monitor remains the production baseline.
 
 ### P2.1R — harden verifier contract semantics
 
@@ -552,13 +554,100 @@ result into conference state, change the deployed monitor, or perform P4.O
 drills. P4.3's fake completion remains separate and no live result has been
 published or consumed.
 
+### P4.O — headless installation and operational drills
+
+Status: `Paused` (Prefect Cloud plan constraint and unjustified recurring cost,
+2026-07-14)
+
+Depends on: P4.4
+
+Outcome: read-only inspection found the planned pool, queues, and deployments
+absent. The first apply was rejected before create by the service plan's hybrid
+work-pool restriction. No Prefect Phase 4 resource, GCS result resource, IAM
+binding, OpenPapers daemon, fixture run, reboot, or result object was created.
+The uncommitted P4.O provisioning/canary code was withdrawn. Host-specific
+evidence remains only in the ignored local operations record.
+
+Do not resume P4.O unless a future decision explicitly accepts either the
+recurring service cost or the operational burden of self-hosting. The adopted
+replacement is documented in
+[`local-first-decision.md`](./local-first-decision.md).
+
+### P4.L1 — local ownership and due-work scheduler foundation
+
+Status: `Ready`
+
+Depends on: P4.4 and the accepted local-first decision
+
+Objective: establish the deterministic, credential-free scheduling core that
+can eventually replace the Prefect transport without changing production.
+
+Included:
+
+- define the target local mutable-state ownership contract and reject an
+  active or ambiguous second writer;
+- represent one bounded scheduler wakeup and derive due conference-year work
+  from persisted `next_check_at` values using an injected timezone-aware clock;
+- acquire one local singleton lease before selecting or recording work;
+- make exact wakeup replay and duplicate due selection idempotent;
+- record bounded local run outcomes needed for restart/recovery reasoning; and
+- use plain Python, temporary SQLite databases, fixtures, and fake effects in
+  tests.
+
+Excluded:
+
+- live websites, Vertex AI, Resend, Prefect, GCS, or any other network call;
+- opening or migrating the deployed monitor's state;
+- installing/loading a plist, calling `launchctl`, rebooting, or changing the
+  dedicated runtime account;
+- running a scraper, validator, Codex, notification transport, promotion, or
+  MustCite operation;
+- mounting or writing the external data volume; and
+- disabling Cloud Scheduler or changing Cloud Run, Prefect, GCP, or production
+  credentials.
+
+Acceptance:
+
+- fake-clock tests prove not-due, due, missed-wakeup, exact-replay,
+  duplicate-wakeup, lease-contention, restart, and stale/ambiguous ownership
+  behavior;
+- the local runner has no import-time orchestration dependency and accepts no
+  arbitrary command or environment expansion;
+- all state is temporary/test-local and the current deployment remains
+  unchanged; and
+- durable docs distinguish this foundation from installation, shadow use, and
+  cutover.
+
+### Later local-first packages
+
+- **P4.L2 — local control composition (`Planned`, depends P4.L1):** compose
+  accepted discovery, verification, lifecycle, case, reminder, and inert action
+  boundaries under the local lease. Fixture/fake only; no delivery or execution.
+- **P4.L3 — headless service package (`Planned`, depends P4.L2):** add a
+  credential-free system LaunchDaemon renderer, bounded logs/health, internal
+  state paths, missing-volume fail-closed behavior, and scoped rollback. Tests
+  do not install it.
+- **P4.LS — isolated host shadow and drills (`Planned`, depends P4.L3):** under
+  separate authorization, install the OpenPapers daemon against isolated state
+  and exercise duplicate wakeup, SSH disconnect, reboot, missing volume,
+  ambiguous claim, recovery, and co-resident-service health gates. The cloud
+  baseline remains authoritative.
+- **P4.LC — single-writer cutover (`Planned`, depends P4.LS):** under separate
+  authorization, back up state, disable the cloud schedule, activate local
+  ownership, verify health, and prove timed rollback. Never run both writers.
+
 | ID | Status | Depends on | Objective and completion boundary |
 |---|---|---|---|
 | P4.1 | Complete | Phase 3 gate | Immutable v2 job identity, fixed Prefect process-pool/typed-queue protocol, and injected fake-tested cloud submission boundary. No external resource or Mac change. |
 | P4.2 | Complete | P4.1 | Fake-only Mac receiving flow, bounded local health checks, isolated dependency, and credential-free `launchd` runbook/template. Nothing installed or executed. |
 | P4.3 | Complete | P4.2 | Mac-local venue/year locks, disk gates, injected-handle timeout/cancellation, completed-delivery suppression, ambiguous-claim recovery closure, and fixed Prefect pull/offline semantics. No command or result path. |
 | P4.4 | Complete | P4.3 | Strict immutable manifest/result contracts, create-only GCS-compatible publishing, exact-generation reads, and lease-protected exactly-once logical consumption. Fake/local only; no external resource or execution. |
-| P4.O | Ready | P4.4 | Explicit Mac/Prefect/GCS installation and reboot, SSH-disconnect, offline-worker, and recovery drills. External resources are changed only in this operator-authorized package. |
+| P4.O | Paused | P4.4 | Prefect feasibility gate failed before resource creation; the required paid/self-hosted transport is not justified. |
+| P4.L1 | Ready | P4.4 + local-first decision | Plain-Python local ownership and clock-injected due-work scheduler foundation using only fixtures and temporary SQLite. No external or production effect. |
+| P4.L2 | Planned | P4.L1 | Compose accepted control-plane domains under local ownership with fake effects only. |
+| P4.L3 | Planned | P4.L2 | Credential-free headless LaunchDaemon package and host-safe health/rollback behavior; no installation. |
+| P4.LS | Planned | P4.L3 | Authorized isolated Mac installation, coexistence health gates, and operational shadow drills. No production authority. |
+| P4.LC | Planned | P4.LS | Authorized backup and no-overlap production writer cutover with timed rollback. |
 
 Code implementation, Mac installation, cloud configuration, and operational
 drills are distinct tasks even when performed by the same maintainer.

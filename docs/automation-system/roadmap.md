@@ -17,7 +17,7 @@ phase-level outcomes and status.
 | 1 | LLM search discovery in shadow mode | Shadow (15-venue live review, 2026-07-13) |
 | 2 | Evidence verification and lifecycle state | Shadow (P2.S 15-venue live review, 2026-07-13) |
 | 3 | Cases and fatigue-resistant notifications | Shadow (P3.S one-delivery canary, 2026-07-13) |
-| 4 | Mac mini Prefect worker and immutable results | Planned |
+| 4 | Local Mac scheduler, execution safety, and immutable results | Planned (local-first redesign, 2026-07-14) |
 | 5 | Automatic execution of existing scrapers | Planned |
 | 6 | Budgeted Codex diagnosis and repair proposals | Planned |
 | 7 | Dataset promotion and MustCite deployment | Planned |
@@ -382,21 +382,24 @@ recipient is connected.
 
 Deliverables:
 
-- dedicated Prefect work pool and typed queues;
-- macOS installation and `launchd` runbook;
+- local single-writer due-work scheduler over durable SQLite state;
+- headless system LaunchDaemon installation and rollback runbook;
 - worker health check and Codex login check;
 - venue/year locks, disk checks, timeouts, cancellation, and idempotent job IDs;
-- immutable GCS job-result/manifest publishing;
-- cloud result-consumer flow.
+- immutable local job-result/manifest publishing; and
+- optional create-only GCS backup/export that is not required for scheduling.
 
 Acceptance:
 
 - worker resumes after Mac reboot and SSH disconnect;
 - the Mac requires no public inbound command endpoint;
 - duplicate delivery does not repeat a completed scrape;
-- the Mac cannot update cloud-owned SQLite state;
-- logs appear in Prefect and artifacts contain a stable result manifest;
-- offline workers leave work queued and visible.
+- a shadow Mac cannot update cloud-owned state, and after cutover only the Mac
+  can update local control state;
+- local logs and health output are bounded and artifacts contain a stable
+  result manifest;
+- missed wakeups resume from durable `next_check_at` state; and
+- cloud and local control writers are never active against the same state.
 
 Accepted P4.1 queue/submission foundation:
 
@@ -425,8 +428,9 @@ Accepted P4.2 Mac worker foundation:
   metadata only. Reports retain no path, setting, credential, or exception
   text;
 - an isolated Prefect dependency set and parseable credential-free `launchd`
-  template/runbook define future user-agent installation, inspection,
-  rollback, and recovery without a public inbound endpoint; and
+  template/runbook documented the original user-agent installation,
+  inspection, rollback, and recovery design without a public inbound endpoint;
+  and
 - fake typed jobs, temporary local fixtures, and static scope tests prove that
   no scraper, validator, Codex, arbitrary command, cloud state, GCS result, or
   external resource is used.
@@ -467,11 +471,18 @@ Accepted P4.4 immutable result protocol:
   loss, migration, generation conflict, and corruption without live GCS.
 
 Phase 4 remains `Planned`: P4.1-P4.4 are unconnected local interfaces. No Mac
-worker was installed, logged in, loaded, started, or operationally checked, and
-P4.3 selects or runs no command. Reboot/SSH/offline behavior in a real Prefect
-run, Prefect log visibility, and stable live result artifacts remain unmet
-acceptance criteria. P4.4 constructed no GCS client or resource and published
-or consumed no live result; those installation and drill steps belong to P4.O.
+execution service has been installed, loaded, started, or operationally
+checked, and P4.3 selects or runs no command. P4.O's Prefect feasibility gate
+failed before resource creation because the acceptable cloud plan does not
+support the required hybrid process pool. P4.O is therefore `Paused`; paying
+for or self-hosting orchestration is not justified for this workload.
+
+The accepted [local-first decision](./local-first-decision.md) preserves the
+typed identity, safety, and immutable-result semantics while replacing the
+Prefect pull transport with a bounded local scheduler. P4.L1 is the next ready
+package. Reboot/SSH/missing-volume behavior, local log visibility, stable live
+results, shadow comparison, and a no-overlap production writer cutover remain
+later acceptance criteria.
 
 ## Phase 5: execute existing scrapers
 

@@ -234,12 +234,18 @@ locally and are not wired into the deployed monitor:
   4 records one lease-protected logical consumption, and
   `automation/job_result_consumer.py` is the thin composition boundary. Tests
   use a fake bucket and temporary database only.
-
 Phase 4 remains `Planned`. P4.1-P4.4 establish contracts and fake-tested local
 safety/result behavior, not an operational execution plane. No command is
 selected or run, no live immutable result is published or consumed, and no GCS
-client/resource, worker, or Prefect resource is installed or connected. P4.O
-is the next ready package and requires explicit operator authorization.
+client/resource, worker, or Prefect resource is installed or connected.
+
+P4.O is `Paused`. Its operator feasibility gate found that the acceptable
+Prefect Cloud plan cannot create the required hybrid process pool; the failed
+apply created none of the planned pool, queues, or deployments. The accepted
+[local-first decision](./local-first-decision.md) replaces that transport with
+a bounded local scheduler and system LaunchDaemon. P4.L1 is the next ready
+package. The existing Cloud Run monitor remains the sole production scheduler
+and writer until a separately authorized, no-overlap cutover.
 
 The following does **not** exist yet:
 
@@ -248,8 +254,8 @@ The following does **not** exist yet:
 - scheduled or deployed case/action/reminder integration or notification
   delivery;
 - automated routing from discovery to a scrape job;
-- provisioned P4 work pools, queues, deployments, or submission wiring;
-- an installed or connected Mac mini Prefect worker;
+- a local due-work scheduler or installed OpenPapers LaunchDaemon;
+- an installed or connected Mac mini execution service;
 - a Codex execution adapter;
 - automatic promotion into the canonical dataset or MustCite deployment.
 
@@ -259,7 +265,7 @@ schema has been added.
 ## Target topology
 
 ```text
-Cloud Scheduler / Prefect
+system LaunchDaemon / local due scheduler
           |
           v
 LLM discovery with citations
@@ -271,7 +277,7 @@ deterministic evidence verification
 conference state machine and action policy
        /      \
       v        v
-notifications  Prefect work queue
+notifications  typed local action
                     |
                     v
              MustCite Mac mini
@@ -285,9 +291,11 @@ notifications  Prefect work queue
              patch/report for review
 ```
 
-The cloud control plane is the sole mutable writer of conference and case
-state. The Mac mini writes immutable job-result objects and reports Prefect
-task state; it must not edit the cloud-owned SQLite database.
+The current Cloud Run monitor remains the sole production writer during local
+development and shadow comparison. After an explicit cutover, the Mac becomes
+the sole mutable writer of conference and case state. The two schedulers must
+never write the same state concurrently. Immutable results remain separate
+from mutable control state.
 
 ## Required reading
 
@@ -297,13 +305,15 @@ Read in this order for a new automation task:
 2. this page;
 3. [architecture.md](./architecture.md) for invariants and component
    boundaries;
-4. [roadmap.md](./roadmap.md) for implemented versus planned work and phase
+4. [local-first-decision.md](./local-first-decision.md) for the accepted Phase
+   4 scheduler, ownership, migration, and cost decision;
+5. [roadmap.md](./roadmap.md) for implemented versus planned work and phase
    acceptance criteria;
-5. [work-packages.md](./work-packages.md) to select one thread-sized task and
+6. [work-packages.md](./work-packages.md) to select one thread-sized task and
    its dependency, scope, and completion boundary;
-6. [development.md](./development.md) for commands, change workflow, and
+7. [development.md](./development.md) for commands, change workflow, and
    handoff requirements;
-7. `docs/automation.md` and `automation/deployment/README.md` for the current
+8. `docs/automation.md` and `automation/deployment/README.md` for the current
    production implementation.
 
 For a venue-specific scrape, also read `docs/<venue>.md`, `docs/pipeline.md`,

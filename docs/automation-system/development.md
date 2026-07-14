@@ -63,7 +63,8 @@ from an adjacent package.
 Record these answers in the task plan or handoff:
 
 - Which roadmap phase and acceptance criterion does the change implement?
-- Is it cloud control plane, Mac execution plane, core scraper, or docs only?
+- Is it the current cloud baseline, target local control/execution plane, core
+  scraper, or docs only?
 - Does it add a network request, credential, persistent state transition,
   executable action, notification, or code-writing agent capability?
 - What is the safe failure behavior?
@@ -457,10 +458,10 @@ probe; no test reads auth contents, starts Codex, or contacts Prefect. The
 plist is parsed locally and must contain the fixed pool/type arguments, a
 restrictive umask, placeholders, and no credential or shell.
 
-The runbook at `automation/mac_worker/README.md` describes future P4.O
-operator commands, but P4.2 must not install packages, log in, copy/load the
-plist, call `launchctl`, start a worker, create/read/change external Prefect or
-GCP resources, or run its health command as evidence of a live worker.
+The runbook at `automation/mac_worker/README.md` records this as a frozen
+prototype. Do not install its Prefect plist, create its work pool, or treat its
+health command as evidence of a live local scheduler. New local service work
+belongs only to P4.L3 after P4.L1 and P4.L2 are accepted.
 
 The P4.3 local safety and replay checks are:
 
@@ -507,9 +508,14 @@ P4.4 constructs no GCS client, reads no credential, changes no external
 resource, connects no worker, and applies no result to lifecycle state. Before
 opening any future durable control database with schema-v4 code, stop
 overlapping writers and take a backup; rollback requires restoring that backup.
-P4.O owns client/credential/IAM installation plus reboot, SSH, offline, and
-recovery drills. Phase 5 owns command selection, execution, real manifest
-generation, and result interpretation. P4.O is the next package.
+P4.O is paused after its Prefect feasibility gate failed before resource
+creation. Follow the accepted local-first decision and select P4.L1 next. That
+package uses fake clocks and temporary SQLite only: it must not open or migrate
+deployed state, call a network service, install a daemon, or run a scraper.
+P4.L2 owns local domain composition, P4.L3 owns an uninstalled headless service
+package, P4.LS owns authorized host shadow drills, and P4.LC owns the explicit
+no-overlap writer cutover. Phase 5 owns command selection, execution, real
+manifest generation, and result interpretation.
 
 Scheduling tests use an injected timezone-aware clock. Keep venue catalogs free
 of year-specific month/date assumptions; discovery records candidates, a

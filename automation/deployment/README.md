@@ -23,10 +23,12 @@ P4.4's job-result code is not part of this deployed topology. It provides a
 fake-tested injected GCS bucket boundary and a local schema-version-4
 consumption ledger, but constructs no client and has no configured bucket,
 prefix, IAM role, worker credential, flow, or migration here. Do not reuse the
-monitor tree or grant the Mac access to `control/state.sqlite3`. P4.O must
-separately authorize and document dedicated immutable manifest/result object
-permissions, cloud read permissions, backup/migration of any durable control
-database, and operational drills before live use.
+monitor tree or grant a shadow Mac process access to `control/state.sqlite3`.
+The accepted local-first design keeps this deployment authoritative until a
+later package has passed isolated host drills. Its cutover must back up state,
+disable Cloud Scheduler before activating the local writer, verify health, and
+retain rollback; both writers must never mutate the same state concurrently.
+No such cutover is implemented or authorized by this document.
 
 ## Build
 

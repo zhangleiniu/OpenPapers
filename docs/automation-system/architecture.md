@@ -321,9 +321,9 @@ command:
 
 P4.3 tests use fake handles, fake disk usage, temporary private directories,
 and child processes. The local marker is neither a job result nor a manifest
-and cannot authorize cloud state. P4.4 owns and now implements the local
-immutable result publishing/consumption boundary; P4.O owns real installation
-and operational drills; Phase 5 owns command selection and execution.
+and cannot authorize control state. P4.4 owns and implements the immutable
+result boundary; the P4.L packages now own local scheduling, installation, and
+operational drills. Phase 5 owns command selection and execution.
 
 P4.4 adds a strict immutable result protocol without connecting it to that
 fake worker path:
@@ -348,16 +348,44 @@ fake worker path:
 P4.4 tests use a fake bucket and temporary SQLite databases. No code constructs
 a GCS client or reads credentials, no live object is written or read, no worker
 is installed or connected, and P4.3's fixture completion is still not a P4.4
-result. Client creation, IAM, installation, and operational drills remain P4.O;
-real manifest generation and result interpretation remain Phase 5.
+result. P4.O's live client/IAM/installation path is paused; P4.L1 and later
+packages own the local replacement. Real manifest generation and result
+interpretation remain Phase 5.
+
+P4.O is paused after its external feasibility gate. The acceptable Prefect
+Cloud plan rejected the required hybrid process pool before resource creation;
+paying for that tier or self-hosting an orchestration stack is not justified.
+The [local-first decision](./local-first-decision.md) replaces the transport,
+not the safety model:
+
+- a bounded plain-Python process derives due work from durable `next_check_at`
+  state under one local singleton lease and then exits;
+- a system LaunchDaemon wakes that process at boot and on a coarse interval,
+  running it as a dedicated non-administrator role account without a GUI login
+  or inbound listener;
+- control SQLite and scheduler logs live on internal storage. The external
+  volume contains execution data only; OpenPapers observes it and fails closed
+  rather than mounting it;
+- typed identity, venue/year exclusion, disk gates, supervision, replay
+  suppression, and immutable results remain transport-independent; and
+- optional GCS backup/export is a side effect, never queue ownership or a
+  correctness dependency.
+
+During development and shadow use, the existing Cloud Run monitor remains the
+only production writer and local runs use isolated state. A later explicit
+cutover must back up state, disable the cloud schedule, activate local
+ownership, prove health, and retain timed rollback. Both writers must never be
+active against the same state.
 
 ## Design principles
 
 1. **Discovery is not proof.** An LLM can find candidate facts and URLs, but a
    deterministic verifier must support an executable state transition.
-2. **Business state is separate from orchestration state.** Prefect records
-   runs, retries, and logs; OpenPapers owns conference, case, and job state.
-3. **One mutable owner per state domain.** Avoid cross-host SQLite writes.
+2. **Business state is independent of orchestration.** OpenPapers owns
+   conference, case, job, due-work, and recovery state; a scheduler is only a
+   bounded wakeup mechanism.
+3. **One mutable owner per state domain.** Never overlap cloud and local SQLite
+   writers, and never synchronize a live SQLite tree between hosts.
 4. **Heavy work runs near the data.** PDF scraping, validation, and Codex run
    on the Mac mini rather than the lightweight Cloud Run monitor.
 5. **Escalate capabilities gradually.** Existing scraper, then validator, then
@@ -371,14 +399,14 @@ real manifest generation and result interpretation remain Phase 5.
 
 | Component | Runs on | Responsibility | Must not do |
 |---|---|---|---|
-| Scheduler | GCP/Prefect | Start due discovery and reminder flows | Decide conference facts |
-| Discovery provider | Cloud control plane | Return structured claims, citations, and uncertainty | Trigger scraping directly |
-| Evidence verifier | Cloud control plane | Fetch/corroborate sources and classify readiness | Execute arbitrary page instructions |
-| State transition service | Cloud control plane | Apply valid idempotent transitions | Accept unverified LLM claims |
-| Action router | Cloud control plane | Select notify, recheck, queue, or review | Submit commands outside approved job types |
-| Notification service | Cloud control plane | Immediate transitions and periodic digests | Send duplicate stateless alerts |
-| Dashboard export | Cloud control plane | Emit a derived, public-safe status snapshot as a side effect of an already-authorized commit | Serve queries, hold state, authenticate a consumer, or push updates |
-| Prefect worker | Mac mini | Pull approved typed jobs | Expose a public command endpoint |
+| Scheduler | Mac mini (target) | Wake a bounded run and select persisted due work | Decide conference facts or become a second writer |
+| Discovery provider | External API called by local control plane | Return structured claims, citations, and uncertainty | Trigger scraping directly |
+| Evidence verifier | Local control plane | Fetch/corroborate sources and classify readiness | Execute arbitrary page instructions |
+| State transition service | Active single writer | Apply valid idempotent transitions | Accept unverified LLM claims |
+| Action router | Local control plane | Select notify, recheck, typed execution, or review | Submit commands outside approved job types |
+| Notification service | Local control plane | Immediate transitions and periodic digests | Send duplicate stateless alerts |
+| Dashboard export | Active single writer | Emit a derived, public-safe status snapshot as a side effect of an already-authorized commit | Serve queries, hold state, authenticate a consumer, or push updates |
+| Local execution supervisor | Mac mini | Run approved typed jobs with locks and resource gates | Expose a public command endpoint |
 | Scrape executor | Mac mini | Run existing repository commands | Modify scraper code |
 | Validator | Mac mini | Enforce metadata/PDF contracts | Promote invalid data |
 | Codex adapter | Mac mini | Diagnose and propose tested repairs | Modify the primary checkout or auto-merge |
@@ -522,33 +550,35 @@ maximum-silence guard permits occasional revalidation of far-future dates.
 
 ## State and result storage
 
-The initial design keeps SQLite and GCS. It avoids distributed writes as
-follows:
+The accepted target keeps mutable SQLite and immutable artifacts on the Mac's
+internal storage. GCS is optional backup/export, not coordination:
 
 ```text
-control/state.sqlite3       cloud control plane is the only writer
+control/state.sqlite3       active single writer only; Mac after cutover
 snapshots/...               content-addressed immutable source evidence
 discoveries/...             immutable structured LLM responses
-job-results/<job-id>.json   Mac mini writes once; cloud consumes
+job-results/<job-id>.json   local executor writes once; local reducer consumes
 manifests/<job-id>.json     immutable scrape/validation manifest
-dashboard/status.json       derived public-safe export; latest-only, not a source of truth
+dashboard/status.json       optional public-safe export; never a source of truth
 ```
 
 Requirements:
 
 - prevent overlapping control-plane runs with a lease;
-- use GCS object-generation preconditions for mutable state upload;
+- keep the live SQLite database on internal storage and back it up only from a
+  consistent snapshot;
 - use stable job IDs and create-only generation preconditions for immutable
-  manifest/result objects;
-- never synchronize the control SQLite tree from the Mac mini;
-- have the cloud record each strict job result exactly once before a later
+  manifest/result objects when an optional object store is used;
+- never synchronize or open one live control SQLite tree from two hosts;
+- have the active writer record each strict job result exactly once before a later
   reducer interprets it;
 - retain enough immutable input to reproduce a transition or diagnosis.
 
-Phase 0 expresses the ownership and write-once rules in
-`automation/domain.py`: the cloud control plane owns mutable control state and
-cloud evidence/discovery/verification objects, while the Mac worker owns
-immutable job results, manifests, and Codex results. P2.1's
+Phase 0's currently executable ownership model in `automation/domain.py`
+predates this decision: it assigns mutable control state to the cloud and
+immutable results to the Mac. P4.L1 must introduce an explicit local target
+ownership mode without weakening the no-overlap rule; the current cloud mode
+remains authoritative until cutover. P2.1's
 `FileSnapshotStore` proves local content-addressed source snapshot replay but
 is not the cloud state store or a GCS adapter. P2.4's
 `ControlStateRepository` implements schema-versioned local SQLite control
@@ -572,9 +602,9 @@ uploaded, consumed by cloud state, or validated as the job-result contract.
 P4.4 supplies strict manifests/results, create-only GCS-compatible publishing,
 exact-generation reads, and schema-version-4 exactly-once logical consumption.
 Its bucket is injected, its tests are fake/local, and it is not wired to the
-P4.3 worker or a production flow. Mutable control-state GCS restore/upload with
-generation preconditions, deployed Phase 3 delivery, and live job-result
-publication/consumption remain future work.
+P4.3 worker or a production flow. P4.L1 owns the first local-writer and due-work
+changes. Deployed Phase 3 delivery, live job-result production/interpretation,
+optional backup/export, and production cutover remain future work.
 P3.S's isolated SQLite root is manual canary evidence, not a cloud state store
 or deployed migration.
 
@@ -648,9 +678,9 @@ Examples:
 - multiple venues fail with the same infrastructure symptom: systemic
   incident, circuit breaker, and one notification.
 
-## Prefect queue protocol
+## Historical Prefect queue prototype
 
-P4.1 fixes the future Mac execution topology as one `process` work pool named
+P4.1 fixed the original Mac execution prototype as one `process` work pool named
 `openpapers-mac` with capability-separated queues:
 
 ```text
@@ -659,7 +689,9 @@ validate_candidate  -> openpapers-validation
 codex_diagnosis     -> openpapers-codex
 ```
 
-This mapping is code and contract data, not provisioned Prefect state. A
+This mapping remains code and contract data, not provisioned Prefect state. It
+is retained for compatibility and as evidence for stable typed routing, but it
+is not the adopted transport after the P4.O feasibility result. A
 version 2 job includes `request_id`, `job_fingerprint`, and `job_id`; the
 fingerprint is canonical SHA-256 over every field except the two derived
 identity fields, and `job_id` is `job:<full fingerprint>`. It intentionally
@@ -863,10 +895,12 @@ Simple execution of an unchanged existing scraper does not require Codex.
 
 ## Security boundaries
 
-- Cloud control plane: provider credentials, Prefect, SMTP, and read/write
-  access only to control-plane storage.
-- Mac worker: repository/data access, Prefect worker credentials, and local
-  Codex authentication; no public inbound command endpoint.
+- Current cloud baseline: only its existing provider, Prefect, SMTP, and
+  monitor-storage credentials; no access to future local control state.
+- Local scheduler account: repository/data access plus only the provider,
+  notification, optional backup/export, and later Codex credentials required
+  by an accepted package; no Prefect credential and no inbound command
+  endpoint.
 - Codex subprocess: relevant repository worktree and task-scoped environment;
   no provider, SMTP, deployment, or unrelated secret environment variables.
 - Logs/artifacts: redact tokens, passwords, cookies, and authorization headers.

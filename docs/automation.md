@@ -65,11 +65,13 @@ and exact-generation reader, control-state schema version 4 for
 lease-protected exactly-once logical consumption, and a thin local consumer.
 Its tests use a fake bucket and temporary database; it constructs no GCS
 client, publishes or consumes no live object, applies no lifecycle transition,
-and is not imported by this deployment. A production-integrated
-verifier/case/reminder flow and notification delivery, provisioned P4 Prefect
-and GCS resources, an installed Mac mini worker, live result wiring and
-operational drills, Codex repair execution, and MustCite deployment are not
-implemented.
+and is not imported by this deployment. P4.O's operator feasibility gate was
+rejected before Prefect resource creation because the acceptable cloud plan
+does not support its hybrid process pool. The accepted replacement is a
+local-first bounded scheduler, but P4.L1 has not yet implemented it. A
+production-integrated verifier/case/reminder flow and notification delivery,
+an installed Mac mini scheduler/executor, live result wiring and operational
+drills, Codex repair execution, and MustCite deployment are not implemented.
 
 Start at the [automation system development guide](./automation-system/README.md) for
 the implemented foundation, target architecture, roadmap, and zero-context
@@ -99,9 +101,12 @@ Supported detectors are:
 
 ## Orchestration boundary
 
-The monitor and scraper remain plain Python commands. Prefect can later wrap
-them for schedules, retries, concurrency, logs, notifications, and downstream
-deployments without moving parsing logic into Prefect tasks.
+The monitor and scraper remain plain Python commands. The current Cloud Run
+entry point uses Prefect only for flow/task observability; Cloud Scheduler owns
+its production wakeup. The accepted future control plane will call the same
+plain Python domain logic from a bounded local scheduler rather than require a
+paid or self-hosted Prefect worker. The existing cloud schedule remains active
+until a separately authorized single-writer cutover.
 
 An agent repair workflow should consume only a change or validation-failure
 event plus a saved source snapshot. Generated parser changes must include a
