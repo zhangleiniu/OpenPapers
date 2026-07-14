@@ -541,6 +541,27 @@ and co-resident health remained unchanged. The boundary is manual,
 uninstalled, and unable to promote data or affect conference state, so Phase 5
 is `Shadow`, not `Implemented`.
 
+P5.5 is the next local-first connection boundary, not an installation package.
+It will add an additive local-owner control-state journal that stores only an
+exact P2.5 `queue_existing_scraper` action and the strict version-2 job
+recomputed from it. Persistence occurs under the same lease as the verified
+reduction that emitted the action; callers cannot supply arbitrary job JSON,
+paths, commands, or execution settings. A separate bounded dispatcher claims
+at most one retained job under the lease, releases the global control lease
+before calling an injected P5.4 effect, and later reacquires a lease to
+reconcile the exact P5 checkpoint and immutable result identity. This avoids
+holding the mutable control-state lease across a potentially hours-long
+scrape while preserving a non-expiring ambiguity barrier around crashes at
+the effect boundary.
+
+P5.5 remains fixture/fake-only. The installed production service currently has
+no automatic deterministic Phase 2 verifier/action source, so an installed
+automatic scraper shadow cannot honestly satisfy the rule that only verified,
+crawl-policy-allowed evidence queues execution. That later canary requires
+both accepted P5.5 dispatch semantics and a separately accepted production
+verifier/action-source gate. Manual or synthetic action injection cannot
+substitute for that prerequisite.
+
 ## Design principles
 
 1. **Discovery is not proof.** An LLM can find candidate facts and URLs, but a

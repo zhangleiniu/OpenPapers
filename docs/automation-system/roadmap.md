@@ -574,7 +574,9 @@ boundary, and P5.2 completed the isolated fake-tested staging/process boundary
 without runtime wiring or an actual scrape. P5.3 has completed the independent
 staged-validation/manifest boundary, and P5.4 has completed fixture-only
 guarded composition, immutable result construction, and readiness/failure
-routing. P5.S is next.
+routing. P5.S completed the first manual real shadow; P5.5 is the next package
+and owns durable local action/job persistence plus fake-only dispatch
+reconciliation.
 
 ## Phase 5: execute existing scrapers
 
@@ -687,6 +689,16 @@ Phase 5 is now `Shadow`, not `Implemented`. The command remains manual and
 uninstalled; no verified action is persisted or automatically dispatched, no
 production runtime invokes P5.4, and no result can promote canonical data or
 change conference state.
+
+The next package is P5.5. It will persist only strict P2.5
+`queue_existing_scraper` actions and recomputed version-2 jobs under the local
+single-writer lease, then exercise a one-job injected P5.4 dispatch and
+crash/replay reconciliation boundary without holding the global control lease
+across the long-running effect. It is fixture/fake-only and does not install or
+run a scraper. A later installed automatic shadow remains blocked until both
+P5.5 and a separately accepted automatic deterministic verifier/action-source
+gate exist; the current manual Phase 2 shadow cannot supply production
+execution authority.
 
 ## Phase 6: Codex diagnosis and repair
 

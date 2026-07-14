@@ -325,6 +325,13 @@ daemon, publishes only to private local files, and cannot promote canonical
 data or change conference state. Its sanitized record is
 [`phase5-existing-scraper-shadow-review-2026-07-14.md`](./phase5-existing-scraper-shadow-review-2026-07-14.md).
 
+P5.5 is the next package. It is limited to additive local-owned action/job
+persistence and one-job dispatch/reconciliation through injected fake effects;
+it will not install a caller or run a scraper. The later installed automatic
+shadow remains blocked until a production deterministic verifier/action-source
+gate can prove that execution originated from retained, crawl-policy-allowed
+evidence rather than manual or synthetic input.
+
 P4.O is `Paused`. Its operator feasibility gate found that the acceptable
 Prefect Cloud plan cannot create the required hybrid process pool; the failed
 apply created none of the planned pool, queues, or deployments. The accepted

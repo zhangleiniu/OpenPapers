@@ -105,8 +105,11 @@ staged-validation/manifest boundary. P5.4 is complete at the fixture-only
 guarded composition/result-routing boundary. P5.S has completed one real COLT
 2025 timeout/resume/success/replay shadow with canonical write denial and
 private immutable results. Phase 5 is `Shadow`; no automatic runtime connection
-or canonical promotion is authorized. The local LaunchDaemon is authoritative
-and the retained Cloud Scheduler job is paused.
+or canonical promotion is authorized. P5.5 is the sole `Ready` package for
+fake-only durable action/job persistence and dispatch reconciliation; P5.5S is
+blocked on that package plus an accepted automatic deterministic
+verifier/action-source gate. The local LaunchDaemon is authoritative and the
+retained Cloud Scheduler job is paused.
 
 ### P2.1R — harden verifier contract semantics
 
@@ -945,6 +948,8 @@ host recovery evidence.
 | P5.3 | Complete | P5.2 | Strict candidate inventory/manifest plus bound independent validation report/manifest for count, metadata, duplicate IDs, PDF existence/size/signature, and completeness levels. Temporary fixture roots only; no runtime, result, or canonical write. |
 | P5.4 | Complete | P5.3 | Fixture-only guarded job-to-staging-to-validation-to-immutable-result composition with readiness routing, replay recovery, and transient/operational/structural classification. No runtime connection or real scrape. |
 | P5.S | Complete | P5.4 | Manual sandboxed COLT 2025 archival shadow: confirmed failure and timeout recovery, 181/181 independent validation, private create-only result, exact duplicate suppression, canonical invariance, coexistence, and scoped rollback. No installed or automatic caller. |
+| P5.5 | Ready | P5.S | Persist only strict P2.5 `queue_existing_scraper` actions and their recomputed v2 jobs in local-owned control state, then claim and reconcile at most one job through an injected P5.4 effect after releasing the global control lease. Schema migration, exact replay, crash ambiguity, result reconciliation, and rollback use temporary state/fakes only. No installed caller, live request, scraper process, canonical write, promotion, or Phase 6 capability. |
+| P5.5S | Blocked | P5.5 plus an accepted automatic deterministic verifier/action-source gate | Separately authorized installed automatic shadow using a verified crawl-policy-allowed action and a bounded venue family not covered by the COLT canary. It may write only isolated staging/artifact/result space and cannot promote, deploy, run statistics writes, or enter Codex repair. |
 
 P5.S completed boundary: `automation/execution_shadow.py` and the explicit
 `automation.run_execution_shadow --live` command bind P5.4 to a private marked
@@ -962,6 +967,62 @@ This does not connect P2.5 actions, the local scheduler, or the installed
 LaunchDaemon to P5.4. Phase 5 is `Shadow`; automatic dispatch and promotion
 remain unimplemented, and Phase 6 remains planned rather than inherited by
 this canary.
+
+### P5.5 — durable local action and execution dispatch
+
+Status: `Ready`
+
+Depends on: P5.S
+
+P5.5 is the next implementation package. It adds an additive local-owner
+control-state migration that can retain only an exact P2.5
+`queue_existing_scraper` action together with the strict version-2 job
+recomputed by `automation.job_queue.build_scrape_job_from_action`. Enqueue
+occurs inside the same lease-protected local reduction that produced the
+action, so a caller cannot submit arbitrary job JSON or turn discovery output
+directly into execution authority. Exact action/job replay is a no-op;
+identity, evidence, venue/year, payload, or stored-content drift fails closed.
+
+Execution dispatch is a separate bounded step. It claims at most one retained
+job under the local control lease, releases that global lease before any
+potentially long-running work, and calls only an injected P5.4-compatible
+effect. The persistent dispatch claim and P5.2/P5.4 checkpoint/result state are
+then reconciled under a newly acquired lease. A crash or lost lease across the
+effect boundary remains durable ambiguity until those exact artifacts prove
+that the process never started, stopped cleanly, or completed; elapsed time
+alone never reclaims it. Terminal result identity is retained exactly once,
+but P5.5 does not interpret the result as a lifecycle transition or promotion
+authority.
+
+P5.5 uses temporary local-owned SQLite, fake verified bundles, fake clocks,
+and injected fake execution effects only. It does not change the installed
+LaunchDaemon, production database, production marker/configuration, network
+policy, credentials, P5.S command, canonical data, statistics, deployment, or
+Codex boundary. Its living plan is
+`.agent/plans/p5-5-durable-local-shadow-dispatch.md`.
+
+### P5.5S — installed automatic execution shadow
+
+Status: `Blocked`
+
+Depends on: P5.5 plus a separately defined and accepted automatic
+deterministic verifier/action-source gate
+
+P5.5S is not ready merely because dispatch code exists. Phase 2 remains
+`Shadow`, the installed production service does not run its deterministic
+HTML/PDF verifier, and no production reduction currently persists a verified
+scraper action. The host canary therefore waits until an accepted package can
+prove that an automatic action came from retained, crawl-policy-allowed,
+venue/year-bound verification evidence rather than manual or synthetic input.
+
+When that prerequisite exists, P5.5S must receive separate authority for the
+installed-service change and live requests. It starts with the same
+single-writer, disk, identity, path-isolation, canonical-denial, coexistence,
+and recovery gates used by P5.S; uses a supported, bounded venue family not
+covered by the COLT canary; and records duplicate delivery, partial output,
+timeout/cancellation, ambiguous-stop recovery, immutable result replay, and
+scoped rollback. It cannot promote data, run `statistics --write`, deploy
+MustCite, enable Cloud Scheduler, expose credentials, or enter Phase 6.
 
 A structural failure in one venue opens a separate venue-specific bug thread.
 The rollout thread resumes after that fix has its own tests and commit.
