@@ -219,15 +219,24 @@ health event. The ledger neither stores provider text nor shares semantics
 with P6's later Codex-trigger suppression. Nothing is installed or connected
 to `automation/local_service/production.py`.
 
-P2.7 will reuse that accepted ledger/configuration pattern under a separate
-verification namespace and add a production-capable `VerificationEffect`.
-Production crawl policy is not a domain allowlist: each reviewed entry must
-separately record trust, request/retention/redistribution permissions,
-robots/source-terms conclusions, identification/contact, concurrency/rate/
-jitter/budget, redirect/cache/resume handling, and 403/429/`Retry-After`/
-CAPTCHA stops. Missing or stale review remains closed. Read-only operator
-research of public robots and terms pages is distinct from live automated
-verification and grants no PDF retrieval or redistribution right.
+P2.7 reuses that accepted ledger/configuration pattern under a separate
+verification namespace. `automation/production_verification.py` implements a
+production-capable but uninstalled `VerificationEffect` around the existing
+P2.2/P2.3 verifiers and generalized `LiveHttpFetcher`. Its independent
+versioned ledger durably claims each venue/year/source request and retains only
+typed failure fingerprints, status, and bounded timestamps; active in-flight
+or cooldown state refuses before the injected fetcher is called.
+
+Production crawl policy is not a domain allowlist. The dated non-shadow review
+artifact separately records every catalog/redirect domain's trust,
+request/retention/redistribution permissions, robots/source-terms conclusions,
+identification/contact, concurrency/rate/jitter/budget, redirect/cache/resume
+handling, and 403/429/`Retry-After`/CAPTCHA stops. The strict loader rejects
+missing, stale, future-dated, role-drifted, or permission-inconsistent review.
+`ecva.net` remains review-required, the Google grounding redirect is denied by
+its published robots policy, and no entry grants redistribution. Read-only
+operator research of public robots and terms pages was distinct from live
+automated verification and granted no verifier request authority.
 
 P2.8 will be the uninstalled automatic composition: one bounded local wakeup
 uses P2.6 and P2.7, then the existing P2.5 reducer and P5.5 retention, with no

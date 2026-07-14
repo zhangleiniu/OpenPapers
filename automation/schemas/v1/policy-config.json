@@ -20,6 +20,7 @@
     "reminders": {"$ref": "#/$defs/reminders"},
     "discovery_budget": {"$ref": "#/$defs/discovery_budget"},
     "automatic_discovery": {"$ref": "#/$defs/automatic_discovery"},
+    "automatic_verification": {"$ref": "#/$defs/automatic_verification"},
     "codex_budget": {"$ref": "#/$defs/codex_budget"},
     "systemic_failure": {"$ref": "#/$defs/systemic_failure"},
     "crawl": {"$ref": "#/$defs/crawl"},
@@ -94,6 +95,22 @@
       "properties": {
         "same_failure_cooldown_hours": {"type": "integer", "minimum": 1, "maximum": 168},
         "systemic_circuit_hours": {"type": "integer", "minimum": 1, "maximum": 168}
+      }
+    },
+    "automatic_verification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "same_source_failure_cooldown_hours",
+        "max_policy_review_age_days",
+        "max_targets_per_discovery",
+        "pdf_sample_size"
+      ],
+      "properties": {
+        "same_source_failure_cooldown_hours": {"type": "integer", "minimum": 1, "maximum": 168},
+        "max_policy_review_age_days": {"type": "integer", "minimum": 1, "maximum": 365},
+        "max_targets_per_discovery": {"type": "integer", "minimum": 1, "maximum": 100},
+        "pdf_sample_size": {"type": "integer", "minimum": 1, "maximum": 10}
       }
     },
     "codex_budget": {

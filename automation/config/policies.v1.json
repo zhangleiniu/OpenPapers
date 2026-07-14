@@ -26,6 +26,12 @@
     "same_failure_cooldown_hours": 6,
     "systemic_circuit_hours": 24
   },
+  "automatic_verification": {
+    "same_source_failure_cooldown_hours": 6,
+    "max_policy_review_age_days": 90,
+    "max_targets_per_discovery": 16,
+    "pdf_sample_size": 3
+  },
   "codex_budget": {
     "max_runs_per_day": 3,
     "max_runs_per_venue_per_day": 1,

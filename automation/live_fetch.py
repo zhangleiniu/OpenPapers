@@ -1,9 +1,11 @@
-"""P2.S opt-in HTTPS transport for shadow evidence verification.
+"""Bounded HTTPS transport for reviewed evidence verification effects.
 
 The deterministic verifier modules intentionally contain no network client.
 This adapter implements their one-request ``EvidenceFetcher`` boundary with
 transport-level DNS/SSRF checks and a hostname-verified, IP-pinned TLS
-connection.  It is not imported by the deployed monitor.
+connection. P2.S constructs it manually and P2.7 may construct it behind a
+separate production crawl policy; neither path is imported by the deployed
+monitor or installed local service.
 """
 
 from __future__ import annotations
@@ -45,6 +47,10 @@ _CAPTCHA_MARKERS = (
 
 class LiveFetchError(FetchBoundaryError):
     """A live request was rejected before returning retained evidence."""
+
+    def __init__(self, message: str, *, category: str = "transport_failure") -> None:
+        super().__init__(message)
+        self.category = category
 
 
 class _HttpResponse(Protocol):
@@ -243,7 +249,7 @@ class LiveHttpFetcher:
             "Accept": "text/html,application/xhtml+xml,application/pdf;q=0.9,*/*;q=0.1",
             "Accept-Encoding": "identity",
             "Connection": "close",
-            "User-Agent": f"OpenPapers-P2S-Shadow/1.0 (+{contact})",
+            "User-Agent": f"OpenPapers-EvidenceVerifier/1.0 (+{contact})",
         }
 
         # A single lock is intentionally stricter than per-domain concurrency
@@ -285,7 +291,9 @@ class LiveHttpFetcher:
         if len(body) > request.max_bytes:
             raise LiveFetchError("live response exceeds the authorized byte limit")
         if request.stop_on_captcha and _looks_like_captcha(retained_headers, body):
-            raise LiveFetchError("live response appears to be a CAPTCHA")
+            raise LiveFetchError(
+                "live response appears to be a CAPTCHA", category="captcha"
+            )
         observed = self._now()
         if observed.tzinfo is None or observed.utcoffset() is None:
             raise LiveFetchError("live fetch clock must be timezone-aware")

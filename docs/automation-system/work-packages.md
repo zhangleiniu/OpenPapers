@@ -75,9 +75,10 @@ lifecycle, scheduling, and inert-routing slices. P2.S has completed the
 explicitly authorized 15-venue live shadow review using isolated roots and no
 production action. P2.6 has completed the fixture-only production-capable
 discovery effect plus durable per-venue cooldown and distinct-venue systemic
-circuit guardrails. Phase 2 is now `Shadow`. P2.7 is the sole `Ready` package
-and owns the fixture-only production-capable verification effect plus reviewed
-per-domain crawl policy. P2.8 remains `Planned`; P2.8S is the blocked,
+circuit guardrails. P2.7 has completed the fixture-only production-capable
+verification effect, separate durable source cooldown, and dated per-domain
+production crawl-policy review. Phase 2 remains `Shadow`. P2.8 is the sole
+`Ready` package; P2.8S is the blocked,
 explicitly authorized live canary. P5.5S waits for both the accepted automatic
 composition and its live evidence. See "Phase 2 packages" below. P3.1 has
 completed the persistent
@@ -360,7 +361,7 @@ execution/service import boundary. Nothing is installed or connected to
 
 ### P2.7 — guarded automatic verification effect
 
-Status: `Ready`
+Status: `Complete`
 
 Depends on: P2.6
 
@@ -416,9 +417,36 @@ Acceptance:
 - static scope tests prove no import of `automation.execution_pipeline`,
   `automation.mac_worker`, or `automation.local_service`.
 
+Completed boundary: `automation/production_verification.py` adds a strict
+loader for the separate non-shadow production crawl policy, a bounded
+`ProductionVerificationEffect`, and a versioned, locked, atomically replaced
+automatic-verification health ledger. The 2026-07-14 review covers every
+catalog official/archival domain plus the grounding redirect domain and is
+recorded in
+`docs/automation-system/p2-7-production-crawl-policy-review-2026-07-14.md`.
+Each entry has an exact catalog trust role, date, public robots and terms/
+copyright evidence, separate permissions and retention/redistribution
+decisions, identification, concurrency/delay/jitter/budget, manual redirect
+handling, immutable cache/resume semantics, and conservative stop behavior.
+`ecva.net` remains `review_required`; the grounding redirect domain is denied
+by its published robots policy; no entry grants redistribution.
+
+The effect selects a deterministic bounded target set, creates one strict
+request/result bundle per selected target, and delegates only to the accepted
+P2.2/P2.3 gates, redirect logic, generic profiles, sampling, and validators.
+Every authorized request first obtains a durable venue/year/source in-flight
+claim; typed transport, HTTP 403/429/5xx, `Retry-After`, and CAPTCHA failures
+open a restart-safe cooldown and stop the remainder of that invocation.
+Policy refusal and per-domain budget exhaustion make no request and return
+conservative evidence. Fixture/fake tests cover strict HTML/PDF results,
+restart/expiry/concurrency, redirects, budgets, stop signals, partial evidence,
+unknown domains, corrupt/stale policy/ledger closure, and a real
+`run_local_control_wakeup` round trip. Nothing is installed or connected to
+`automation/local_service/production.py`; no test makes a live request.
+
 ### P2.8 — automatic verified-action composition
 
-Status: `Planned`
+Status: `Ready`
 
 Depends on: P2.7
 
@@ -503,17 +531,16 @@ occur only in P2.S and remain isolated from production.
 | P2.5 | Complete | P2.4 | Verified evidence to state reducer, milestone scheduling, and typed action routing. Actions are returned as data and never executed. Replay all catalog venue/lifecycle shapes with fixtures. |
 | P2.S | Complete | P2.5 | Opt-in DNS/SSRF-safe live adapter and explicitly authorized 15-venue shadow review using reviewed crawl policy and isolated state/artifact roots. The record contains 28 targets, rejects the known readiness false positives, returns no queue intent, and performs no job, scraper, notification, or production-state write. |
 | P2.6 | Complete | Phase 2 gate | Fixture-only production-capable `DiscoveryEffect` with required budget/artifact ledgers plus durable per-venue cooldown and distinct-venue systemic circuit state. No live LLM call, installed caller, or production wiring. |
-| P2.7 | Ready | P2.6 | Fixture-only production-capable `VerificationEffect` plus fully reviewed per-domain production crawl policy and durable fetch-failure guardrails. Only bounded read-only robots/terms research is live; no live verifier request or production wiring. |
-| P2.8 | Planned | P2.7 | Fixture-only automatic discovery→verification→P2.5→P5.5 retention composition with exact replay and failure closure. Uninstalled; no live call, dispatch, or production state. |
+| P2.7 | Complete | P2.6 | Fixture-only production-capable `VerificationEffect` plus fully reviewed per-domain production crawl policy and durable fetch-failure guardrails. Only bounded read-only robots/terms research was live; no live verifier request or production wiring. |
+| P2.8 | Ready | P2.7 | Fixture-only automatic discovery→verification→P2.5→P5.5 retention composition with exact replay and failure closure. Uninstalled; no live call, dispatch, or production state. |
 | P2.8S | Blocked | P2.8 | Separately authorized isolated live canary for the exact P2.8 composition. It may retain a genuine action/job but never dispatch it or touch production/canonical state. |
 
 Phase 2 has passed its shadow gate with the reviewed record in
 `phase2-live-review-2026-07-13.md`. It remains `Shadow`, not `Implemented`,
 because live observation has no production action authority and source-shape
-coverage remains conservative. P2.6 is accepted; P2.7 is the sole next
-package. P2.7 and P2.8 form the sequential uninstalled automatic path, and
-P2.8S is its separately authorized live evidence. P5.5S remains blocked until
-both P2.8 and P2.8S are complete.
+coverage remains conservative. P2.6 and P2.7 are accepted; P2.8 is the sole
+next package, and P2.8S is its separately authorized live evidence. P5.5S
+remains blocked until both P2.8 and P2.8S are complete.
 
 ## Phase 3 packages — cases and notifications
 

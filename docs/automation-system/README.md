@@ -163,10 +163,15 @@ refuses before provider construction or budget reservation when a same-venue
 cooldown or a distinct-venue systemic circuit is open, and only a closed set
 of provider/transport/output-shape failure categories can open the circuit;
 venue-specific content problems cannot. Nothing is installed or connected to
-the deployed monitor. P2.7 is now the sole next package and owns
-deterministic verification plus full per-domain production crawl-policy
-review; P2.8 owns the uninstalled automatic composition through P5.5
-retention; and P2.8S owns its separately authorized isolated live evidence.
+the deployed monitor. P2.7 has completed the separate fixture-only
+`VerificationEffect` (`automation/production_verification.py`), dated
+non-shadow review of all 23 catalog/redirect domains, strict stale/missing
+review closure, bounded deterministic P2.2/P2.3 composition, and durable
+venue/year/source fetch cooldown. `ecva.net` remains review-required, the
+grounding redirect is denied by robots, and no redistribution is granted.
+P2.8 is now the sole next package and owns the uninstalled automatic
+composition through P5.5 retention; P2.8S owns its separately authorized
+isolated live evidence.
 P5.5S remains blocked until P2.8 and P2.8S complete.
 
 Phase 3.1 persistent unresolved cases, P3.2 reminder/digest policy, P3.3's

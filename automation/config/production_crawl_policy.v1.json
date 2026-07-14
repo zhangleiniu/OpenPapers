@@ -1,0 +1,238 @@
+{
+  "schema_version": 1,
+  "shadow_only": false,
+  "reviewed_at": "2026-07-14",
+  "review_basis": "Bounded unauthenticated review of each public robots.txt and the cited public source terms or copyright page. Approval covers only catalog-bounded read-only verification with immutable internal evidence; it grants no PDF or metadata redistribution.",
+  "domains": [
+    {
+      "domain": "aaai.org",
+      "reviewed_at": "2026-07-14",
+      "catalog_roles": ["official"],
+      "classification": "approved",
+      "robots_review": {"url": "https://aaai.org/robots.txt", "outcome": "allow_with_constraints", "notes": "Public paths are not disallowed; Crawl-delay is 43200 seconds."},
+      "source_terms_review": {"urls": ["https://aaai.org/about-aaai/aaai-website-terms-of-use-agreement/", "https://aaai.org/about-aaai/copyright-notice/"], "outcome": "restrictive", "notes": "Public metadata inspection only; copying, storage, and redistribution are not granted."},
+      "runtime": {"allowed_permissions": ["metadata_fetch"], "user_agent_contact": "https://github.com/zhangleiniu/OpenPapers", "max_concurrency": 1, "minimum_delay_seconds": 43200.0, "jitter_seconds": 60.0, "max_requests_per_run": 2, "honor_retry_after": true, "stop_statuses": [403, 429], "stop_on_captcha": true, "api_preferred": false, "redirect_handling": "manual_policy_gate_each_hop", "cache_policy": "immutable_content_addressed_snapshots", "resume_policy": "replay_retained_then_refetch_after_cooldown"},
+      "retention": {"store_metadata_snapshot": true, "store_pdf_internal_copy": false, "redistribute_metadata": false, "redistribute_pdf": false}
+    },
+    {
+      "domain": "aclanthology.org",
+      "reviewed_at": "2026-07-14",
+      "catalog_roles": ["archival"],
+      "classification": "approved",
+      "robots_review": {"url": "https://aclanthology.org/robots.txt", "outcome": "not_found", "notes": "No robots policy was published at the reviewed URL."},
+      "source_terms_review": {"urls": ["https://aclanthology.org/faq/copyright/"], "outcome": "licensed_with_attribution", "notes": "ACL materials from 2016 onward are CC BY 4.0; third-party and older materials retain their stated terms."},
+      "runtime": {"allowed_permissions": ["metadata_fetch", "pdf_fetch_for_processing", "store_internal_copy"], "user_agent_contact": "https://github.com/zhangleiniu/OpenPapers", "max_concurrency": 1, "minimum_delay_seconds": 2.0, "jitter_seconds": 0.5, "max_requests_per_run": 12, "honor_retry_after": true, "stop_statuses": [403, 429], "stop_on_captcha": true, "api_preferred": false, "redirect_handling": "manual_policy_gate_each_hop", "cache_policy": "immutable_content_addressed_snapshots", "resume_policy": "replay_retained_then_refetch_after_cooldown"},
+      "retention": {"store_metadata_snapshot": true, "store_pdf_internal_copy": true, "redistribute_metadata": false, "redistribute_pdf": false}
+    },
+    {
+      "domain": "aclweb.org",
+      "reviewed_at": "2026-07-14",
+      "catalog_roles": ["official"],
+      "classification": "approved",
+      "robots_review": {"url": "https://aclweb.org/robots.txt", "outcome": "allow_with_constraints", "notes": "Public paths are allowed with a 10-second crawl delay; account, admin, and search paths are excluded."},
+      "source_terms_review": {"urls": ["https://www.aclweb.org/portal/"], "outcome": "no_automated_access_terms_found", "notes": "No broader retrieval or redistribution grant was identified; metadata verification only."},
+      "runtime": {"allowed_permissions": ["metadata_fetch"], "user_agent_contact": "https://github.com/zhangleiniu/OpenPapers", "max_concurrency": 1, "minimum_delay_seconds": 10.0, "jitter_seconds": 1.0, "max_requests_per_run": 8, "honor_retry_after": true, "stop_statuses": [403, 429], "stop_on_captcha": true, "api_preferred": false, "redirect_handling": "manual_policy_gate_each_hop", "cache_policy": "immutable_content_addressed_snapshots", "resume_policy": "replay_retained_then_refetch_after_cooldown"},
+      "retention": {"store_metadata_snapshot": true, "store_pdf_internal_copy": false, "redistribute_metadata": false, "redistribute_pdf": false}
+    },
+    {
+      "domain": "aistats.org",
+      "reviewed_at": "2026-07-14",
+      "catalog_roles": ["official"],
+      "classification": "approved",
+      "robots_review": {"url": "https://aistats.org/robots.txt", "outcome": "not_found", "notes": "No robots policy was published at the reviewed URL."},
+      "source_terms_review": {"urls": ["https://aistats.org/"], "outcome": "no_automated_access_terms_found", "notes": "Metadata verification only; archival PDF processing uses separately reviewed PMLR or OpenReview policy."},
+      "runtime": {"allowed_permissions": ["metadata_fetch"], "user_agent_contact": "https://github.com/zhangleiniu/OpenPapers", "max_concurrency": 1, "minimum_delay_seconds": 2.0, "jitter_seconds": 0.5, "max_requests_per_run": 8, "honor_retry_after": true, "stop_statuses": [403, 429], "stop_on_captcha": true, "api_preferred": false, "redirect_handling": "manual_policy_gate_each_hop", "cache_policy": "immutable_content_addressed_snapshots", "resume_policy": "replay_retained_then_refetch_after_cooldown"},
+      "retention": {"store_metadata_snapshot": true, "store_pdf_internal_copy": false, "redistribute_metadata": false, "redistribute_pdf": false}
+    },
+    {
+      "domain": "auai.org",
+      "reviewed_at": "2026-07-14",
+      "catalog_roles": ["official"],
+      "classification": "approved",
+      "robots_review": {"url": "https://auai.org/robots.txt", "outcome": "not_found", "notes": "No robots policy was published at the reviewed URL."},
+      "source_terms_review": {"urls": ["https://www.auai.org/"], "outcome": "no_automated_access_terms_found", "notes": "Metadata verification only; archival PDF processing uses separately reviewed PMLR policy."},
+      "runtime": {"allowed_permissions": ["metadata_fetch"], "user_agent_contact": "https://github.com/zhangleiniu/OpenPapers", "max_concurrency": 1, "minimum_delay_seconds": 2.0, "jitter_seconds": 0.5, "max_requests_per_run": 8, "honor_retry_after": true, "stop_statuses": [403, 429], "stop_on_captcha": true, "api_preferred": false, "redirect_handling": "manual_policy_gate_each_hop", "cache_policy": "immutable_content_addressed_snapshots", "resume_policy": "replay_retained_then_refetch_after_cooldown"},
+      "retention": {"store_metadata_snapshot": true, "store_pdf_internal_copy": false, "redistribute_metadata": false, "redistribute_pdf": false}
+    },
+    {
+      "domain": "cvpr.thecvf.com",
+      "reviewed_at": "2026-07-14",
+      "catalog_roles": ["official"],
+      "classification": "approved",
+      "robots_review": {"url": "https://cvpr.thecvf.com/robots.txt", "outcome": "allow_with_constraints", "notes": "Public event paths are allowed; search, admin, static, and pagination traps are excluded. A conservative 10-second delay is used."},
+      "source_terms_review": {"urls": ["https://cvpr.thecvf.com/"], "outcome": "copyright_retained", "notes": "Metadata verification only; no PDF retention or redistribution grant inferred."},
+      "runtime": {"allowed_permissions": ["metadata_fetch"], "user_agent_contact": "https://github.com/zhangleiniu/OpenPapers", "max_concurrency": 1, "minimum_delay_seconds": 10.0, "jitter_seconds": 1.0, "max_requests_per_run": 8, "honor_retry_after": true, "stop_statuses": [403, 429], "stop_on_captcha": true, "api_preferred": false, "redirect_handling": "manual_policy_gate_each_hop", "cache_policy": "immutable_content_addressed_snapshots", "resume_policy": "replay_retained_then_refetch_after_cooldown"},
+      "retention": {"store_metadata_snapshot": true, "store_pdf_internal_copy": false, "redistribute_metadata": false, "redistribute_pdf": false}
+    },
+    {
+      "domain": "eccv.ecva.net",
+      "reviewed_at": "2026-07-14",
+      "catalog_roles": ["official"],
+      "classification": "approved",
+      "robots_review": {"url": "https://eccv.ecva.net/robots.txt", "outcome": "allow_with_constraints", "notes": "Public event paths are allowed; search, admin, static, and pagination traps are excluded. A conservative 10-second delay is used."},
+      "source_terms_review": {"urls": ["https://eccv.ecva.net/"], "outcome": "copyright_retained", "notes": "Metadata verification only; no PDF retention or redistribution grant inferred."},
+      "runtime": {"allowed_permissions": ["metadata_fetch"], "user_agent_contact": "https://github.com/zhangleiniu/OpenPapers", "max_concurrency": 1, "minimum_delay_seconds": 10.0, "jitter_seconds": 1.0, "max_requests_per_run": 8, "honor_retry_after": true, "stop_statuses": [403, 429], "stop_on_captcha": true, "api_preferred": false, "redirect_handling": "manual_policy_gate_each_hop", "cache_policy": "immutable_content_addressed_snapshots", "resume_policy": "replay_retained_then_refetch_after_cooldown"},
+      "retention": {"store_metadata_snapshot": true, "store_pdf_internal_copy": false, "redistribute_metadata": false, "redistribute_pdf": false}
+    },
+    {
+      "domain": "ecva.net",
+      "reviewed_at": "2026-07-14",
+      "catalog_roles": ["archival"],
+      "classification": "review_required",
+      "robots_review": {"url": "https://ecva.net/robots.txt", "outcome": "agent_not_covered", "notes": "The published policy explicitly allows Googlebot but gives no rule for the OpenPapers user agent."},
+      "source_terms_review": {"urls": ["https://www.ecva.net/"], "outcome": "copyright_retained", "notes": "The unresolved robots scope keeps all automated permissions closed."},
+      "runtime": {"allowed_permissions": [], "user_agent_contact": null, "max_concurrency": 1, "minimum_delay_seconds": 10.0, "jitter_seconds": 1.0, "max_requests_per_run": 1, "honor_retry_after": true, "stop_statuses": [403, 429], "stop_on_captcha": true, "api_preferred": false, "redirect_handling": "manual_policy_gate_each_hop", "cache_policy": "no_fetch", "resume_policy": "manual_review_required"},
+      "retention": {"store_metadata_snapshot": false, "store_pdf_internal_copy": false, "redistribute_metadata": false, "redistribute_pdf": false}
+    },
+    {
+      "domain": "emnlp.org",
+      "reviewed_at": "2026-07-14",
+      "catalog_roles": ["official"],
+      "classification": "approved",
+      "robots_review": {"url": "https://emnlp.org/robots.txt", "outcome": "not_found", "notes": "No robots policy was published at the reviewed URL."},
+      "source_terms_review": {"urls": ["https://emnlp.org/"], "outcome": "no_automated_access_terms_found", "notes": "Metadata verification only; archival material uses separately reviewed ACL Anthology policy."},
+      "runtime": {"allowed_permissions": ["metadata_fetch"], "user_agent_contact": "https://github.com/zhangleiniu/OpenPapers", "max_concurrency": 1, "minimum_delay_seconds": 2.0, "jitter_seconds": 0.5, "max_requests_per_run": 8, "honor_retry_after": true, "stop_statuses": [403, 429], "stop_on_captcha": true, "api_preferred": false, "redirect_handling": "manual_policy_gate_each_hop", "cache_policy": "immutable_content_addressed_snapshots", "resume_policy": "replay_retained_then_refetch_after_cooldown"},
+      "retention": {"store_metadata_snapshot": true, "store_pdf_internal_copy": false, "redistribute_metadata": false, "redistribute_pdf": false}
+    },
+    {
+      "domain": "iccv.thecvf.com",
+      "reviewed_at": "2026-07-14",
+      "catalog_roles": ["official"],
+      "classification": "approved",
+      "robots_review": {"url": "https://iccv.thecvf.com/robots.txt", "outcome": "allow_with_constraints", "notes": "Public event paths are allowed; search, admin, static, and pagination traps are excluded. A conservative 10-second delay is used."},
+      "source_terms_review": {"urls": ["https://iccv.thecvf.com/"], "outcome": "copyright_retained", "notes": "Metadata verification only; no PDF retention or redistribution grant inferred."},
+      "runtime": {"allowed_permissions": ["metadata_fetch"], "user_agent_contact": "https://github.com/zhangleiniu/OpenPapers", "max_concurrency": 1, "minimum_delay_seconds": 10.0, "jitter_seconds": 1.0, "max_requests_per_run": 8, "honor_retry_after": true, "stop_statuses": [403, 429], "stop_on_captcha": true, "api_preferred": false, "redirect_handling": "manual_policy_gate_each_hop", "cache_policy": "immutable_content_addressed_snapshots", "resume_policy": "replay_retained_then_refetch_after_cooldown"},
+      "retention": {"store_metadata_snapshot": true, "store_pdf_internal_copy": false, "redistribute_metadata": false, "redistribute_pdf": false}
+    },
+    {
+      "domain": "iclr.cc",
+      "reviewed_at": "2026-07-14",
+      "catalog_roles": ["official"],
+      "classification": "approved",
+      "robots_review": {"url": "https://iclr.cc/robots.txt", "outcome": "allow_with_constraints", "notes": "Public event paths are allowed; search, admin, static, and pagination traps are excluded. A conservative 10-second delay is used."},
+      "source_terms_review": {"urls": ["https://iclr.cc/"], "outcome": "no_automated_access_terms_found", "notes": "Metadata verification only; archival material uses separately reviewed OpenReview policy."},
+      "runtime": {"allowed_permissions": ["metadata_fetch"], "user_agent_contact": "https://github.com/zhangleiniu/OpenPapers", "max_concurrency": 1, "minimum_delay_seconds": 10.0, "jitter_seconds": 1.0, "max_requests_per_run": 8, "honor_retry_after": true, "stop_statuses": [403, 429], "stop_on_captcha": true, "api_preferred": false, "redirect_handling": "manual_policy_gate_each_hop", "cache_policy": "immutable_content_addressed_snapshots", "resume_policy": "replay_retained_then_refetch_after_cooldown"},
+      "retention": {"store_metadata_snapshot": true, "store_pdf_internal_copy": false, "redistribute_metadata": false, "redistribute_pdf": false}
+    },
+    {
+      "domain": "icml.cc",
+      "reviewed_at": "2026-07-14",
+      "catalog_roles": ["official"],
+      "classification": "approved",
+      "robots_review": {"url": "https://icml.cc/robots.txt", "outcome": "allow_with_constraints", "notes": "Public event paths are allowed; search, admin, static, and pagination traps are excluded. A conservative 10-second delay is used."},
+      "source_terms_review": {"urls": ["https://icml.cc/"], "outcome": "no_automated_access_terms_found", "notes": "Metadata verification only; archival material uses separately reviewed PMLR or OpenReview policy."},
+      "runtime": {"allowed_permissions": ["metadata_fetch"], "user_agent_contact": "https://github.com/zhangleiniu/OpenPapers", "max_concurrency": 1, "minimum_delay_seconds": 10.0, "jitter_seconds": 1.0, "max_requests_per_run": 8, "honor_retry_after": true, "stop_statuses": [403, 429], "stop_on_captcha": true, "api_preferred": false, "redirect_handling": "manual_policy_gate_each_hop", "cache_policy": "immutable_content_addressed_snapshots", "resume_policy": "replay_retained_then_refetch_after_cooldown"},
+      "retention": {"store_metadata_snapshot": true, "store_pdf_internal_copy": false, "redistribute_metadata": false, "redistribute_pdf": false}
+    },
+    {
+      "domain": "ijcai.org",
+      "reviewed_at": "2026-07-14",
+      "catalog_roles": ["official"],
+      "classification": "approved",
+      "robots_review": {"url": "https://ijcai.org/robots.txt", "outcome": "allow_with_constraints", "notes": "Public paths are allowed with a 10-second crawl delay; administrative paths remain excluded."},
+      "source_terms_review": {"urls": ["https://www.ijcai.org/"], "outcome": "copyright_retained", "notes": "Metadata verification only; no PDF retention or redistribution grant inferred."},
+      "runtime": {"allowed_permissions": ["metadata_fetch"], "user_agent_contact": "https://github.com/zhangleiniu/OpenPapers", "max_concurrency": 1, "minimum_delay_seconds": 10.0, "jitter_seconds": 1.0, "max_requests_per_run": 8, "honor_retry_after": true, "stop_statuses": [403, 429], "stop_on_captcha": true, "api_preferred": false, "redirect_handling": "manual_policy_gate_each_hop", "cache_policy": "immutable_content_addressed_snapshots", "resume_policy": "replay_retained_then_refetch_after_cooldown"},
+      "retention": {"store_metadata_snapshot": true, "store_pdf_internal_copy": false, "redistribute_metadata": false, "redistribute_pdf": false}
+    },
+    {
+      "domain": "jmlr.org",
+      "reviewed_at": "2026-07-14",
+      "catalog_roles": ["official"],
+      "classification": "approved",
+      "robots_review": {"url": "https://jmlr.org/robots.txt", "outcome": "not_found", "notes": "No robots policy was published at the reviewed URL."},
+      "source_terms_review": {"urls": ["https://www.jmlr.org/"], "outcome": "copyright_retained", "notes": "Metadata verification only; no PDF retention or redistribution grant inferred from the reviewed page."},
+      "runtime": {"allowed_permissions": ["metadata_fetch"], "user_agent_contact": "https://github.com/zhangleiniu/OpenPapers", "max_concurrency": 1, "minimum_delay_seconds": 2.0, "jitter_seconds": 0.5, "max_requests_per_run": 8, "honor_retry_after": true, "stop_statuses": [403, 429], "stop_on_captcha": true, "api_preferred": false, "redirect_handling": "manual_policy_gate_each_hop", "cache_policy": "immutable_content_addressed_snapshots", "resume_policy": "replay_retained_then_refetch_after_cooldown"},
+      "retention": {"store_metadata_snapshot": true, "store_pdf_internal_copy": false, "redistribute_metadata": false, "redistribute_pdf": false}
+    },
+    {
+      "domain": "learningtheory.org",
+      "reviewed_at": "2026-07-14",
+      "catalog_roles": ["official"],
+      "classification": "approved",
+      "robots_review": {"url": "https://learningtheory.org/robots.txt", "outcome": "not_found", "notes": "No robots policy was published at the reviewed URL."},
+      "source_terms_review": {"urls": ["https://learningtheory.org/"], "outcome": "no_automated_access_terms_found", "notes": "Metadata verification only; archival PDF processing uses separately reviewed PMLR policy."},
+      "runtime": {"allowed_permissions": ["metadata_fetch"], "user_agent_contact": "https://github.com/zhangleiniu/OpenPapers", "max_concurrency": 1, "minimum_delay_seconds": 2.0, "jitter_seconds": 0.5, "max_requests_per_run": 8, "honor_retry_after": true, "stop_statuses": [403, 429], "stop_on_captcha": true, "api_preferred": false, "redirect_handling": "manual_policy_gate_each_hop", "cache_policy": "immutable_content_addressed_snapshots", "resume_policy": "replay_retained_then_refetch_after_cooldown"},
+      "retention": {"store_metadata_snapshot": true, "store_pdf_internal_copy": false, "redistribute_metadata": false, "redistribute_pdf": false}
+    },
+    {
+      "domain": "naacl.org",
+      "reviewed_at": "2026-07-14",
+      "catalog_roles": ["official"],
+      "classification": "approved",
+      "robots_review": {"url": "https://naacl.org/robots.txt", "outcome": "not_found", "notes": "No robots policy was published at the reviewed URL."},
+      "source_terms_review": {"urls": ["https://naacl.org/"], "outcome": "no_automated_access_terms_found", "notes": "Metadata verification only; archival material uses separately reviewed ACL Anthology policy."},
+      "runtime": {"allowed_permissions": ["metadata_fetch"], "user_agent_contact": "https://github.com/zhangleiniu/OpenPapers", "max_concurrency": 1, "minimum_delay_seconds": 2.0, "jitter_seconds": 0.5, "max_requests_per_run": 8, "honor_retry_after": true, "stop_statuses": [403, 429], "stop_on_captcha": true, "api_preferred": false, "redirect_handling": "manual_policy_gate_each_hop", "cache_policy": "immutable_content_addressed_snapshots", "resume_policy": "replay_retained_then_refetch_after_cooldown"},
+      "retention": {"store_metadata_snapshot": true, "store_pdf_internal_copy": false, "redistribute_metadata": false, "redistribute_pdf": false}
+    },
+    {
+      "domain": "neurips.cc",
+      "reviewed_at": "2026-07-14",
+      "catalog_roles": ["official"],
+      "classification": "approved",
+      "robots_review": {"url": "https://neurips.cc/robots.txt", "outcome": "allow_with_constraints", "notes": "Public event paths are allowed; search, admin, static, and pagination traps are excluded. A conservative 10-second delay is used."},
+      "source_terms_review": {"urls": ["https://neurips.cc/"], "outcome": "copyright_retained", "notes": "Metadata verification only; archival PDF handling uses a separately reviewed archival domain."},
+      "runtime": {"allowed_permissions": ["metadata_fetch"], "user_agent_contact": "https://github.com/zhangleiniu/OpenPapers", "max_concurrency": 1, "minimum_delay_seconds": 10.0, "jitter_seconds": 1.0, "max_requests_per_run": 8, "honor_retry_after": true, "stop_statuses": [403, 429], "stop_on_captcha": true, "api_preferred": false, "redirect_handling": "manual_policy_gate_each_hop", "cache_policy": "immutable_content_addressed_snapshots", "resume_policy": "replay_retained_then_refetch_after_cooldown"},
+      "retention": {"store_metadata_snapshot": true, "store_pdf_internal_copy": false, "redistribute_metadata": false, "redistribute_pdf": false}
+    },
+    {
+      "domain": "ojs.aaai.org",
+      "reviewed_at": "2026-07-14",
+      "catalog_roles": ["archival"],
+      "classification": "approved",
+      "robots_review": {"url": "https://ojs.aaai.org/robots.txt", "outcome": "allow_with_constraints", "notes": "Only the cache path is disallowed."},
+      "source_terms_review": {"urls": ["https://aaai.org/about-aaai/copyright-notice/"], "outcome": "restrictive", "notes": "AAAI copyright terms do not grant internal PDF storage or redistribution; metadata verification only."},
+      "runtime": {"allowed_permissions": ["metadata_fetch"], "user_agent_contact": "https://github.com/zhangleiniu/OpenPapers", "max_concurrency": 1, "minimum_delay_seconds": 5.0, "jitter_seconds": 1.0, "max_requests_per_run": 8, "honor_retry_after": true, "stop_statuses": [403, 429], "stop_on_captcha": true, "api_preferred": false, "redirect_handling": "manual_policy_gate_each_hop", "cache_policy": "immutable_content_addressed_snapshots", "resume_policy": "replay_retained_then_refetch_after_cooldown"},
+      "retention": {"store_metadata_snapshot": true, "store_pdf_internal_copy": false, "redistribute_metadata": false, "redistribute_pdf": false}
+    },
+    {
+      "domain": "openaccess.thecvf.com",
+      "reviewed_at": "2026-07-14",
+      "catalog_roles": ["archival"],
+      "classification": "approved",
+      "robots_review": {"url": "https://openaccess.thecvf.com/robots.txt", "outcome": "not_found", "notes": "No robots policy was published at the reviewed URL."},
+      "source_terms_review": {"urls": ["https://openaccess.thecvf.com/"], "outcome": "copyright_retained", "notes": "Pages state that copyright remains with authors or other holders; metadata verification only."},
+      "runtime": {"allowed_permissions": ["metadata_fetch"], "user_agent_contact": "https://github.com/zhangleiniu/OpenPapers", "max_concurrency": 1, "minimum_delay_seconds": 5.0, "jitter_seconds": 1.0, "max_requests_per_run": 8, "honor_retry_after": true, "stop_statuses": [403, 429], "stop_on_captcha": true, "api_preferred": false, "redirect_handling": "manual_policy_gate_each_hop", "cache_policy": "immutable_content_addressed_snapshots", "resume_policy": "replay_retained_then_refetch_after_cooldown"},
+      "retention": {"store_metadata_snapshot": true, "store_pdf_internal_copy": false, "redistribute_metadata": false, "redistribute_pdf": false}
+    },
+    {
+      "domain": "openreview.net",
+      "reviewed_at": "2026-07-14",
+      "catalog_roles": ["archival"],
+      "classification": "approved",
+      "robots_review": {"url": "https://openreview.net/robots.txt", "outcome": "allow_with_constraints", "notes": "Email-bearing query URLs are disallowed; public artifact URLs remain eligible."},
+      "source_terms_review": {"urls": ["https://openreview.net/legal/terms"], "outcome": "public_access_with_limits", "notes": "Public API/site access and internal evidence processing are allowed subject to access controls and provider-set transmission limits; no redistribution authority is inferred."},
+      "runtime": {"allowed_permissions": ["metadata_fetch", "pdf_fetch_for_processing", "store_internal_copy"], "user_agent_contact": "https://github.com/zhangleiniu/OpenPapers", "max_concurrency": 1, "minimum_delay_seconds": 5.0, "jitter_seconds": 1.0, "max_requests_per_run": 12, "honor_retry_after": true, "stop_statuses": [403, 429], "stop_on_captcha": true, "api_preferred": true, "redirect_handling": "manual_policy_gate_each_hop", "cache_policy": "immutable_content_addressed_snapshots", "resume_policy": "replay_retained_then_refetch_after_cooldown"},
+      "retention": {"store_metadata_snapshot": true, "store_pdf_internal_copy": true, "redistribute_metadata": false, "redistribute_pdf": false}
+    },
+    {
+      "domain": "papers.nips.cc",
+      "reviewed_at": "2026-07-14",
+      "catalog_roles": ["archival"],
+      "classification": "approved",
+      "robots_review": {"url": "https://papers.nips.cc/robots.txt", "outcome": "not_found", "notes": "No robots policy was published at the reviewed URL."},
+      "source_terms_review": {"urls": ["https://papers.nips.cc/"], "outcome": "copyright_retained", "notes": "Metadata verification only; no PDF retention or redistribution grant inferred from the reviewed page."},
+      "runtime": {"allowed_permissions": ["metadata_fetch"], "user_agent_contact": "https://github.com/zhangleiniu/OpenPapers", "max_concurrency": 1, "minimum_delay_seconds": 5.0, "jitter_seconds": 1.0, "max_requests_per_run": 8, "honor_retry_after": true, "stop_statuses": [403, 429], "stop_on_captcha": true, "api_preferred": false, "redirect_handling": "manual_policy_gate_each_hop", "cache_policy": "immutable_content_addressed_snapshots", "resume_policy": "replay_retained_then_refetch_after_cooldown"},
+      "retention": {"store_metadata_snapshot": true, "store_pdf_internal_copy": false, "redistribute_metadata": false, "redistribute_pdf": false}
+    },
+    {
+      "domain": "proceedings.mlr.press",
+      "reviewed_at": "2026-07-14",
+      "catalog_roles": ["archival"],
+      "classification": "approved",
+      "robots_review": {"url": "https://proceedings.mlr.press/robots.txt", "outcome": "not_found", "notes": "No robots policy was published at the reviewed URL."},
+      "source_terms_review": {"urls": ["https://proceedings.mlr.press/pmlr-license-agreement.html"], "outcome": "licensed_with_attribution", "notes": "PMLR articles are licensed CC BY 4.0 with citation and source-link attribution requirements."},
+      "runtime": {"allowed_permissions": ["metadata_fetch", "pdf_fetch_for_processing", "store_internal_copy"], "user_agent_contact": "https://github.com/zhangleiniu/OpenPapers", "max_concurrency": 1, "minimum_delay_seconds": 2.0, "jitter_seconds": 0.5, "max_requests_per_run": 12, "honor_retry_after": true, "stop_statuses": [403, 429], "stop_on_captcha": true, "api_preferred": false, "redirect_handling": "manual_policy_gate_each_hop", "cache_policy": "immutable_content_addressed_snapshots", "resume_policy": "replay_retained_then_refetch_after_cooldown"},
+      "retention": {"store_metadata_snapshot": true, "store_pdf_internal_copy": true, "redistribute_metadata": false, "redistribute_pdf": false}
+    },
+    {
+      "domain": "vertexaisearch.cloud.google.com",
+      "reviewed_at": "2026-07-14",
+      "catalog_roles": ["grounding_redirect"],
+      "classification": "denied",
+      "robots_review": {"url": "https://vertexaisearch.cloud.google.com/robots.txt", "outcome": "disallow", "notes": "The grounding-api-redirect and grounding-redirect paths are explicitly disallowed."},
+      "source_terms_review": {"urls": ["https://policies.google.com/terms"], "outcome": "not_applicable_while_denied", "notes": "Robots denial closes the automatic verification path before any redirect request."},
+      "runtime": {"allowed_permissions": [], "user_agent_contact": null, "max_concurrency": 1, "minimum_delay_seconds": 10.0, "jitter_seconds": 1.0, "max_requests_per_run": 1, "honor_retry_after": true, "stop_statuses": [403, 429], "stop_on_captcha": true, "api_preferred": false, "redirect_handling": "manual_policy_gate_each_hop", "cache_policy": "no_fetch", "resume_policy": "manual_review_required"},
+      "retention": {"store_metadata_snapshot": false, "store_pdf_internal_copy": false, "redistribute_metadata": false, "redistribute_pdf": false}
+    }
+  ]
+}

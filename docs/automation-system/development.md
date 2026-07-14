@@ -34,6 +34,7 @@ automation/discovery.py
 automation/providers/gemini.py
 automation/run_discovery.py
 automation/production_discovery.py
+automation/production_verification.py
 automation/verification.py
 automation/html_verification.py
 automation/pdf_verification.py
@@ -307,9 +308,33 @@ execution/service-import scope boundary. Nothing is installed or connected to
 `automation/local_service/production.py`, and no test makes a live provider
 call.
 
-A live fetch adapter must add transport-level DNS/SSRF protections and
-operational crawl controls before use; the existence of the injected interface
-is not permission to make live calls.
+The P2.7 guarded automatic verification effect checks are:
+
+```bash
+python -m unittest automation.tests.test_production_verification -v
+python -m unittest automation.tests.test_live_fetch -v
+python -m unittest automation.tests.test_contracts -v
+python -m unittest automation.tests.test_local_control_plane -v
+```
+
+`automation/production_verification.py` builds the concrete, uninstalled
+`VerificationEffect` from explicit snapshot/health/review paths. Its strict
+review loader requires current dated evidence for all catalog domains and the
+grounding redirect, projects only the existing `CrawlPolicyGate` fields, and
+fails before fetch authority on missing/stale dimensions. A separate locked,
+atomic ledger durably guards each venue/year/source request. Tests use only
+fake fetchers and temporary roots to cover strict HTML/PDF bundles, restart,
+cooldown expiry, concurrent claims, redirects, budgets, 403/429/
+`Retry-After`, CAPTCHA, partial evidence, unknown domains, corruption, and a
+real local-wakeup round trip. The only network activity in P2.7 was the
+bounded operator review recorded in
+`p2-7-production-crawl-policy-review-2026-07-14.md`; no verifier test made a
+live request. Nothing imports or changes `automation/local_service/`.
+
+The generalized live fetch adapter retains its transport-level DNS/SSRF and
+operational crawl controls. The existence of that injected interface or the
+P2.7 review artifact is not permission to make a live call; P2.8S owns any
+future authorized live exercise.
 
 P2.S implements that adapter and its isolated manual composition. Focused
 checks and the mandatory non-live refusal are:

@@ -274,24 +274,41 @@ Accepted P2.6 guarded automatic discovery effect:
   provider call and no import of `automation.execution_pipeline`,
   `automation.mac_worker`, or `automation.local_service`.
 
-Phase 2 is `Shadow`, not `Implemented`. P2.1 through P2.6 and the P2.S manual
+Accepted P2.7 guarded automatic verification effect:
+
+- `automation/production_verification.py` implements the narrow
+  `VerificationEffect` with deterministic bounded target selection and the
+  accepted P2.2/P2.3 request, redirect, snapshot, parser, sampler, and strict
+  result boundaries;
+- a separate versioned process-safe health ledger durably claims each
+  venue/year/source request and retains typed restart-safe cooldowns for
+  transport, 403/429/5xx, `Retry-After`, and CAPTCHA failures;
+- the dated non-shadow production crawl review covers every catalog domain
+  plus the grounding redirect with trust, permissions, robots/terms,
+  identification, rates, redirects, stops, cache/resume, and explicit
+  retention/redistribution decisions. Missing/stale review fails closed,
+  `ecva.net` remains review-required, the grounding redirect is denied, and no
+  PDF redistribution is granted; and
+- fixture/fake tests prove strict results, restart/expiry/concurrency,
+  redirects, domain budgets, partial/unknown evidence, stop signals, corrupt
+  state closure, and a real local-wakeup round trip without a live request or
+  installed-service import.
+
+Phase 2 is `Shadow`, not `Implemented`. P2.1 through P2.7 and the P2.S manual
 runtime are not deployed or scheduled, and there is no installed or production
 action dispatcher.
 
-Three remaining packages in `work-packages.md` name the concrete path toward
-closing that gap without claiming it is closed. P2.7, now the sole `Ready`
-package, provides the production-capable deterministic verification effect,
-full per-domain production crawl-policy review, and durable fetch-failure
-guardrails reusing P2.6's accepted ledger conventions. P2.8 then composes both
-effects through the automatic local wakeup, P2.5, and P5.5 action retention
-using fakes and temporary state only. P2.8S is the separately authorized
-isolated live canary for that exact composition.
+Two remaining packages in `work-packages.md` name the concrete path toward
+closing that gap without claiming it is closed. P2.8, now the sole `Ready`
+package, composes the accepted P2.6/P2.7 effects through the automatic local
+wakeup, P2.5, and P5.5 action retention using fakes and temporary state only.
+P2.8S is the separately authorized isolated live canary for that exact
+composition.
 
-P2.7 and P2.8 are not implemented yet. P2.8 supplies the automatic
-verifier/action-source implementation prerequisite for P5.5S, while P2.8S
-supplies its real operational evidence; both must complete. Installation,
-production database use, and automatic scraper dispatch remain separately
-authorized P5.5S work.
+P2.8 supplies the automatic verifier/action-source implementation prerequisite
+for P5.5S, while P2.8S supplies its real operational evidence; both must
+complete. Installation, production database use, and automatic scraper
+dispatch remain separately authorized P5.5S work.
 
 ## Phase 3: cases and notifications
 

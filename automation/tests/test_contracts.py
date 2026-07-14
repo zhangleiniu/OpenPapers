@@ -258,6 +258,30 @@ class ConfigurationTests(unittest.TestCase):
             with self.assertRaises(ContractValidationError):
                 load_policy_config(path)
 
+    def test_automatic_verification_policy_is_optional_and_bounded(self):
+        policy = load_policy_config()
+        automatic = policy["automatic_verification"]
+        self.assertEqual(automatic["same_source_failure_cooldown_hours"], 6)
+        self.assertEqual(automatic["max_policy_review_age_days"], 90)
+        self.assertEqual(automatic["max_targets_per_discovery"], 16)
+        self.assertEqual(automatic["pdf_sample_size"], 3)
+
+        without_block = load_policy_config()
+        del without_block["automatic_verification"]
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "policy.json"
+            path.write_text(json.dumps(without_block), encoding="utf-8")
+            replayed = load_policy_config(path)
+        self.assertNotIn("automatic_verification", replayed)
+
+        out_of_range = load_policy_config()
+        out_of_range["automatic_verification"]["pdf_sample_size"] = 11
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "policy.json"
+            path.write_text(json.dumps(out_of_range), encoding="utf-8")
+            with self.assertRaises(ContractValidationError):
+                load_policy_config(path)
+
 
 if __name__ == "__main__":
     unittest.main()
