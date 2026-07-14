@@ -11,6 +11,7 @@ from automation.control_state import (
     CONTROL_SCHEMA_VERSION,
     ControlStateError,
     ControlStateRepository,
+    ExecutionQueueError,
     LeaseHandle,
     LeaseConflictError,
     LeaseLostError,
@@ -27,7 +28,8 @@ from automation.control_state import (
 )
 from automation.cases import CaseObservation, case_event_payload, observe_case
 from automation.contracts import artifact_fingerprint
-from automation.domain import OwnershipError, Writer
+from automation.domain import ActionType, OwnershipError, Writer
+from automation.lifecycle import ActionIntent, QueueExistingScraperPayload
 from automation.verification import VerificationError, build_verification_result
 
 
@@ -74,6 +76,27 @@ def job_result_bundle():
     )
 
 
+def scraper_action(
+    result,
+    *,
+    action_id="action:" + "f" * 32,
+    readiness="pdf_ready",
+    extra_evidence=("source:icml:pdf-test", "snapshot:icml:pdf-test"),
+):
+    return ActionIntent(
+        action_id=action_id,
+        action_type=ActionType.QUEUE_EXISTING_SCRAPER,
+        venue_id=result["venue_id"],
+        year=result["year"],
+        evidence_ids=(result["verification_id"], *extra_evidence),
+        payload=QueueExistingScraperPayload(
+            readiness=readiness,
+            scraper_module="scrapers.icml",
+            scraper_class="ICMLScraper",
+        ),
+    )
+
+
 def canonical_json(payload):
     return json.dumps(
         payload,
@@ -94,7 +117,7 @@ class SchemaAndBoundaryTests(unittest.TestCase):
                     "SELECT version FROM schema_migrations"
                 ).fetchall()
                 self.assertEqual(
-                    [row[0] for row in versions], [1, 2, 3, 4, 5, 6]
+                    [row[0] for row in versions], [1, 2, 3, 4, 5, 6, 7]
                 )
 
             with ControlStateRepository(path) as reopened:
@@ -134,7 +157,7 @@ class SchemaAndBoundaryTests(unittest.TestCase):
             connection.close()
 
             with ControlStateRepository(path, clock=MutableClock()) as repository:
-                self.assertEqual(repository.schema_version, 6)
+                self.assertEqual(repository.schema_version, 7)
                 self.assertEqual(
                     repository.get_conference_state("icml", 2026).state, state
                 )
@@ -143,7 +166,7 @@ class SchemaAndBoundaryTests(unittest.TestCase):
                     "SELECT version FROM schema_migrations ORDER BY version"
                 ).fetchall()
                 self.assertEqual(
-                    [row[0] for row in versions], [1, 2, 3, 4, 5, 6]
+                    [row[0] for row in versions], [1, 2, 3, 4, 5, 6, 7]
                 )
 
     def test_valid_version_two_database_migrates_without_losing_cases(self):
@@ -212,14 +235,14 @@ class SchemaAndBoundaryTests(unittest.TestCase):
             connection.close()
 
             with ControlStateRepository(path, clock=MutableClock()) as repository:
-                self.assertEqual(repository.schema_version, 6)
+                self.assertEqual(repository.schema_version, 7)
                 self.assertEqual(repository.get_case(state["case_id"]).state, state)
                 self.assertEqual(repository.get_notification("missing"), None)
                 versions = repository._connection.execute(
                     "SELECT version FROM schema_migrations ORDER BY version"
                 ).fetchall()
                 self.assertEqual(
-                    [row[0] for row in versions], [1, 2, 3, 4, 5, 6]
+                    [row[0] for row in versions], [1, 2, 3, 4, 5, 6, 7]
                 )
 
     def test_valid_version_three_database_migrates_additive_result_ledger(self):
@@ -241,13 +264,13 @@ class SchemaAndBoundaryTests(unittest.TestCase):
             connection.close()
 
             with ControlStateRepository(path, clock=MutableClock()) as repository:
-                self.assertEqual(repository.schema_version, 6)
+                self.assertEqual(repository.schema_version, 7)
                 self.assertEqual(repository.replay_job_result_consumptions(), ())
                 versions = repository._connection.execute(
                     "SELECT version FROM schema_migrations ORDER BY version"
                 ).fetchall()
                 self.assertEqual(
-                    [row[0] for row in versions], [1, 2, 3, 4, 5, 6]
+                    [row[0] for row in versions], [1, 2, 3, 4, 5, 6, 7]
                 )
 
     def test_unrecognized_and_future_databases_fail_without_mutation(self):
@@ -324,7 +347,7 @@ class SchemaAndBoundaryTests(unittest.TestCase):
             with ControlStateRepository(
                 path, writer=Writer.LOCAL_CONTROL_PLANE, clock=MutableClock()
             ) as reopened:
-                self.assertEqual(reopened.schema_version, 6)
+                self.assertEqual(reopened.schema_version, 7)
 
     def test_valid_version_five_local_database_migrates_additive_plan_state(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -359,7 +382,7 @@ class SchemaAndBoundaryTests(unittest.TestCase):
                 writer=Writer.LOCAL_CONTROL_PLANE,
                 clock=MutableClock(),
             ) as repository:
-                self.assertEqual(repository.schema_version, 6)
+                self.assertEqual(repository.schema_version, 7)
                 self.assertEqual(
                     repository.control_owner, Writer.LOCAL_CONTROL_PLANE
                 )
@@ -797,6 +820,314 @@ class ConferenceStateTests(unittest.TestCase):
                 )
                 with self.assertRaisesRegex(StoredDataError, "fingerprint"):
                     store.get_conference_state("icml", 2026)
+
+
+class ExecutionJobTests(unittest.TestCase):
+    def _local_repository(self, path, *, clock=None):
+        return ControlStateRepository(
+            path, writer=Writer.LOCAL_CONTROL_PLANE, clock=clock or MutableClock()
+        )
+
+    def test_retain_is_idempotent_and_conflicting_replay_fails_closed(self):
+        _, _, result = verification_bundle()
+        action = scraper_action(result)
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "state.sqlite3"
+            with self._local_repository(path) as repo:
+                lease = repo.acquire_lease("dispatch-owner")
+                repo.accept_verification(
+                    *verification_bundle(), lease=lease, received_at=NOW
+                )
+                first = repo.retain_existing_scraper_action(
+                    action,
+                    source_verification_id=result["verification_id"],
+                    lease=lease,
+                    enqueued_at=NOW,
+                )
+                self.assertTrue(first.applied)
+                self.assertEqual(first.record.state, "pending")
+                self.assertEqual(first.record.current_attempt_number, 0)
+                self.assertEqual(first.record.action_id, action.action_id)
+
+                replay = repo.retain_existing_scraper_action(
+                    action,
+                    source_verification_id=result["verification_id"],
+                    lease=lease,
+                    enqueued_at=NOW,
+                )
+                self.assertFalse(replay.applied)
+                self.assertEqual(replay.record.job_id, first.record.job_id)
+
+                conflicting = scraper_action(
+                    result,
+                    action_id=action.action_id,
+                    extra_evidence=("source:icml:pdf-other", "snapshot:icml:pdf-other"),
+                )
+                with self.assertRaisesRegex(ExecutionQueueError, "different job"):
+                    repo.retain_existing_scraper_action(
+                        conflicting,
+                        source_verification_id=result["verification_id"],
+                        lease=lease,
+                        enqueued_at=NOW,
+                    )
+
+            with self._local_repository(path) as reopened:
+                stored = reopened.get_execution_job(first.record.job_id)
+                self.assertEqual(stored.action_id, action.action_id)
+                self.assertEqual(stored.job, first.record.job)
+
+    def test_retain_rejects_unknown_verification_and_venue_year_mismatch(self):
+        _, _, result = verification_bundle()
+        action = scraper_action(result)
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "state.sqlite3"
+            with self._local_repository(path) as repo:
+                lease = repo.acquire_lease("dispatch-owner")
+                with self.assertRaisesRegex(ExecutionQueueError, "not retained"):
+                    repo.retain_existing_scraper_action(
+                        action,
+                        source_verification_id=result["verification_id"],
+                        lease=lease,
+                        enqueued_at=NOW,
+                    )
+                repo.accept_verification(
+                    *verification_bundle(), lease=lease, received_at=NOW
+                )
+                unrelated_action = scraper_action(
+                    result, action_id="action:" + "a" * 32
+                )
+                with self.assertRaisesRegex(ExecutionQueueError, "does not cite"):
+                    repo.retain_existing_scraper_action(
+                        unrelated_action,
+                        source_verification_id="verification:" + "b" * 32,
+                        lease=lease,
+                        enqueued_at=NOW,
+                    )
+                mismatched_action = ActionIntent(
+                    action_id="action:" + "c" * 32,
+                    action_type=ActionType.QUEUE_EXISTING_SCRAPER,
+                    venue_id="aistats",
+                    year=result["year"],
+                    evidence_ids=(result["verification_id"], "source:x", "snapshot:x"),
+                    payload=QueueExistingScraperPayload(
+                        readiness="pdf_ready",
+                        scraper_module="scrapers.aistats",
+                        scraper_class="AISTATSScraper",
+                    ),
+                )
+                with self.assertRaisesRegex(ExecutionQueueError, "venue/year"):
+                    repo.retain_existing_scraper_action(
+                        mismatched_action,
+                        source_verification_id=result["verification_id"],
+                        lease=lease,
+                        enqueued_at=NOW,
+                    )
+
+    def test_retain_rejects_non_scraper_and_non_pdf_ready_actions(self):
+        _, _, result = verification_bundle()
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "state.sqlite3"
+            with self._local_repository(path) as repo:
+                lease = repo.acquire_lease("dispatch-owner")
+                repo.accept_verification(
+                    *verification_bundle(), lease=lease, received_at=NOW
+                )
+                not_ready = scraper_action(result, readiness="pdf_partial")
+                with self.assertRaisesRegex(ExecutionQueueError, "pdf_ready"):
+                    repo.retain_existing_scraper_action(
+                        not_ready,
+                        source_verification_id=result["verification_id"],
+                        lease=lease,
+                        enqueued_at=NOW,
+                    )
+
+    def test_retain_requires_local_ownership(self):
+        _, _, result = verification_bundle()
+        action = scraper_action(result)
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "state.sqlite3"
+            with ControlStateRepository(path, clock=MutableClock()) as repo:
+                lease = repo.acquire_lease("cloud-owner")
+                repo.accept_verification(
+                    *verification_bundle(), lease=lease, received_at=NOW
+                )
+                with self.assertRaises(OwnershipError):
+                    repo.retain_existing_scraper_action(
+                        action,
+                        source_verification_id=result["verification_id"],
+                        lease=lease,
+                        enqueued_at=NOW,
+                    )
+
+    def test_claim_selects_oldest_pending_and_returns_none_when_empty(self):
+        _, _, result = verification_bundle()
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "state.sqlite3"
+            with self._local_repository(path) as repo:
+                lease = repo.acquire_lease("dispatch-owner")
+                self.assertIsNone(
+                    repo.claim_next_execution_job(lease=lease, claimed_at=NOW)
+                )
+                repo.accept_verification(
+                    *verification_bundle(), lease=lease, received_at=NOW
+                )
+                later = scraper_action(result, action_id="action:" + "1" * 32)
+                earlier = scraper_action(result, action_id="action:" + "2" * 32)
+                repo.retain_existing_scraper_action(
+                    later,
+                    source_verification_id=result["verification_id"],
+                    lease=lease,
+                    enqueued_at=NOW + timedelta(seconds=10),
+                )
+                repo.retain_existing_scraper_action(
+                    earlier,
+                    source_verification_id=result["verification_id"],
+                    lease=lease,
+                    enqueued_at=NOW,
+                )
+                claim = repo.claim_next_execution_job(lease=lease, claimed_at=NOW)
+                stored = repo.get_execution_job(claim.job_id)
+                self.assertEqual(stored.action_id, earlier.action_id)
+                self.assertEqual(stored.state, "in_flight")
+                self.assertEqual(claim.attempt_number, 1)
+
+    def test_complete_retry_then_completed_and_rejects_stale_or_mismatched_claims(self):
+        _, _, result = verification_bundle()
+        action = scraper_action(result)
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "state.sqlite3"
+            with self._local_repository(path) as repo:
+                lease = repo.acquire_lease("dispatch-owner")
+                repo.accept_verification(
+                    *verification_bundle(), lease=lease, received_at=NOW
+                )
+                repo.retain_existing_scraper_action(
+                    action,
+                    source_verification_id=result["verification_id"],
+                    lease=lease,
+                    enqueued_at=NOW,
+                )
+                claim = repo.claim_next_execution_job(lease=lease, claimed_at=NOW)
+                forged_claim = claim.__class__(
+                    job_id=claim.job_id,
+                    attempt_number=claim.attempt_number,
+                    claim_token="not-the-real-token",
+                    started_at=claim.started_at,
+                    job=claim.job,
+                )
+
+                with self.assertRaisesRegex(ExecutionQueueError, "stale"):
+                    repo.complete_execution_attempt(
+                        forged_claim,
+                        disposition="retry",
+                        status="retry",
+                        failure_class="transient",
+                        reason_code="process_failed",
+                        result_job_id=None,
+                        published=False,
+                        retry_permitted=True,
+                        paper_count=None,
+                        valid_pdf_count=None,
+                        lease=lease,
+                        completed_at=NOW,
+                    )
+
+                completion = repo.complete_execution_attempt(
+                    claim,
+                    disposition="retry",
+                    status="retry",
+                    failure_class="transient",
+                    reason_code="process_failed",
+                    result_job_id=None,
+                    published=False,
+                    retry_permitted=True,
+                    paper_count=None,
+                    valid_pdf_count=None,
+                    lease=lease,
+                    completed_at=NOW,
+                )
+                self.assertEqual(completion.record.state, "pending")
+                self.assertEqual(completion.record.current_attempt_number, 1)
+                self.assertEqual(completion.attempt.disposition, "retry")
+
+                with self.assertRaisesRegex(ExecutionQueueError, "does not match"):
+                    repo.complete_execution_attempt(
+                        claim,
+                        disposition="retry",
+                        status="retry",
+                        failure_class="transient",
+                        reason_code="process_failed",
+                        result_job_id=None,
+                        published=False,
+                        retry_permitted=True,
+                        paper_count=None,
+                        valid_pdf_count=None,
+                        lease=lease,
+                        completed_at=NOW,
+                    )
+
+                second_claim = repo.claim_next_execution_job(
+                    lease=lease, claimed_at=NOW
+                )
+                self.assertEqual(second_claim.attempt_number, 2)
+                with self.assertRaisesRegex(
+                    ExecutionQueueError, "does not match the supplied disposition"
+                ):
+                    repo.complete_execution_attempt(
+                        second_claim,
+                        disposition="completed",
+                        status="ready",
+                        failure_class=None,
+                        reason_code="validated_ready",
+                        result_job_id="job:" + "0" * 64,
+                        published=True,
+                        retry_permitted=True,
+                        paper_count=3,
+                        valid_pdf_count=3,
+                        lease=lease,
+                        completed_at=NOW,
+                    )
+                final = repo.complete_execution_attempt(
+                    second_claim,
+                    disposition="completed",
+                    status="ready",
+                    failure_class=None,
+                    reason_code="validated_ready",
+                    result_job_id="job:" + "0" * 64,
+                    published=True,
+                    retry_permitted=False,
+                    paper_count=3,
+                    valid_pdf_count=3,
+                    lease=lease,
+                    completed_at=NOW,
+                )
+                self.assertEqual(final.record.state, "completed")
+                self.assertIsNone(
+                    repo.claim_next_execution_job(lease=lease, claimed_at=NOW)
+                )
+
+    def test_stored_corruption_fails_closed_on_read(self):
+        _, _, result = verification_bundle()
+        action = scraper_action(result)
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "state.sqlite3"
+            with self._local_repository(path) as repo:
+                lease = repo.acquire_lease("dispatch-owner")
+                repo.accept_verification(
+                    *verification_bundle(), lease=lease, received_at=NOW
+                )
+                outcome = repo.retain_existing_scraper_action(
+                    action,
+                    source_verification_id=result["verification_id"],
+                    lease=lease,
+                    enqueued_at=NOW,
+                )
+                repo._connection.execute(
+                    "UPDATE execution_job SET job_fingerprint = ? WHERE job_id = ?",
+                    ("0" * 64, outcome.record.job_id),
+                )
+                with self.assertRaisesRegex(StoredDataError, "fingerprint"):
+                    repo.get_execution_job(outcome.record.job_id)
 
 
 if __name__ == "__main__":

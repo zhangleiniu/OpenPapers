@@ -727,6 +727,46 @@ deploy MustCite, enable Cloud Scheduler, or invoke Codex. An ambiguous claim or
 unconfirmed stop requires retained-root manual recovery and must never be
 cleared merely to force replay.
 
+The P5.5 durable local action/job persistence and bounded dispatch checks are:
+
+```bash
+python -m unittest automation.tests.test_execution_retention -v
+python -m unittest automation.tests.test_execution_dispatch -v
+python -m unittest automation.tests.test_control_state -v
+python -m unittest automation.tests.test_local_control_plane -v
+```
+
+Control-state schema version 7 adds an immutable current `execution_job` row
+keyed by the recomputed job ID and an append-only numbered
+`execution_attempt_history`, retained only under the local single-writer
+lease. `automation/execution_retention.py` accepts only the exact
+`ActionIntent` values a lease-protected local reduction just produced,
+filters to `queue_existing_scraper`, and lets
+`ControlStateRepository.retain_existing_scraper_action` recompute the job
+with `automation.job_queue.build_scrape_job_from_action`; a caller can never
+supply job bytes, and every read reconstructs the action and rebuilds the
+job to detect stored drift. It has no import on
+`automation.execution_pipeline`, `automation.mac_worker`, or
+`automation.staging_executor`, so `automation/local_control_plane.py` calls
+it directly inside `_compose_selection` without adding a process-adjacent
+dependency; `test_local_control_plane.py` proves a real single-shot
+`pdf_ready` fixture retains exactly one job and exact wakeup replay adds
+nothing new.
+
+`automation/execution_dispatch.py` is the separate bounded step that may
+call a real P5.4 effect. `dispatch_one_existing_scraper` claims at most one
+pending job under a short lease, releases it before calling an injected
+`ExistingScraperExecutionEffect`, and reacquires a lease afterward to
+reconcile the typed observation. A `retry`/`cancelled` observation returns
+the job to `pending` with an incremented attempt number; a terminal
+observation closes the job permanently. An effect exception, a
+`recovery_required` observation, a job-identity mismatch, or a failure while
+reconciling leaves the attempt `in_flight` and is never reclaimed by elapsed
+time. Tests use only temporary local-owned SQLite, a real verified action
+fixture, fixed clocks, and injected fake effects; no scraper, validator,
+network request, installed service, or Prefect/GCS/Codex/promotion path
+exists.
+
 Scheduling tests use an injected timezone-aware clock. Keep venue catalogs free
 of year-specific month/date assumptions; discovery records candidates, a
 deterministic verifier promotes supported dates into conference-year

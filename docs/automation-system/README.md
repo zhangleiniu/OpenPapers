@@ -325,12 +325,13 @@ daemon, publishes only to private local files, and cannot promote canonical
 data or change conference state. Its sanitized record is
 [`phase5-existing-scraper-shadow-review-2026-07-14.md`](./phase5-existing-scraper-shadow-review-2026-07-14.md).
 
-P5.5 is the next package. It is limited to additive local-owned action/job
-persistence and one-job dispatch/reconciliation through injected fake effects;
-it will not install a caller or run a scraper. The later installed automatic
-shadow remains blocked until a production deterministic verifier/action-source
-gate can prove that execution originated from retained, crawl-policy-allowed
-evidence rather than manual or synthetic input.
+P5.5 has completed additive local-owned action/job persistence (control-state
+schema version 7) and one-job dispatch/reconciliation through injected fake
+effects; it installs no caller and runs no scraper. The later installed
+automatic shadow (P5.5S) remains blocked until a production deterministic
+verifier/action-source gate can prove that execution originated from
+retained, crawl-policy-allowed evidence rather than manual or synthetic
+input.
 
 P4.O is `Paused`. Its operator feasibility gate found that the acceptable
 Prefect Cloud plan cannot create the required hybrid process pool; the failed
@@ -347,8 +348,10 @@ the Cloud Scheduler job is paused and retained only for rollback. P5.1 is
 complete at the pure selection boundary, P5.2 is complete at the isolated
 fake-tested staging/process boundary, P5.3 is complete at the fixture-only
 validation/manifest boundary, P5.4 is complete at the fixture-only guarded
-composition/result-routing boundary, and P5.S has completed one real manual
-shadow. Phase 5 is `Shadow`, not automatically connected or implemented.
+composition/result-routing boundary, P5.S has completed one real manual
+shadow, and P5.5 has completed fake-only durable action/job persistence and
+bounded dispatch. Phase 5 is `Shadow`, not automatically connected or
+implemented.
 
 The following does **not** exist yet:
 

@@ -541,26 +541,56 @@ and co-resident health remained unchanged. The boundary is manual,
 uninstalled, and unable to promote data or affect conference state, so Phase 5
 is `Shadow`, not `Implemented`.
 
-P5.5 is the next local-first connection boundary, not an installation package.
-It will add an additive local-owner control-state journal that stores only an
-exact P2.5 `queue_existing_scraper` action and the strict version-2 job
-recomputed from it. Persistence occurs under the same lease as the verified
-reduction that emitted the action; callers cannot supply arbitrary job JSON,
-paths, commands, or execution settings. A separate bounded dispatcher claims
-at most one retained job under the lease, releases the global control lease
-before calling an injected P5.4 effect, and later reacquires a lease to
-reconcile the exact P5 checkpoint and immutable result identity. This avoids
-holding the mutable control-state lease across a potentially hours-long
-scrape while preserving a non-expiring ambiguity barrier around crashes at
-the effect boundary.
+P5.5 adds the local-first connection boundary, still not an installation
+package. Control-state schema version 7 adds an additive local-owner journal
+that stores only an exact P2.5 `queue_existing_scraper` action and the strict
+version-2 job recomputed from it in one current row plus an append-only
+numbered attempt history:
 
-P5.5 remains fixture/fake-only. The installed production service currently has
-no automatic deterministic Phase 2 verifier/action source, so an installed
-automatic scraper shadow cannot honestly satisfy the rule that only verified,
-crawl-policy-allowed evidence queues execution. That later canary requires
-both accepted P5.5 dispatch semantics and a separately accepted production
-verifier/action-source gate. Manual or synthetic action injection cannot
-substitute for that prerequisite.
+- `automation.execution_retention.retain_execution_actions` is called from
+  inside `automation.local_control_plane`'s existing lease-protected
+  reduction, immediately after P2.5 reduction and P3.4 case/notification
+  integration for the same verification. It filters to
+  `queue_existing_scraper` actions and hands each one to
+  `ControlStateRepository.retain_existing_scraper_action`, which recomputes
+  the job with `automation.job_queue.build_scrape_job_from_action` so a
+  caller can never supply job bytes, an unrelated venue/year, or an unknown
+  source verification directly. Exact action replay is a no-op; identity,
+  evidence, or stored-content drift fails closed, and every read
+  reconstructs the `ActionIntent` and rebuilds the job to detect corruption;
+- `automation.execution_dispatch.dispatch_one_existing_scraper` is a
+  separate bounded step that acquires the local lease only to claim the
+  oldest pending job, releases it before calling an injected
+  `ExistingScraperExecutionEffect`, and reacquires a fresh lease afterward to
+  record the typed observation. The control-state lease is never held across
+  the effect call, so a real archival scrape can run for hours without
+  blocking scheduler wakeups; and
+- a `retry`- or `cancelled`-permitted observation returns the job to
+  `pending` with an incremented attempt number under the same immutable job
+  ID; a terminal observation (`ready`, `partial`, `failed`, or
+  duplicate-completed `skipped`) closes the job permanently. An effect
+  exception, a `recovery_required` observation, a job-identity mismatch
+  between the claim and the returned observation, or any failure while
+  reconciling leaves the attempt `in_flight` and is reported as an
+  undispatched-outcome-free result; elapsed time never reclaims it, matching
+  P4.3's non-expiring ambiguity barrier.
+
+`automation.execution_retention` deliberately has no import on
+`automation.execution_pipeline`, `automation.mac_worker`, or
+`automation.staging_executor`, so `local_control_plane.py`'s existing
+process-free import boundary is unaffected; only the separate
+`execution_dispatch` module depends on the P5.4 effect protocol.
+
+P5.5 remains fixture/fake-only: tests use only temporary local-owned SQLite,
+a real single-shot `pdf_ready` verification fixture that exercises genuine
+P2.5 reduction, and injected fake execution effects. The installed
+production service currently has no automatic deterministic Phase 2
+verifier/action source, so an installed automatic scraper shadow (P5.5S)
+cannot honestly satisfy the rule that only verified, crawl-policy-allowed
+evidence queues execution. That later canary requires both the accepted P5.5
+dispatch semantics and a separately accepted production verifier/action-source
+gate. Manual or synthetic action injection cannot substitute for that
+prerequisite.
 
 ## Design principles
 
@@ -798,20 +828,26 @@ gate, bounded records, and a credential-free plist; it adds no schema and its
 ordinary CLI has no concrete effect. P4.LS installs only the separately marked
 P4.L1 scheduler adapter against a new isolated local-owned schema-v6 database.
 It contains no conference state and is not wired to P4.L2, P4.3, P4.4, or a
-production flow.
-Deployed Phase 3 delivery, live
-domain effects, job-result production/interpretation, optional backup/export,
-and production cutover remain future work.
+production flow. P4.LC's production cutover activated a schema-v6 local
+control database as the sole writer; that installed runtime uses a root-owned
+read-only source snapshot taken at install time, so it keeps running the code
+and schema version active at that install and is unaffected by later commits
+until a separately authorized reinstall/upgrade. P5.5 adds schema version 7
+to the repository only; it has no deployed migration or current operator
+action until such a reinstall occurs.
 P3.S's isolated SQLite root is manual canary evidence, not a cloud state store
 or deployed migration.
 
-Schema version 6 has no deployed migration or current operator action. Valid
+Schema versions 6 and 7 have no deployed migration or current operator action
+beyond P4.LC's already-completed schema-v6 production cutover. Valid
 version-1 through version-4 control databases migrate on open only under the
 cloud role and preserve verification, conference, case, notification, and
 job-result data. A local role refuses those legacy cloud-owned databases;
 valid version-5 databases retain their persisted owner while gaining only the
-plan table. Before any future durable operator database is opened by
-version-6 code, stop overlapping writers and take a backup; rollback after
+plan table, and valid version-6 databases gain only the execution-job and
+attempt-history tables. Before any future durable operator database
+(including the P4.LC production database at a future reinstall) is opened by
+version-7 code, stop overlapping writers and take a backup; rollback after
 migration requires restoring that backup because older code must reject, not
 downgrade or delete, a newer schema.
 

@@ -13,12 +13,14 @@ from automation.control_state import (
     SchedulerWakeupConflictError,
 )
 from automation.domain import ActionType, BlockerCode, Writer
+from automation.job_queue import build_scrape_job_from_action
+from automation.lifecycle import initial_conference_state, reduce_verification
 from automation.local_control_plane import (
     LocalControlCompositionError,
     VerificationBundle,
     run_local_control_wakeup,
 )
-from automation.verification import build_verification_result
+from automation.verification import build_verification_request, build_verification_result
 
 
 FIXTURES = Path(__file__).with_name("fixtures")
@@ -71,6 +73,155 @@ def due_state(*, consumed=False):
         _, bundle = fixture_bundle()
         state["evidence_ids"].append(bundle.result["verification_id"])
     return state
+
+
+def pdf_ready_bundle(catalog, *, venue_id="icml", year=2026):
+    """Build a single-shot verification bundle that reaches pdf_ready.
+
+    Unlike ``fixture_bundle()``, every facet is verified in one bundle so
+    ``reduce_verification`` promotes the conference state straight from
+    ``unknown`` to ``pdf_ready`` and returns a real ``QUEUE_EXISTING_SCRAPER``
+    action, proving the P5.5 retention wiring against genuine P2.5 output.
+    """
+    venue = next(item for item in catalog["venues"] if item["venue_id"] == venue_id)
+    domain = venue["official_domains"][0]
+    html_url = f"https://{domain}/openpapers-fixture/{venue_id}/index.html"
+    pdf_url = f"https://{domain}/openpapers-fixture/{venue_id}/paper.pdf"
+    claims = [
+        {
+            "claim_id": f"claim:{venue_id}:{year}:{kind}",
+            "claim_kind": kind,
+            "statement": f"Sanitized {kind} fixture for P5.5 retention.",
+            "evidence_urls": [pdf_url if kind == "pdf" else html_url],
+            "source_type": "official",
+            "published_at": None,
+        }
+        for kind in ("paper_list", "metadata", "proceedings", "pdf")
+    ]
+    milestones = [{
+        "milestone_id": f"milestone:{venue_id}:{year}:end",
+        "milestone_type": "conference_end",
+        "scope": "conference",
+        "date": "2026-07-10",
+        "evidence_urls": [html_url],
+        "source_type": "official",
+    }]
+    discovery = {
+        "schema_version": 1,
+        "discovery_id": f"discovery:{venue_id}:{year}:p55-fixture",
+        "venue_id": venue_id,
+        "year": year,
+        "checked_at": "2026-07-13T20:00:00Z",
+        "provider": "fixture-provider",
+        "model": "fixture-model",
+        "prompt_version": "v1",
+        "conference_status": "unknown",
+        "paper_list_status": "released",
+        "metadata_status": "ready",
+        "pdf_status": "ready",
+        "proceedings_status": "archival",
+        "claims": claims,
+        "candidate_milestones": milestones,
+        "confidence": 0.9,
+        "uncertainties": [],
+        "evidence_fingerprint": (venue_id.encode().hex() + "0" * 64)[:64],
+    }
+    request = build_verification_request(
+        discovery,
+        requested_at="2026-07-13T20:05:00Z",
+        claim_ids=[claim["claim_id"] for claim in claims],
+        candidate_milestone_ids=[milestone["milestone_id"] for milestone in milestones],
+    )
+
+    def observed_source(url, permission, suffix):
+        return {
+            "source_id": f"source:{venue_id}:{suffix}",
+            "url": url,
+            "redirect_target_url": None,
+            "source_trust": "official",
+            "policy_decision": "allowed",
+            "policy_domain": url.split("/", 3)[2],
+            "permission": permission,
+            "fetch_status": "fetched",
+            "http_status": 200,
+            "snapshot_id": f"snapshot:{venue_id}:{suffix}",
+            "observed_at": "2026-07-13T20:30:00Z",
+            "reason_code": "source_observed",
+        }
+
+    html_observation = observed_source(html_url, "metadata_fetch", "html")
+    pdf_observation = observed_source(pdf_url, "pdf_fetch_for_processing", "pdf")
+    html_evidence = (html_observation["source_id"], html_observation["snapshot_id"])
+    pdf_evidence = (pdf_observation["source_id"], pdf_observation["snapshot_id"])
+
+    def verified_finding(target_id, kind, evidence_ids):
+        return {
+            "finding_id": f"finding:{venue_id}:{year}:{kind}",
+            "target_kind": (
+                "candidate_milestone" if kind == "conference_milestone" else "claim"
+            ),
+            "target_id": target_id,
+            "verification_kind": kind,
+            "status": "verified",
+            "source_ids": [evidence_ids[0]],
+            "evidence_ids": list(evidence_ids),
+            "reason_code": "supported",
+            "metrics": {"paper_count": 3} if kind == "paper_list" else None,
+        }
+
+    findings = [
+        verified_finding(
+            f"claim:{venue_id}:{year}:paper_list", "paper_list", html_evidence
+        ),
+        verified_finding(
+            f"claim:{venue_id}:{year}:metadata", "metadata", html_evidence
+        ),
+        verified_finding(
+            f"claim:{venue_id}:{year}:proceedings", "proceedings", html_evidence
+        ),
+        verified_finding(f"claim:{venue_id}:{year}:pdf", "pdf", pdf_evidence),
+        verified_finding(
+            f"milestone:{venue_id}:{year}:end",
+            "conference_milestone",
+            html_evidence,
+        ),
+    ]
+    result = build_verification_result(
+        request,
+        discovery,
+        overall_status="verified",
+        verified_at="2026-07-13T20:30:00Z",
+        source_observations=[html_observation, pdf_observation],
+        findings=findings,
+        verified_facets={
+            "conference_status": None,
+            "paper_list_status": {
+                "value": "released", "evidence_ids": list(html_evidence),
+            },
+            "metadata_status": {
+                "value": "ready", "evidence_ids": list(html_evidence),
+            },
+            "pdf_status": {"value": "ready", "evidence_ids": list(pdf_evidence)},
+            "proceedings_status": {
+                "value": "archival", "evidence_ids": list(html_evidence),
+            },
+        },
+        verified_milestones=[{
+            "candidate_milestone_id": f"milestone:{venue_id}:{year}:end",
+            "milestone_type": "conference_end",
+            "scope": "conference",
+            "date": "2026-07-10",
+            "source_type": "official",
+            "source_url": html_url,
+            "evidence_ids": list(html_evidence),
+        }],
+    )
+    state = initial_conference_state(
+        catalog, venue_id, year, at="2026-07-13T13:00:00Z"
+    )
+    state["next_check_at"] = "2026-07-13T14:00:00Z"
+    state["next_check_reason"] = "unknown_schedule_fallback"
+    return discovery, VerificationBundle(request=request, result=result), state
 
 
 def seed_local_state(path, *, state=None, old_case=False):
@@ -249,6 +400,73 @@ class LocalControlCompositionTests(unittest.TestCase):
             self.assertIsNone(replay.digest)
             self.assertEqual(len(discovery_effect.calls), 1)
             self.assertEqual(len(verification_effect.calls), 1)
+
+    def test_verified_scraper_action_retains_exactly_one_execution_job(self):
+        discovery, bundle, state = pdf_ready_bundle(self.catalog)
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "state.sqlite3"
+            seed_local_state(path, state=state)
+            discovery_effect = FakeDiscovery(discovery)
+            verification_effect = FakeVerification((bundle,))
+
+            outcome = run_local_control_wakeup(
+                path,
+                scheduled_for=NOW,
+                clock=MutableClock(),
+                discovery_effect=discovery_effect,
+                verification_effect=verification_effect,
+                catalog=self.catalog,
+                policy=self.policy,
+            )
+
+            self.assertFalse(outcome.replayed)
+            self.assertEqual(len(outcome.selections), 1)
+            selected = outcome.selections[0]
+            action_types = {item.action_type for item in selected.actions}
+            self.assertIn(ActionType.QUEUE_EXISTING_SCRAPER, action_types)
+            self.assertEqual(len(selected.execution_retentions), 1)
+            retention = selected.execution_retentions[0]
+            self.assertTrue(retention.applied)
+            self.assertEqual(retention.record.state, "pending")
+
+            queue_action = next(
+                action
+                for action in selected.actions
+                if action.action_type is ActionType.QUEUE_EXISTING_SCRAPER
+            )
+            expected_job = build_scrape_job_from_action(queue_action)
+            self.assertEqual(retention.record.job, expected_job)
+            self.assertEqual(retention.record.action_id, queue_action.action_id)
+            self.assertEqual(
+                retention.record.source_verification_id,
+                bundle.result["verification_id"],
+            )
+
+            with ControlStateRepository(
+                path,
+                writer=Writer.LOCAL_CONTROL_PLANE,
+                clock=MutableClock(),
+            ) as repository:
+                jobs = repository.list_execution_jobs()
+                self.assertEqual(len(jobs), 1)
+                self.assertEqual(jobs[0].job_id, expected_job["job_id"])
+
+            replay = run_local_control_wakeup(
+                path,
+                scheduled_for=NOW,
+                clock=MutableClock(NOW + timedelta(minutes=1)),
+                discovery_effect=discovery_effect,
+                verification_effect=verification_effect,
+                catalog=self.catalog,
+                policy=self.policy,
+            )
+            self.assertTrue(replay.replayed)
+            with ControlStateRepository(
+                path,
+                writer=Writer.LOCAL_CONTROL_PLANE,
+                clock=MutableClock(),
+            ) as repository:
+                self.assertEqual(len(repository.list_execution_jobs()), 1)
 
     def test_invalid_fake_identity_leaves_planned_wakeup_ambiguous(self):
         discovery, bundle = fixture_bundle()

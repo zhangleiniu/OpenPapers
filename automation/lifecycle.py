@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, fields
 from datetime import datetime, timezone
 from typing import Any, Mapping, Sequence, TypeAlias
 
@@ -123,6 +123,48 @@ class ActionIntent:
             "evidence_ids": list(self.evidence_ids),
             "payload": payload,
         }
+
+
+def action_intent_from_payload(payload: Mapping[str, Any]) -> ActionIntent:
+    """Rebuild and validate a defensive ActionIntent from persisted JSON."""
+    if not isinstance(payload, Mapping):
+        raise LifecycleReductionError("action payload must be a mapping")
+    try:
+        action_type = ActionType(payload["action_type"])
+    except (KeyError, ValueError) as exc:
+        raise LifecycleReductionError("action_type is invalid") from exc
+    payload_cls = _ACTION_PAYLOAD_TYPES[action_type]
+    raw_payload = payload.get("payload")
+    if not isinstance(raw_payload, Mapping):
+        raise LifecycleReductionError("action payload body must be a mapping")
+    payload_fields = fields(payload_cls)
+    field_names = {field.name for field in payload_fields}
+    if set(raw_payload.keys()) != field_names:
+        raise LifecycleReductionError(
+            "action payload fields do not match its declared type"
+        )
+    kwargs: dict[str, Any] = {}
+    for field in payload_fields:
+        value = raw_payload[field.name]
+        if field.type == "tuple[str, ...]":
+            if not isinstance(value, list):
+                raise LifecycleReductionError(
+                    "action payload field must be a list"
+                )
+            value = tuple(value)
+        kwargs[field.name] = value
+    try:
+        evidence_ids = tuple(payload["evidence_ids"])
+        return ActionIntent(
+            action_id=payload["action_id"],
+            action_type=action_type,
+            venue_id=payload["venue_id"],
+            year=payload["year"],
+            evidence_ids=evidence_ids,
+            payload=payload_cls(**kwargs),
+        )
+    except (KeyError, TypeError) as exc:
+        raise LifecycleReductionError("action payload is invalid") from exc
 
 
 @dataclass(frozen=True)

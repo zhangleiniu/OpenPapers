@@ -18,11 +18,13 @@ from automation.control_state import (
     DEFAULT_SCHEDULER_SELECTION_LIMIT,
     ControlStateRepository,
     DueWorkSelection,
+    ExecutionRetentionOutcome,
     LeaseHandle,
     SchedulerWakeupOutcome,
 )
 from automation.discovery import DiscoveryRequest, request_from_catalog
 from automation.domain import Writer
+from automation.execution_retention import retain_execution_actions
 from automation.lifecycle import ActionIntent
 from automation.local_scheduler import (
     LOCAL_SCHEDULER_OWNER_ID,
@@ -81,6 +83,7 @@ class SelectionCompositionOutcome:
     consumptions: tuple[VerificationConsumptionOutcome, ...]
     action_integration: tuple[ActionIntegrationOutcome, ...]
     actions: tuple[ActionIntent, ...]
+    execution_retentions: tuple[ExecutionRetentionOutcome, ...]
     final_state_revision: int
 
 
@@ -240,6 +243,7 @@ def _compose_selection(
     consumptions: list[VerificationConsumptionOutcome] = []
     integrations: list[ActionIntegrationOutcome] = []
     actions: list[ActionIntent] = []
+    execution_retentions: list[ExecutionRetentionOutcome] = []
     verification_ids: list[str] = []
     for bundle in bundles:
         repository.accept_verification(
@@ -272,10 +276,18 @@ def _compose_selection(
             occurred_at=bundle.result["verified_at"],
             run_ids=(wakeup_id, selection.selection_id),
         )
+        retentions = retain_execution_actions(
+            repository,
+            consumption.reduction.actions,
+            source_verification_id=bundle.result["verification_id"],
+            lease=lease,
+            enqueued_at=bundle.result["verified_at"],
+        )
         verification_ids.append(bundle.result["verification_id"])
         consumptions.append(consumption)
         integrations.append(integration)
         actions.extend(consumption.reduction.actions)
+        execution_retentions.extend(retentions)
 
     final = repository.get_conference_state(selection.venue_id, selection.year)
     if final is None or final.state["next_check_at"] == selection.next_check_at:
@@ -288,6 +300,7 @@ def _compose_selection(
         consumptions=tuple(consumptions),
         action_integration=tuple(integrations),
         actions=tuple(actions),
+        execution_retentions=tuple(execution_retentions),
         final_state_revision=final.revision,
     )
 

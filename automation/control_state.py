@@ -33,11 +33,17 @@ from automation.domain import (
     assert_secret_free,
     assert_writer_allowed,
 )
+from automation.job_queue import (
+    JobQueueError,
+    build_scrape_job_from_action,
+    validate_job_identity,
+)
 from automation.job_results import (
     manifest_object_name,
     result_object_name,
     validate_result_bundle,
 )
+from automation.lifecycle import ActionIntent, action_intent_from_payload
 from automation.notifications import (
     FailureCategory,
     NotificationIntent,
@@ -50,7 +56,7 @@ from automation.notifications import (
 from automation.verification import validate_verification_result
 
 
-CONTROL_SCHEMA_VERSION = 6
+CONTROL_SCHEMA_VERSION = 7
 DEFAULT_LEASE_TTL_SECONDS = 300
 MAX_LEASE_TTL_SECONDS = 86_400
 DEFAULT_SCHEDULER_SELECTION_LIMIT = 100
@@ -100,6 +106,10 @@ class JobResultConsumptionConflictError(ControlStateError):
 
 class SchedulerWakeupConflictError(ControlStateError):
     """Raised when a wakeup identity changes meaning or remains ambiguous."""
+
+
+class ExecutionQueueError(ControlStateError):
+    """Raised when durable execution enqueue, claim, or completion is unsafe."""
 
 
 class StoredDataError(ControlStateError):
@@ -313,6 +323,71 @@ class JobResultConsumptionOutcome:
 
     record: JobResultConsumptionRecord
     applied: bool
+
+
+@dataclass(frozen=True)
+class ExecutionJobRecord:
+    """Current durable state for one retained verified scraper action/job."""
+
+    job_id: str
+    action_id: str
+    source_verification_id: str
+    venue_id: str
+    year: int
+    enqueued_at: str
+    state: str
+    current_attempt_number: int
+    action_fingerprint: str
+    job_fingerprint: str
+    action: dict[str, Any]
+    job: dict[str, Any]
+
+
+@dataclass(frozen=True)
+class ExecutionRetentionOutcome:
+    """Result of retaining one verified action; false for exact replay."""
+
+    record: ExecutionJobRecord
+    applied: bool
+
+
+@dataclass(frozen=True)
+class ExecutionAttemptClaim:
+    """Opaque authority for one in-flight dispatch attempt of one job."""
+
+    job_id: str
+    attempt_number: int
+    claim_token: str
+    started_at: str
+    job: dict[str, Any]
+
+
+@dataclass(frozen=True)
+class ExecutionAttemptRecord:
+    """One immutable-numbered dispatch attempt for a durable execution job."""
+
+    job_id: str
+    attempt_number: int
+    claim_token: str
+    started_at: str
+    completed_at: str | None
+    disposition: str | None
+    status: str | None
+    failure_class: str | None
+    reason_code: str | None
+    result_job_id: str | None
+    published: bool | None
+    retry_permitted: bool | None
+    paper_count: int | None
+    valid_pdf_count: int | None
+
+
+@dataclass(frozen=True)
+class ExecutionCompletionOutcome:
+    """Result of durably closing or retrying the current claimed attempt."""
+
+    record: ExecutionJobRecord
+    attempt: ExecutionAttemptRecord
 
 
 _MIGRATION_1 = (
@@ -603,6 +678,61 @@ _MIGRATION_6 = (
     """,
 )
 
+_MIGRATION_7 = (
+    """
+    CREATE TABLE execution_job (
+        job_id TEXT PRIMARY KEY,
+        action_id TEXT NOT NULL UNIQUE,
+        source_verification_id TEXT NOT NULL,
+        venue_id TEXT NOT NULL,
+        year INTEGER NOT NULL,
+        enqueued_at TEXT NOT NULL,
+        state TEXT NOT NULL CHECK (state IN ('pending', 'in_flight', 'completed')),
+        current_attempt_number INTEGER NOT NULL CHECK (current_attempt_number >= 0),
+        action_fingerprint TEXT NOT NULL,
+        job_fingerprint TEXT NOT NULL,
+        action_json TEXT NOT NULL,
+        job_json TEXT NOT NULL,
+        FOREIGN KEY (source_verification_id)
+            REFERENCES verification_history (verification_id)
+    )
+    """,
+    """
+    CREATE INDEX execution_job_state_enqueued
+    ON execution_job (state, enqueued_at, job_id)
+    """,
+    """
+    CREATE TABLE execution_attempt_history (
+        job_id TEXT NOT NULL,
+        attempt_number INTEGER NOT NULL CHECK (attempt_number >= 1),
+        claim_token TEXT NOT NULL,
+        started_at TEXT NOT NULL,
+        completed_at TEXT,
+        disposition TEXT CHECK (disposition IN ('retry', 'completed')),
+        status TEXT,
+        failure_class TEXT,
+        reason_code TEXT,
+        result_job_id TEXT,
+        published INTEGER,
+        retry_permitted INTEGER,
+        paper_count INTEGER CHECK (paper_count IS NULL OR paper_count >= 0),
+        valid_pdf_count INTEGER
+            CHECK (valid_pdf_count IS NULL OR valid_pdf_count >= 0),
+        PRIMARY KEY (job_id, attempt_number),
+        FOREIGN KEY (job_id) REFERENCES execution_job (job_id),
+        CHECK (
+            (completed_at IS NULL AND disposition IS NULL AND status IS NULL
+                AND reason_code IS NULL AND published IS NULL
+                AND retry_permitted IS NULL)
+            OR
+            (completed_at IS NOT NULL AND disposition IS NOT NULL
+                AND status IS NOT NULL AND reason_code IS NOT NULL
+                AND published IS NOT NULL AND retry_permitted IS NOT NULL)
+        )
+    )
+    """,
+)
+
 _MIGRATIONS = {
     1: _MIGRATION_1,
     2: _MIGRATION_2,
@@ -610,6 +740,7 @@ _MIGRATIONS = {
     4: _MIGRATION_4,
     5: _MIGRATION_5,
     6: _MIGRATION_6,
+    7: _MIGRATION_7,
 }
 
 _REQUIRED_COLUMNS_V1 = {
@@ -693,6 +824,20 @@ _REQUIRED_COLUMNS_V6 = {
     },
 }
 
+_REQUIRED_COLUMNS_V7 = {
+    "execution_job": {
+        "job_id", "action_id", "source_verification_id", "venue_id", "year",
+        "enqueued_at", "state", "current_attempt_number", "action_fingerprint",
+        "job_fingerprint", "action_json", "job_json",
+    },
+    "execution_attempt_history": {
+        "job_id", "attempt_number", "claim_token", "started_at", "completed_at",
+        "disposition", "status", "failure_class", "reason_code",
+        "result_job_id", "published", "retry_permitted", "paper_count",
+        "valid_pdf_count",
+    },
+}
+
 _REQUIRED_COLUMNS_BY_VERSION = {
     1: _REQUIRED_COLUMNS_V1,
     2: _REQUIRED_COLUMNS_V2,
@@ -700,6 +845,7 @@ _REQUIRED_COLUMNS_BY_VERSION = {
     4: _REQUIRED_COLUMNS_V4,
     5: _REQUIRED_COLUMNS_V5,
     6: _REQUIRED_COLUMNS_V6,
+    7: _REQUIRED_COLUMNS_V7,
 }
 
 
@@ -1735,6 +1881,523 @@ class ControlStateRepository:
             discovery=deepcopy(discovery),
             request=deepcopy(request),
             result=deepcopy(result),
+        )
+
+    def retain_existing_scraper_action(
+        self,
+        action: ActionIntent,
+        *,
+        source_verification_id: str,
+        lease: LeaseHandle,
+        enqueued_at: datetime | str,
+    ) -> ExecutionRetentionOutcome:
+        """Persist one verified queue_existing_scraper action and its job.
+
+        The strict version-2 job is always recomputed from the action; a
+        caller can never supply job bytes directly. Exact replay of the same
+        action ID is a no-op; identity, evidence, or stored-content drift
+        fails closed.
+        """
+        if self.writer is not Writer.LOCAL_CONTROL_PLANE:
+            raise OwnershipError(
+                "execution dispatch requires local control ownership"
+            )
+        if not isinstance(action, ActionIntent):
+            raise ExecutionQueueError("retained action must be an ActionIntent")
+        if not isinstance(source_verification_id, str) or not source_verification_id:
+            raise ExecutionQueueError("source_verification_id is required")
+        if source_verification_id not in action.evidence_ids:
+            raise ExecutionQueueError(
+                "action does not cite the supplied source verification among "
+                "its evidence"
+            )
+        try:
+            job = build_scrape_job_from_action(action)
+        except JobQueueError as exc:
+            raise ExecutionQueueError(
+                f"action cannot become a scrape job: {exc}"
+            ) from exc
+        action_payload = action.as_dict()
+        assert_secret_free(action_payload)
+        action_json = _canonical_json(action_payload)
+        job_json = _canonical_json(job)
+        action_fp = artifact_fingerprint(action_payload)
+        job_fp = job["job_fingerprint"]
+        enqueued_text = _timestamp(enqueued_at, field="execution enqueued_at")
+
+        with self._write_transaction() as connection:
+            self._require_lease(connection, lease, self._now())
+            verification_row = connection.execute(
+                "SELECT venue_id, year FROM verification_history "
+                "WHERE verification_id = ?",
+                (source_verification_id,),
+            ).fetchone()
+            if verification_row is None:
+                raise ExecutionQueueError("source verification is not retained")
+            if (
+                str(verification_row["venue_id"]) != action.venue_id
+                or int(verification_row["year"]) != action.year
+            ):
+                raise ExecutionQueueError(
+                    "source verification venue/year does not match the action"
+                )
+            existing = connection.execute(
+                "SELECT * FROM execution_job WHERE action_id = ?",
+                (action.action_id,),
+            ).fetchone()
+            if existing is not None:
+                record = self._execution_job_from_row(existing, connection)
+                if (
+                    record.job_id != job["job_id"]
+                    or record.source_verification_id != source_verification_id
+                    or record.action_fingerprint != action_fp
+                    or record.job_fingerprint != job_fp
+                ):
+                    raise ExecutionQueueError(
+                        "action ID already retained a different job"
+                    )
+                return ExecutionRetentionOutcome(record=record, applied=False)
+            conflicting = connection.execute(
+                "SELECT job_id FROM execution_job WHERE job_id = ?",
+                (job["job_id"],),
+            ).fetchone()
+            if conflicting is not None:
+                raise ExecutionQueueError(
+                    "recomputed job ID already belongs to a different action"
+                )
+            connection.execute(
+                """
+                INSERT INTO execution_job (
+                    job_id, action_id, source_verification_id, venue_id, year,
+                    enqueued_at, state, current_attempt_number,
+                    action_fingerprint, job_fingerprint, action_json, job_json
+                ) VALUES (?, ?, ?, ?, ?, ?, 'pending', 0, ?, ?, ?, ?)
+                """,
+                (
+                    job["job_id"], action.action_id, source_verification_id,
+                    action.venue_id, action.year, enqueued_text,
+                    action_fp, job_fp, action_json, job_json,
+                ),
+            )
+            row = connection.execute(
+                "SELECT * FROM execution_job WHERE job_id = ?", (job["job_id"],)
+            ).fetchone()
+            record = self._execution_job_from_row(row, connection)
+        return ExecutionRetentionOutcome(record=record, applied=True)
+
+    def claim_next_execution_job(
+        self,
+        *,
+        lease: LeaseHandle,
+        claimed_at: datetime | str,
+    ) -> ExecutionAttemptClaim | None:
+        """Claim at most one pending job in stable enqueue/job-ID order."""
+        if self.writer is not Writer.LOCAL_CONTROL_PLANE:
+            raise OwnershipError(
+                "execution dispatch requires local control ownership"
+            )
+        claimed_text = _timestamp(claimed_at, field="execution claimed_at")
+        with self._write_transaction() as connection:
+            self._require_lease(connection, lease, self._now())
+            row = connection.execute(
+                "SELECT * FROM execution_job WHERE state = 'pending' "
+                "ORDER BY enqueued_at, job_id LIMIT 1"
+            ).fetchone()
+            if row is None:
+                return None
+            record = self._execution_job_from_row(row, connection)
+            attempt_number = record.current_attempt_number + 1
+            claim_token = uuid.uuid4().hex
+            connection.execute(
+                """
+                INSERT INTO execution_attempt_history (
+                    job_id, attempt_number, claim_token, started_at,
+                    completed_at, disposition, status, failure_class,
+                    reason_code, result_job_id, published, retry_permitted,
+                    paper_count, valid_pdf_count
+                ) VALUES (?, ?, ?, ?, NULL, NULL, NULL, NULL, NULL, NULL,
+                    NULL, NULL, NULL, NULL)
+                """,
+                (record.job_id, attempt_number, claim_token, claimed_text),
+            )
+            connection.execute(
+                "UPDATE execution_job "
+                "SET state = 'in_flight', current_attempt_number = ? "
+                "WHERE job_id = ?",
+                (attempt_number, record.job_id),
+            )
+        return ExecutionAttemptClaim(
+            job_id=record.job_id,
+            attempt_number=attempt_number,
+            claim_token=claim_token,
+            started_at=claimed_text,
+            job=deepcopy(record.job),
+        )
+
+    def complete_execution_attempt(
+        self,
+        claim: ExecutionAttemptClaim,
+        *,
+        disposition: str,
+        status: str,
+        failure_class: str | None,
+        reason_code: str,
+        result_job_id: str | None,
+        published: bool,
+        retry_permitted: bool,
+        paper_count: int | None,
+        valid_pdf_count: int | None,
+        lease: LeaseHandle,
+        completed_at: datetime | str,
+    ) -> ExecutionCompletionOutcome:
+        """Durably close the current in-flight attempt exactly once.
+
+        A ``retry`` disposition returns the job to ``pending`` for a new
+        attempt with an incremented attempt number. A ``completed``
+        disposition closes the job permanently. Any inability to prove the
+        effect outcome (an exception, a stale claim, or a lost lease) must
+        never reach this method; the attempt then stays durably ``in_flight``
+        and is never reclaimed by elapsed time.
+        """
+        if self.writer is not Writer.LOCAL_CONTROL_PLANE:
+            raise OwnershipError(
+                "execution dispatch requires local control ownership"
+            )
+        if not isinstance(claim, ExecutionAttemptClaim):
+            raise ExecutionQueueError("claim must be an ExecutionAttemptClaim")
+        if disposition not in {"retry", "completed"}:
+            raise ExecutionQueueError(
+                "execution disposition must be retry or completed"
+            )
+        if retry_permitted != (disposition == "retry"):
+            raise ExecutionQueueError(
+                "retry_permitted does not match the supplied disposition"
+            )
+        if not isinstance(status, str) or not status:
+            raise ExecutionQueueError("execution status is required")
+        if failure_class is not None and not isinstance(failure_class, str):
+            raise ExecutionQueueError(
+                "execution failure_class must be a string or None"
+            )
+        if not isinstance(reason_code, str) or not reason_code:
+            raise ExecutionQueueError("execution reason_code is required")
+        if result_job_id is not None and not isinstance(result_job_id, str):
+            raise ExecutionQueueError("execution result_job_id must be a string or None")
+        if published and result_job_id is None:
+            raise ExecutionQueueError(
+                "published execution output requires a result job ID"
+            )
+        for value in (paper_count, valid_pdf_count):
+            if value is not None and (
+                not isinstance(value, int) or isinstance(value, bool) or value < 0
+            ):
+                raise ExecutionQueueError(
+                    "execution counts must be non-negative integers or None"
+                )
+        completed_text = _timestamp(completed_at, field="execution completed_at")
+
+        with self._write_transaction() as connection:
+            self._require_lease(connection, lease, self._now())
+            job_row = connection.execute(
+                "SELECT * FROM execution_job WHERE job_id = ?", (claim.job_id,)
+            ).fetchone()
+            if job_row is None:
+                raise ExecutionQueueError("claimed execution job does not exist")
+            record = self._execution_job_from_row(job_row, connection)
+            if (
+                record.state != "in_flight"
+                or record.current_attempt_number != claim.attempt_number
+            ):
+                raise ExecutionQueueError(
+                    "claim does not match the current in-flight attempt"
+                )
+            attempt_row = connection.execute(
+                "SELECT * FROM execution_attempt_history "
+                "WHERE job_id = ? AND attempt_number = ?",
+                (claim.job_id, claim.attempt_number),
+            ).fetchone()
+            if attempt_row is None:
+                raise StoredDataError("claimed execution attempt is missing")
+            if (
+                str(attempt_row["claim_token"]) != claim.claim_token
+                or attempt_row["completed_at"] is not None
+            ):
+                raise ExecutionQueueError(
+                    "execution claim token is stale or already completed"
+                )
+            started_at = _timestamp(
+                str(attempt_row["started_at"]), field="stored execution started_at"
+            )
+            if _parse_timestamp(
+                completed_text, field="execution completed_at"
+            ) < _parse_timestamp(started_at, field="execution started_at"):
+                raise ExecutionQueueError(
+                    "execution completion time cannot precede its start"
+                )
+            connection.execute(
+                """
+                UPDATE execution_attempt_history
+                SET completed_at = ?, disposition = ?, status = ?,
+                    failure_class = ?, reason_code = ?, result_job_id = ?,
+                    published = ?, retry_permitted = ?, paper_count = ?,
+                    valid_pdf_count = ?
+                WHERE job_id = ? AND attempt_number = ?
+                """,
+                (
+                    completed_text, disposition, status, failure_class,
+                    reason_code, result_job_id, int(published),
+                    int(retry_permitted), paper_count, valid_pdf_count,
+                    claim.job_id, claim.attempt_number,
+                ),
+            )
+            new_state = "pending" if disposition == "retry" else "completed"
+            connection.execute(
+                "UPDATE execution_job SET state = ? WHERE job_id = ?",
+                (new_state, claim.job_id),
+            )
+            completed_row = connection.execute(
+                "SELECT * FROM execution_job WHERE job_id = ?", (claim.job_id,)
+            ).fetchone()
+            completed_record = self._execution_job_from_row(completed_row, connection)
+            attempt_row = connection.execute(
+                "SELECT * FROM execution_attempt_history "
+                "WHERE job_id = ? AND attempt_number = ?",
+                (claim.job_id, claim.attempt_number),
+            ).fetchone()
+            attempt = self._execution_attempt_from_row(attempt_row)
+        return ExecutionCompletionOutcome(record=completed_record, attempt=attempt)
+
+    def get_execution_job(self, job_id: str) -> ExecutionJobRecord | None:
+        """Return one fully revalidated execution job for recovery inspection."""
+        row = self._connection.execute(
+            "SELECT * FROM execution_job WHERE job_id = ?", (job_id,)
+        ).fetchone()
+        return (
+            self._execution_job_from_row(row, self._connection)
+            if row is not None
+            else None
+        )
+
+    def list_execution_jobs(
+        self, *, state: str | None = None
+    ) -> tuple[ExecutionJobRecord, ...]:
+        """Return validated execution jobs in stable enqueue order."""
+        if state is not None and state not in {"pending", "in_flight", "completed"}:
+            raise ExecutionQueueError("execution job state filter is invalid")
+        if state is None:
+            rows = self._connection.execute(
+                "SELECT * FROM execution_job ORDER BY enqueued_at, job_id"
+            ).fetchall()
+        else:
+            rows = self._connection.execute(
+                "SELECT * FROM execution_job WHERE state = ? "
+                "ORDER BY enqueued_at, job_id",
+                (state,),
+            ).fetchall()
+        return tuple(
+            self._execution_job_from_row(row, self._connection) for row in rows
+        )
+
+    def execution_attempt_history(
+        self, job_id: str
+    ) -> tuple[ExecutionAttemptRecord, ...]:
+        """Return validated dispatch attempts for one job in attempt order."""
+        rows = self._connection.execute(
+            "SELECT * FROM execution_attempt_history WHERE job_id = ? "
+            "ORDER BY attempt_number",
+            (job_id,),
+        ).fetchall()
+        return tuple(self._execution_attempt_from_row(row) for row in rows)
+
+    def _execution_job_from_row(
+        self,
+        row: sqlite3.Row,
+        connection: sqlite3.Connection,
+    ) -> ExecutionJobRecord:
+        job_id = str(row["job_id"])
+        action_id = str(row["action_id"])
+        source_verification_id = str(row["source_verification_id"])
+        venue_id = str(row["venue_id"])
+        year = int(row["year"])
+        enqueued_at = _timestamp(
+            str(row["enqueued_at"]), field="stored execution enqueued_at"
+        )
+        state = str(row["state"])
+        if state not in {"pending", "in_flight", "completed"}:
+            raise StoredDataError("stored execution job state is invalid")
+        current_attempt_number = int(row["current_attempt_number"])
+        if current_attempt_number < 0:
+            raise StoredDataError("stored execution attempt number is invalid")
+        action_payload = _decode_json(row["action_json"], label="execution action")
+        job = _decode_json(row["job_json"], label="execution job")
+        if artifact_fingerprint(action_payload) != row["action_fingerprint"]:
+            raise StoredDataError(
+                "stored execution action fingerprint does not match"
+            )
+        try:
+            validate_job_identity(job)
+        except JobQueueError as exc:
+            raise StoredDataError(f"stored execution job is invalid: {exc}") from exc
+        if (
+            job.get("job_fingerprint") != row["job_fingerprint"]
+            or job.get("job_id") != job_id
+        ):
+            raise StoredDataError("stored execution job fingerprint does not match")
+        try:
+            action = action_intent_from_payload(action_payload)
+        except Exception as exc:
+            raise StoredDataError(
+                f"stored execution action is invalid: {exc}"
+            ) from exc
+        if (
+            action.action_id != action_id
+            or action.venue_id != venue_id
+            or action.year != year
+            or source_verification_id not in action.evidence_ids
+        ):
+            raise StoredDataError("stored execution action identity does not match")
+        try:
+            recomputed_job = build_scrape_job_from_action(action)
+        except JobQueueError as exc:
+            raise StoredDataError(
+                f"stored execution action cannot rebuild its job: {exc}"
+            ) from exc
+        if recomputed_job != job or recomputed_job["job_id"] != job_id:
+            raise StoredDataError("stored execution job does not match its action")
+
+        counts = connection.execute(
+            "SELECT COUNT(*) AS attempts, MAX(attempt_number) AS max_attempt "
+            "FROM execution_attempt_history WHERE job_id = ?",
+            (job_id,),
+        ).fetchone()
+        stored_attempts = int(counts["attempts"])
+        max_attempt = 0 if counts["max_attempt"] is None else int(counts["max_attempt"])
+        if stored_attempts != max_attempt or max_attempt != current_attempt_number:
+            raise StoredDataError(
+                "stored execution attempt count does not match its history"
+            )
+        if state in {"in_flight", "completed"} or (
+            state == "pending" and current_attempt_number > 0
+        ):
+            latest = connection.execute(
+                "SELECT completed_at, disposition FROM execution_attempt_history "
+                "WHERE job_id = ? AND attempt_number = ?",
+                (job_id, current_attempt_number),
+            ).fetchone()
+            if latest is None:
+                raise StoredDataError("stored execution job has no matching attempt")
+            if state == "in_flight" and latest["completed_at"] is not None:
+                raise StoredDataError(
+                    "stored in-flight execution job attempt is already closed"
+                )
+            if state == "completed" and (
+                latest["completed_at"] is None
+                or str(latest["disposition"]) != "completed"
+            ):
+                raise StoredDataError(
+                    "stored completed execution job attempt does not match"
+                )
+            if state == "pending" and current_attempt_number > 0 and (
+                latest["completed_at"] is None
+                or str(latest["disposition"]) != "retry"
+            ):
+                raise StoredDataError(
+                    "stored pending execution job attempt does not match"
+                )
+        return ExecutionJobRecord(
+            job_id=job_id,
+            action_id=action_id,
+            source_verification_id=source_verification_id,
+            venue_id=venue_id,
+            year=year,
+            enqueued_at=enqueued_at,
+            state=state,
+            current_attempt_number=current_attempt_number,
+            action_fingerprint=str(row["action_fingerprint"]),
+            job_fingerprint=str(row["job_fingerprint"]),
+            action=deepcopy(action_payload),
+            job=deepcopy(job),
+        )
+
+    def _execution_attempt_from_row(
+        self, row: sqlite3.Row
+    ) -> ExecutionAttemptRecord:
+        job_id = str(row["job_id"])
+        attempt_number = int(row["attempt_number"])
+        if attempt_number < 1:
+            raise StoredDataError("stored execution attempt number is invalid")
+        started_at = _timestamp(
+            str(row["started_at"]), field="stored execution started_at"
+        )
+        completed_at = (
+            None
+            if row["completed_at"] is None
+            else _timestamp(
+                str(row["completed_at"]), field="stored execution completed_at"
+            )
+        )
+        closed_fields = (
+            row["disposition"], row["status"], row["reason_code"],
+        )
+        if completed_at is None:
+            if (
+                any(value is not None for value in closed_fields)
+                or row["published"] is not None
+                or row["retry_permitted"] is not None
+            ):
+                raise StoredDataError(
+                    "stored in-flight execution attempt has completion data"
+                )
+        else:
+            if (
+                any(value is None for value in closed_fields)
+                or row["published"] is None
+                or row["retry_permitted"] is None
+            ):
+                raise StoredDataError(
+                    "stored closed execution attempt is incomplete"
+                )
+            if str(row["disposition"]) not in {"retry", "completed"}:
+                raise StoredDataError("stored execution disposition is invalid")
+            if _parse_timestamp(
+                completed_at, field="stored execution completed_at"
+            ) < _parse_timestamp(started_at, field="stored execution started_at"):
+                raise StoredDataError("stored execution attempt regresses")
+        return ExecutionAttemptRecord(
+            job_id=job_id,
+            attempt_number=attempt_number,
+            claim_token=str(row["claim_token"]),
+            started_at=started_at,
+            completed_at=completed_at,
+            disposition=(
+                None if row["disposition"] is None else str(row["disposition"])
+            ),
+            status=None if row["status"] is None else str(row["status"]),
+            failure_class=(
+                None if row["failure_class"] is None else str(row["failure_class"])
+            ),
+            reason_code=(
+                None if row["reason_code"] is None else str(row["reason_code"])
+            ),
+            result_job_id=(
+                None if row["result_job_id"] is None else str(row["result_job_id"])
+            ),
+            published=(
+                None if row["published"] is None else bool(row["published"])
+            ),
+            retry_permitted=(
+                None
+                if row["retry_permitted"] is None
+                else bool(row["retry_permitted"])
+            ),
+            paper_count=(
+                None if row["paper_count"] is None else int(row["paper_count"])
+            ),
+            valid_pdf_count=(
+                None
+                if row["valid_pdf_count"] is None
+                else int(row["valid_pdf_count"])
+            ),
         )
 
     def consume_job_result(

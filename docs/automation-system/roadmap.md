@@ -574,9 +574,10 @@ boundary, and P5.2 completed the isolated fake-tested staging/process boundary
 without runtime wiring or an actual scrape. P5.3 has completed the independent
 staged-validation/manifest boundary, and P5.4 has completed fixture-only
 guarded composition, immutable result construction, and readiness/failure
-routing. P5.S completed the first manual real shadow; P5.5 is the next package
-and owns durable local action/job persistence plus fake-only dispatch
-reconciliation.
+routing. P5.S completed the first manual real shadow, and P5.5 has completed
+durable local action/job persistence plus fake-only bounded dispatch and
+reconciliation. P5.5S remains blocked on a separately accepted automatic
+deterministic verifier/action-source gate.
 
 ## Phase 5: execute existing scrapers
 
@@ -686,19 +687,44 @@ P5.S has completed the first authorized real shadow:
   [`phase5-existing-scraper-shadow-review-2026-07-14.md`](./phase5-existing-scraper-shadow-review-2026-07-14.md).
 
 Phase 5 is now `Shadow`, not `Implemented`. The command remains manual and
-uninstalled; no verified action is persisted or automatically dispatched, no
-production runtime invokes P5.4, and no result can promote canonical data or
-change conference state.
+uninstalled; no production runtime invokes P5.4, and no result can promote
+canonical data or change conference state.
 
-The next package is P5.5. It will persist only strict P2.5
-`queue_existing_scraper` actions and recomputed version-2 jobs under the local
-single-writer lease, then exercise a one-job injected P5.4 dispatch and
-crash/replay reconciliation boundary without holding the global control lease
-across the long-running effect. It is fixture/fake-only and does not install or
-run a scraper. A later installed automatic shadow remains blocked until both
-P5.5 and a separately accepted automatic deterministic verifier/action-source
-gate exist; the current manual Phase 2 shadow cannot supply production
-execution authority.
+P5.5 has completed durable local action/job persistence and bounded dispatch:
+
+- control-state schema version 7 adds an immutable current-job row keyed by
+  the recomputed job ID and an append-only numbered attempt history, retained
+  only under the local single-writer lease;
+- `automation/execution_retention.py` accepts only the exact `ActionIntent`
+  values a lease-protected local reduction just produced, filters to
+  `queue_existing_scraper`, and lets the repository recompute the strict
+  version-2 job from the action; a caller can never submit job bytes directly,
+  and exact action replay is a no-op while identity, evidence, venue/year, or
+  stored-content drift fails closed;
+- `automation/local_control_plane.py` retains a real verified action
+  immediately after the existing P2.5 reduction and P3.4 integration, inside
+  the same wakeup, so `SelectionCompositionOutcome.execution_retentions`
+  reports exactly one durable job for a real single-shot `pdf_ready` fixture
+  and exact wakeup replay adds nothing new;
+- `automation/execution_dispatch.py` claims at most one pending job under a
+  short lease, releases that lease before calling an injected P5.4-compatible
+  effect, and reconciles the typed observation under a freshly acquired
+  lease. A `retry`/`cancelled` observation returns the job to `pending` with
+  an incremented attempt number; a terminal observation (`ready`, `partial`,
+  `failed`, or duplicate-completed `skipped`) closes the job permanently; and
+- an effect exception, a `recovery_required` observation, a job-identity
+  mismatch, or any failure while reconciling leaves the attempt `in_flight`
+  and blocks automatic redispatch. Elapsed time never reclaims it; only a
+  future package with exact P5 artifact reconciliation may resolve it.
+
+P5.5 uses only temporary local-owned SQLite, fake verified bundles, fake
+clocks, and injected fake execution effects. It changes no installed
+LaunchDaemon, production database, production marker/configuration, network
+policy, credential, P5.S command, canonical data, statistics, deployment, or
+Codex boundary. A later installed automatic shadow (P5.5S) remains blocked
+until both P5.5 and a separately accepted automatic deterministic
+verifier/action-source gate exist; the current manual Phase 2 shadow cannot
+supply production execution authority.
 
 ## Phase 6: Codex diagnosis and repair
 

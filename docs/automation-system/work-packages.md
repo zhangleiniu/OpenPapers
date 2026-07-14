@@ -104,11 +104,13 @@ fake-tested staging/process boundary, and P5.3 is complete at the independent
 staged-validation/manifest boundary. P5.4 is complete at the fixture-only
 guarded composition/result-routing boundary. P5.S has completed one real COLT
 2025 timeout/resume/success/replay shadow with canonical write denial and
-private immutable results. Phase 5 is `Shadow`; no automatic runtime connection
-or canonical promotion is authorized. P5.5 is the sole `Ready` package for
-fake-only durable action/job persistence and dispatch reconciliation; P5.5S is
-blocked on that package plus an accepted automatic deterministic
-verifier/action-source gate. The local LaunchDaemon is authoritative and the
+private immutable results. P5.5 has completed fake-only durable action/job
+persistence (control-state schema version 7) and bounded dispatch/
+reconciliation with no installed caller or live request. Phase 5 remains
+`Shadow`; no automatic runtime connection or canonical promotion is
+authorized. P5.5S is `Blocked` on a separately accepted automatic
+deterministic verifier/action-source gate; no package on the main sequential
+path is currently `Ready`. The local LaunchDaemon is authoritative and the
 retained Cloud Scheduler job is paused.
 
 ### P2.1R — harden verifier contract semantics
@@ -948,7 +950,7 @@ host recovery evidence.
 | P5.3 | Complete | P5.2 | Strict candidate inventory/manifest plus bound independent validation report/manifest for count, metadata, duplicate IDs, PDF existence/size/signature, and completeness levels. Temporary fixture roots only; no runtime, result, or canonical write. |
 | P5.4 | Complete | P5.3 | Fixture-only guarded job-to-staging-to-validation-to-immutable-result composition with readiness routing, replay recovery, and transient/operational/structural classification. No runtime connection or real scrape. |
 | P5.S | Complete | P5.4 | Manual sandboxed COLT 2025 archival shadow: confirmed failure and timeout recovery, 181/181 independent validation, private create-only result, exact duplicate suppression, canonical invariance, coexistence, and scoped rollback. No installed or automatic caller. |
-| P5.5 | Ready | P5.S | Persist only strict P2.5 `queue_existing_scraper` actions and their recomputed v2 jobs in local-owned control state, then claim and reconcile at most one job through an injected P5.4 effect after releasing the global control lease. Schema migration, exact replay, crash ambiguity, result reconciliation, and rollback use temporary state/fakes only. No installed caller, live request, scraper process, canonical write, promotion, or Phase 6 capability. |
+| P5.5 | Complete | P5.S | Persists only strict P2.5 `queue_existing_scraper` actions and their recomputed v2 jobs in local-owned control state (schema version 7), then claims and reconciles at most one job through an injected P5.4 effect after releasing the global control lease. Schema migration, exact replay, crash ambiguity, result reconciliation, and rollback use temporary state/fakes only. No installed caller, live request, scraper process, canonical write, promotion, or Phase 6 capability. |
 | P5.5S | Blocked | P5.5 plus an accepted automatic deterministic verifier/action-source gate | Separately authorized installed automatic shadow using a verified crawl-policy-allowed action and a bounded venue family not covered by the COLT canary. It may write only isolated staging/artifact/result space and cannot promote, deploy, run statistics writes, or enter Codex repair. |
 
 P5.S completed boundary: `automation/execution_shadow.py` and the explicit
@@ -970,35 +972,48 @@ this canary.
 
 ### P5.5 — durable local action and execution dispatch
 
-Status: `Ready`
+Status: `Complete`
 
 Depends on: P5.S
 
-P5.5 is the next implementation package. It adds an additive local-owner
-control-state migration that can retain only an exact P2.5
-`queue_existing_scraper` action together with the strict version-2 job
-recomputed by `automation.job_queue.build_scrape_job_from_action`. Enqueue
-occurs inside the same lease-protected local reduction that produced the
-action, so a caller cannot submit arbitrary job JSON or turn discovery output
-directly into execution authority. Exact action/job replay is a no-op;
-identity, evidence, venue/year, payload, or stored-content drift fails closed.
+Completed boundary: control-state schema version 7 adds an additive
+local-owner journal that retains only an exact P2.5 `queue_existing_scraper`
+action together with the strict version-2 job recomputed by
+`automation.job_queue.build_scrape_job_from_action` in one immutable current
+row plus an append-only numbered attempt history.
+`automation/execution_retention.py` is called from inside
+`automation/local_control_plane.py`'s existing lease-protected reduction,
+immediately after P2.5 reduction and P3.4 integration, so a caller cannot
+submit arbitrary job JSON or turn discovery output directly into execution
+authority. Exact action/job replay is a no-op; identity, evidence,
+venue/year, payload, or stored-content drift fails closed, and it has no
+import on `automation.execution_pipeline`, `automation.mac_worker`, or
+`automation.staging_executor`.
 
-Execution dispatch is a separate bounded step. It claims at most one retained
-job under the local control lease, releases that global lease before any
-potentially long-running work, and calls only an injected P5.4-compatible
-effect. The persistent dispatch claim and P5.2/P5.4 checkpoint/result state are
-then reconciled under a newly acquired lease. A crash or lost lease across the
-effect boundary remains durable ambiguity until those exact artifacts prove
-that the process never started, stopped cleanly, or completed; elapsed time
-alone never reclaims it. Terminal result identity is retained exactly once,
-but P5.5 does not interpret the result as a lifecycle transition or promotion
-authority.
+`automation/execution_dispatch.py` is the separate bounded dispatch step. It
+claims at most one retained job under the local control lease, releases that
+global lease before any potentially long-running work, and calls only an
+injected P5.4-compatible effect. The persistent dispatch claim and its typed
+observation are then reconciled under a newly acquired lease. A `retry`- or
+`cancelled`-permitted observation returns the job to `pending` with an
+incremented attempt number under the same immutable job ID; a terminal
+observation (`ready`, `partial`, `failed`, or duplicate-completed `skipped`)
+closes the job permanently. An effect exception, a `recovery_required`
+observation, a job-identity mismatch, or a failure while reconciling leaves
+the attempt durably `in_flight`; elapsed time alone never reclaims it.
+Terminal result identity is retained exactly once, but P5.5 does not
+interpret the result as a lifecycle transition or promotion authority.
 
-P5.5 uses temporary local-owned SQLite, fake verified bundles, fake clocks,
-and injected fake execution effects only. It does not change the installed
-LaunchDaemon, production database, production marker/configuration, network
-policy, credentials, P5.S command, canonical data, statistics, deployment, or
-Codex boundary. Its living plan is
+Tests use only temporary local-owned SQLite, a real single-shot `pdf_ready`
+verification fixture that exercises genuine P2.5 reduction, fake clocks, and
+injected fake execution effects. `test_local_control_plane.py` proves a real
+verified action retains exactly one job and exact wakeup replay adds nothing
+new. P5.5 does not change the installed LaunchDaemon, production database,
+production marker/configuration, network policy, credentials, P5.S command,
+canonical data, statistics, deployment, or Codex boundary. Because the
+installed P4.LC production service runs a read-only source snapshot fixed at
+install time, this change has no effect on the live production database
+until a separately authorized reinstall/upgrade. Its living plan is
 `.agent/plans/p5-5-durable-local-shadow-dispatch.md`.
 
 ### P5.5S — installed automatic execution shadow
