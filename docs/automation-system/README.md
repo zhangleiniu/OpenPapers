@@ -147,10 +147,21 @@ sample produced 28 strict targets: 2 verified milestones, 22 rejections, 4
 review-required results, 8 invalid PDF signatures, and no scraper-queue
 intent. The record is
 [`phase2-live-review-2026-07-13.md`](./phase2-live-review-2026-07-13.md).
-Actions remain inert data: no intent is persisted or dispatched, no
-notification is delivered, and no scraper runs. PDF evidence retention grants
-no redistribution authority. Phase 2 is `Shadow`, not deployed or
-implemented; live source-profile coverage remains conservative.
+P2.S actions remain inert data: it persists or dispatches no intent, delivers
+no notification, and runs no scraper. P5.5 can now retain a strict scraper
+action produced by the separate fake-only local composition, but no live or
+installed Phase 2 path supplies one and no installed dispatcher consumes it.
+PDF evidence retention grants no redistribution authority. Phase 2 is
+`Shadow`, not deployed or implemented; live source-profile coverage remains
+conservative.
+
+P2.6 is the sole next package. It will add a fixture-only,
+production-capable `DiscoveryEffect` that requires the existing attempt budget
+ledger plus durable cross-process cooldown and systemic-circuit state before an
+automatic provider call. P2.7 then owns deterministic verification and full
+per-domain production crawl-policy review; P2.8 owns the uninstalled automatic
+composition through P5.5 retention; and P2.8S owns its separately authorized
+isolated live evidence. P5.5S remains blocked until P2.8 and P2.8S complete.
 
 Phase 3.1 persistent unresolved cases, P3.2 reminder/digest policy, P3.3's
 fake-only notification delivery boundary, P3.4's persistent shadow-output

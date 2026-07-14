@@ -73,7 +73,12 @@ parallel.
 P2.1R through P2.5 have completed the local verification, persistence,
 lifecycle, scheduling, and inert-routing slices. P2.S has completed the
 explicitly authorized 15-venue live shadow review using isolated roots and no
-production action. Phase 2 is now `Shadow`. P3.1 has completed the persistent
+production action. Phase 2 is now `Shadow`. P2.6 is the sole `Ready` package
+and owns the fixture-only automatic discovery effect plus durable automatic-call
+guardrails. P2.7 and P2.8 remain sequentially `Planned`; P2.8S is the blocked,
+explicitly authorized live canary. P5.5S waits for both the accepted automatic
+composition and its live evidence. See "Phase 2 packages" below. P3.1 has
+completed the persistent
 case slice, P3.2 has completed reminder aging and grouped digest data, P3.3 has
 completed the fake-only durable delivery boundary, and P3.4 has completed
 pending shadow-output integration. P3.S has completed one separately
@@ -108,10 +113,10 @@ private immutable results. P5.5 has completed fake-only durable action/job
 persistence (control-state schema version 7) and bounded dispatch/
 reconciliation with no installed caller or live request. Phase 5 remains
 `Shadow`; no automatic runtime connection or canonical promotion is
-authorized. P5.5S is `Blocked` on a separately accepted automatic
-deterministic verifier/action-source gate; no package on the main sequential
-path is currently `Ready`. The local LaunchDaemon is authoritative and the
-retained Cloud Scheduler job is paused.
+authorized. P5.5S is `Blocked` on P2.8 and P2.8S: the former is the uninstalled
+automatic deterministic verifier/action-source composition, and the latter is
+its separately authorized live evidence. The local LaunchDaemon is authoritative
+and the retained Cloud Scheduler job is paused.
 
 ### P2.1R — harden verifier contract semantics
 
@@ -262,6 +267,194 @@ lifecycle shape deterministically. There is no live network, P2.S observation,
 production state/GCS/Prefect integration, case service, notification, Mac
 worker, Codex, promotion, or deployment behavior.
 
+### P2.6 — guarded automatic discovery effect
+
+Status: `Ready`
+
+Depends on: Phase 2 gate (P2.5)
+
+P2.6 is fixture/fake-only. It builds a production-capable implementation of
+`automation.local_control_plane.DiscoveryEffect` around the existing
+`DiscoveryService`, `GeminiSearchGroundingProvider`, `JsonBudgetLedger`,
+`ArtifactStore`, and policy-derived `BudgetLimits`. The automatic adapter
+requires explicit private artifact/budget/health-ledger paths and rejects a
+missing budget or health ledger. It does not reuse the existing unmetered
+manual `automation.run_discovery --live` entry point.
+
+Included:
+
+- require the existing process-safe daily/global/per-venue/secondary-call
+  attempt reservations before provider I/O and retain concurrency enforcement;
+- add a separate versioned, process-safe automatic-discovery health ledger
+  containing only typed failure category/fingerprint, venue, timestamps,
+  cooldown deadline, and circuit state—never provider text or credentials;
+- enforce a durable same-venue/same-fingerprint cooldown across process restart
+  and a global circuit when the configured systemic threshold is reached by
+  distinct venues; circuit/cooldown checks occur before budget reservation or
+  provider construction and do not silently discard due work;
+- add backwards-compatible policy fields for automatic discovery cooldown and
+  circuit duration while continuing to use the existing
+  `systemic_failure.venue_failure_threshold`; and
+- strict typed configuration for project/location/model and explicit private
+  roots, with no caller-supplied provider, arbitrary environment, path from
+  discovery content, or executable callback.
+
+Excluded:
+
+- any live Gemini/Vertex AI call in this package's own tests (fakes and
+  temporary ledgers only);
+- connecting this effect to `automation/local_service/production.py` or any
+  installed caller;
+- verification, crawl policy, P2.5 reduction, or P5.5 retention changes; and
+- P6.1 Codex-trigger classification/cooldowns. P2.6 protects automatic LLM
+  discovery calls only and cannot authorize or suppress Codex execution.
+
+Acceptance:
+
+- the concrete adapter satisfies `DiscoveryEffect` and round-trips through
+  `run_local_control_wakeup` using fake providers and temporary private roots;
+- budget exhaustion, provider failure, and low-confidence escalation are
+  handled exactly as `automation/discovery.py` already defines, with no
+  silent discard;
+- exact reopen proves cooldown and circuit state survive a new adapter process;
+  same-fingerprint replay makes no provider call or budget reservation, three
+  distinct-venue systemic failures open one circuit at the configured
+  threshold, and clock-controlled expiry is explicit;
+- partial writes, corrupt/unsafe ledgers, conflicting replay, concurrent
+  reservation, and secret-shaped retained data fail closed; and
+- static scope tests prove no import of `automation.execution_pipeline`,
+  `automation.mac_worker`, or `automation.local_service`.
+
+### P2.7 — guarded automatic verification effect
+
+Status: `Planned`
+
+Depends on: P2.6
+
+P2.7 is fixture/fake-only. It wraps the existing `CrawlPolicyGate`,
+`automation/live_fetch.py`'s `LiveHttpFetcher` (generalized from its current
+P2.S-only usage), `automation/html_verification.py`, and
+`automation/pdf_verification.py` into one module conforming to
+`automation.local_control_plane.VerificationEffect`
+(`verify(discovery, *, observed_at: datetime) -> Sequence[VerificationBundle]`).
+It reuses P2.6's accepted persistent health-ledger/configuration conventions
+under a separate verification namespace, which is the sequencing dependency;
+it does not share failure state or authority with discovery.
+
+Included:
+
+- author a reviewed, non-`shadow_only` production crawl-policy entry for each
+  in-scope domain rather than a bare allowlist. Each entry records trust and
+  permission dimensions, robots/source-terms review, identifiable User-Agent
+  and maintainer contact policy, concurrency/delay/jitter/request budget,
+  redirect handling, `Retry-After`/429/403/CAPTCHA stops, cache/resume policy,
+  and separate fetch/internal-retention/redistribution decisions;
+- bounded read-only operator research of public robots and source-terms pages
+  is explicitly permitted for that policy review. It uses no credentials,
+  bypass, bulk crawl, PDF download, or automated verifier execution; captured
+  documentation contains conclusions and public citations, not session data;
+- durable venue/source failure cooldown using P2.6's accepted ledger semantics,
+  plus the existing per-domain request limits and transport stop behavior; and
+- deterministic composition of the existing P2.2/P2.3 verifiers behind the
+  `VerificationEffect` protocol, with no new parsing or trust logic beyond
+  what those modules already implement.
+
+Excluded:
+
+- any live network request in this package's own tests (fakes and temporary
+  snapshots only, matching P2.2/P2.3/P2.S's existing test conventions);
+- discovery, P2.5 reduction, or P5.5 retention changes;
+- connecting this effect to `automation/local_service/production.py` or any
+  installed caller; and
+- crawl-policy classification for domains outside the reviewed list (those
+  remain `review_required` and closed).
+
+Acceptance:
+
+- the effect satisfies `VerificationEffect` and round-trips through
+  `run_local_control_wakeup` in tests using fake discovery/fetch doubles;
+- every produced verification bundle passes `validate_verification_result`
+  and cites only crawl-policy-allowed, classified sources;
+- every production crawl-policy entry has dated evidence for all required
+  permission/rate/stop dimensions; a missing or stale dimension remains
+  `review_required` rather than inheriting P2.S authority;
+- restart, cooldown, redirect, domain-budget, 403/429/`Retry-After`, CAPTCHA,
+  partial evidence, and unknown-domain cases are fixture-tested; and
+- static scope tests prove no import of `automation.execution_pipeline`,
+  `automation.mac_worker`, or `automation.local_service`.
+
+### P2.8 — automatic verified-action composition
+
+Status: `Planned`
+
+Depends on: P2.7
+
+P2.8 is the actual automatic deterministic verifier/action-source gate. It
+composes the accepted P2.6 and P2.7 effects through
+`run_local_control_wakeup`, P2.5 reduction, and P5.5 action retention behind
+one fixed production-capable wakeup effect. It is fixture/fake-only and
+uninstalled: tests inject fake providers/fetchers and temporary local-owned
+state, but exercise the exact automatic scheduling, budget, policy,
+verification, reduction, and retention control flow that a later service may
+call.
+
+Included:
+
+- strict configuration deriving private control/discovery/snapshot/budget/
+  health roots without accepting paths or policy from web/model content;
+- one bounded automatic wakeup that advances or safely retains due work and
+  persists only genuine P2.5 actions through P5.5; and
+- exact replay, budget/circuit closure, verification denial, partial commit,
+  active-wakeup ambiguity, and no-action outcomes under fake clocks/reopen.
+
+Excluded:
+
+- any live LLM/network call, production database, LaunchDaemon change, or
+  installation;
+- P5.5 dispatch/P5.4 execution, canonical write, statistics write, promotion,
+  deployment, or Codex; and
+- a generic callback/command interface or synthetic/manual job injection.
+
+Acceptance:
+
+- a fake authoritative PDF-ready bundle automatically persists exactly one
+  P5.5 action/job without caller-supplied action or job data;
+- denied, ambiguous, conflicting, unsupported, circuit-open, or budget-exhausted
+  inputs persist no executable action and make no later effect call;
+- exact wakeup replay makes zero provider/fetch calls and creates no duplicate
+  action/job; interruption remains durable ambiguity rather than auto-retry;
+- the module remains unimported by the installed service and contains no live
+  adapter construction or execution dispatch; and
+- completion satisfies the implementation half of P5.5S's automatic
+  verifier/action-source prerequisite, but not its live-evidence half.
+
+### P2.8S — authorized live discovery and verification canary
+
+Status: `Blocked`
+
+Depends on: P2.8
+
+P2.8S is the only package in this sequence allowed to exercise real P2.6/P2.7
+effects. A manual `--live` command runs the exact P2.8 composition against a
+private marked root and a non-production local-owned database. It performs
+metered Gemini calls plus reviewed crawl-policy-gated HTTP fetches, may retain
+a genuine P5.5 action/job, and never dispatches that job.
+
+The package requires separate live authorization. It preselects a supported,
+bounded archival venue/year whose reviewed sources and scraper capability can
+exercise the action path. Failure to produce an eligible action is retained as
+evidence and fails the canary; verifier or policy rules are never weakened to
+force success. Exact completed replay makes no second live call. Missing
+`--live`, unsafe/non-isolated roots, budget/circuit closure, policy denial, or
+identity conflict refuses before the corresponding effect. The durable review
+must be sanitized and record costs, requests, decisions, replay, partial
+failure, and scoped rollback without credentials or private host paths.
+
+P2.8S writes no production database, changes no LaunchDaemon, runs no scraper,
+and has no canonical, statistics, promotion, deployment, notification, or
+Codex authority. Completion supplies only the live-evidence half of P5.5S's
+prerequisite; installation and automatic scraper dispatch remain P5.5S.
+
 ## Phase 2 packages — verification and lifecycle state
 
 Phase gate: P2.5 permits explicitly supplied authoritative retained evidence to
@@ -276,11 +469,19 @@ occur only in P2.S and remain isolated from production.
 | P2.4 | Complete | P2.2, P2.3 | Single-writer SQLite repository, schema/migration, evidence history, lease, idempotent consumption, and replay. Temporary databases in tests; no deployed migration. |
 | P2.5 | Complete | P2.4 | Verified evidence to state reducer, milestone scheduling, and typed action routing. Actions are returned as data and never executed. Replay all catalog venue/lifecycle shapes with fixtures. |
 | P2.S | Complete | P2.5 | Opt-in DNS/SSRF-safe live adapter and explicitly authorized 15-venue shadow review using reviewed crawl policy and isolated state/artifact roots. The record contains 28 targets, rejects the known readiness false positives, returns no queue intent, and performs no job, scraper, notification, or production-state write. |
+| P2.6 | Ready | Phase 2 gate | Fixture-only production-capable `DiscoveryEffect` with required budget/artifact ledgers plus durable per-venue cooldown and distinct-venue systemic circuit state. No live LLM call, installed caller, or production wiring. |
+| P2.7 | Planned | P2.6 | Fixture-only production-capable `VerificationEffect` plus fully reviewed per-domain production crawl policy and durable fetch-failure guardrails. Only bounded read-only robots/terms research is live; no live verifier request or production wiring. |
+| P2.8 | Planned | P2.7 | Fixture-only automatic discovery→verification→P2.5→P5.5 retention composition with exact replay and failure closure. Uninstalled; no live call, dispatch, or production state. |
+| P2.8S | Blocked | P2.8 | Separately authorized isolated live canary for the exact P2.8 composition. It may retain a genuine action/job but never dispatch it or touch production/canonical state. |
 
 Phase 2 has passed its shadow gate with the reviewed record in
 `phase2-live-review-2026-07-13.md`. It remains `Shadow`, not `Implemented`,
 because live observation has no production action authority and source-shape
-coverage remains conservative.
+coverage remains conservative. P2.6 is the sole next package; P2.7 and P2.8
+form the sequential uninstalled automatic path, and P2.8S is its separately
+authorized live evidence. P5.5S remains blocked until both P2.8 and P2.8S are
+complete. None is implemented yet—this is a documentation-only definition
+pass.
 
 ## Phase 3 packages — cases and notifications
 
@@ -951,7 +1152,7 @@ host recovery evidence.
 | P5.4 | Complete | P5.3 | Fixture-only guarded job-to-staging-to-validation-to-immutable-result composition with readiness routing, replay recovery, and transient/operational/structural classification. No runtime connection or real scrape. |
 | P5.S | Complete | P5.4 | Manual sandboxed COLT 2025 archival shadow: confirmed failure and timeout recovery, 181/181 independent validation, private create-only result, exact duplicate suppression, canonical invariance, coexistence, and scoped rollback. No installed or automatic caller. |
 | P5.5 | Complete | P5.S | Persists only strict P2.5 `queue_existing_scraper` actions and their recomputed v2 jobs in local-owned control state (schema version 7), then claims and reconciles at most one job through an injected P5.4 effect after releasing the global control lease. Schema migration, exact replay, crash ambiguity, result reconciliation, and rollback use temporary state/fakes only. No installed caller, live request, scraper process, canonical write, promotion, or Phase 6 capability. |
-| P5.5S | Blocked | P5.5 plus an accepted automatic deterministic verifier/action-source gate | Separately authorized installed automatic shadow using a verified crawl-policy-allowed action and a bounded venue family not covered by the COLT canary. It may write only isolated staging/artifact/result space and cannot promote, deploy, run statistics writes, or enter Codex repair. |
+| P5.5S | Blocked | P5.5, P2.8, P2.8S | Separately authorized installed automatic shadow using the accepted automatic verified-action composition and its live canary evidence, on a bounded venue family not covered by COLT. It may write only isolated staging/artifact/result space and cannot promote, deploy, run statistics writes, or enter Codex repair. |
 
 P5.S completed boundary: `automation/execution_shadow.py` and the explicit
 `automation.run_execution_shadow --live` command bind P5.4 to a private marked
@@ -1020,15 +1221,16 @@ until a separately authorized reinstall/upgrade. Its living plan is
 
 Status: `Blocked`
 
-Depends on: P5.5 plus a separately defined and accepted automatic
-deterministic verifier/action-source gate
+Depends on: P5.5 plus P2.8 (the accepted automatic deterministic
+verifier/action-source composition) and P2.8S (its authorized live evidence)
 
 P5.5S is not ready merely because dispatch code exists. Phase 2 remains
 `Shadow`, the installed production service does not run its deterministic
 HTML/PDF verifier, and no production reduction currently persists a verified
-scraper action. The host canary therefore waits until an accepted package can
-prove that an automatic action came from retained, crawl-policy-allowed,
-venue/year-bound verification evidence rather than manual or synthetic input.
+scraper action. The host canary therefore waits until P2.8 proves the automatic
+composition with fixtures and P2.8S proves that exact composition against real
+retained, crawl-policy-allowed, venue/year-bound evidence. Neither a manual
+synthetic action nor the live canary alone satisfies both prerequisites.
 
 When that prerequisite exists, P5.5S must receive separate authority for the
 installed-service change and live requests. It starts with the same

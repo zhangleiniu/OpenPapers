@@ -198,6 +198,38 @@ verifier, action store/dispatcher, deployed notification service or real
 transport, job submission, scraper execution, GCS integration, or
 production-state migration.
 
+The planned automatic Phase 2 path is deliberately split from that manual
+shadow. P2.6 will construct a production-capable discovery effect only when
+explicit private artifact, attempt-budget, and automatic-health ledgers are
+present. The health ledger is versioned and process-safe: it retains only typed
+failure fingerprints/categories and bounded timestamps, enforces per-venue
+same-failure cooldown across wakeups, and opens a global circuit after the
+configured threshold of distinct venues. The venue occurrence fingerprint
+includes venue/year; a separate systemic fingerprint excludes them and uses
+only closed provider/model/role/error type/category/status fields. A durable
+logical in-flight claim is written before provider construction so process
+death cannot bypass cooldown evidence, but an unclassified claim never counts
+toward the systemic threshold. Cooldown/circuit refusal occurs before provider
+construction or budget reservation. The ledger neither stores provider text
+nor shares semantics with P6's later Codex-trigger suppression.
+
+P2.7 will reuse that accepted ledger/configuration pattern under a separate
+verification namespace and add a production-capable `VerificationEffect`.
+Production crawl policy is not a domain allowlist: each reviewed entry must
+separately record trust, request/retention/redistribution permissions,
+robots/source-terms conclusions, identification/contact, concurrency/rate/
+jitter/budget, redirect/cache/resume handling, and 403/429/`Retry-After`/
+CAPTCHA stops. Missing or stale review remains closed. Read-only operator
+research of public robots and terms pages is distinct from live automated
+verification and grants no PDF retrieval or redistribution right.
+
+P2.8 will be the uninstalled automatic composition: one bounded local wakeup
+uses P2.6 and P2.7, then the existing P2.5 reducer and P5.5 retention, with no
+caller-supplied action or job. P2.8S separately exercises that exact
+composition through an authorized manual live canary against isolated roots.
+Only P2.8 plus P2.8S together satisfy P5.5S's action-source prerequisite;
+neither installs the service or dispatches a scraper.
+
 P3.1 adds a local case domain and extends the same control repository, P3.2
 adds a separate pure reminder projection, P3.3 adds an injected delivery
 boundary, P3.4 adds local pending-output integration, and P3.S adds one

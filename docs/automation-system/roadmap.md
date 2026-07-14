@@ -254,7 +254,23 @@ P2.S is accepted at the shadow boundary:
   for later venue-family rollout.
 
 Phase 2 is `Shadow`, not `Implemented`. P2.1 through P2.5 and the P2.S manual
-runtime are not deployed or scheduled, and there is no action dispatcher.
+runtime are not deployed or scheduled, and there is no installed or production
+action dispatcher.
+
+Four newly defined packages in `work-packages.md` name the concrete path
+toward closing that gap without claiming it is closed. P2.6, the sole `Ready`
+package, provides a fixture-only production-capable discovery effect with
+required budgets plus durable cross-process cooldown/systemic-circuit state.
+P2.7 follows with the production-capable deterministic verification effect,
+full per-domain production crawl-policy review, and durable fetch-failure
+guardrails. P2.8 then composes both through the automatic local wakeup, P2.5,
+and P5.5 action retention using fakes and temporary state only. P2.8S is the
+separately authorized isolated live canary for that exact composition.
+
+None is implemented yet. P2.8 supplies the automatic verifier/action-source
+implementation prerequisite for P5.5S, while P2.8S supplies its real
+operational evidence; both must complete. Installation, production database
+use, and automatic scraper dispatch remain separately authorized P5.5S work.
 
 ## Phase 3: cases and notifications
 
@@ -721,10 +737,10 @@ P5.5 uses only temporary local-owned SQLite, fake verified bundles, fake
 clocks, and injected fake execution effects. It changes no installed
 LaunchDaemon, production database, production marker/configuration, network
 policy, credential, P5.S command, canonical data, statistics, deployment, or
-Codex boundary. A later installed automatic shadow (P5.5S) remains blocked
-until both P5.5 and a separately accepted automatic deterministic
-verifier/action-source gate exist; the current manual Phase 2 shadow cannot
-supply production execution authority.
+Codex boundary. A later installed automatic shadow (P5.5S) remains blocked on
+P2.8's accepted automatic deterministic verifier/action-source composition and
+P2.8S's separately authorized live evidence; the current manual Phase 2 shadow
+cannot supply production execution authority.
 
 ## Phase 6: Codex diagnosis and repair
 
