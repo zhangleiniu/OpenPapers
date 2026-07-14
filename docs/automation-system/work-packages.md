@@ -780,6 +780,11 @@ P4.LC adds no live discovery/verifier, case-delivery, scraper, validator, job,
 result, Codex, promotion, or MustCite deployment effect; those remain later
 packages.
 
+The committed sanitized acceptance record is
+[`phase4-local-cutover-review-2026-07-14.md`](./phase4-local-cutover-review-2026-07-14.md).
+It consolidates P4.LS/P4.LC host, backup, cutover, rollback, validation, and
+residual-risk evidence while keeping private operations data outside Git.
+
 | ID | Status | Depends on | Objective and completion boundary |
 |---|---|---|---|
 | P4.1 | Complete | Phase 3 gate | Immutable v2 job identity, fixed Prefect process-pool/typed-queue protocol, and injected fake-tested cloud submission boundary. No external resource or Mac change. |

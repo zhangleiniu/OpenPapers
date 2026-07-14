@@ -548,6 +548,12 @@ P4.LC completed the production boundary:
   and completed in 96 seconds. Final activation paused/drained cloud again and
   refreshed the recovered generation before starting local.
 
+The durable sanitized review is
+[`phase4-local-cutover-review-2026-07-14.md`](./phase4-local-cutover-review-2026-07-14.md).
+It records the host-shadow drills, backup fingerprints, no-overlap sequence,
+timed rollback, final runtime synchronization, validation, and retained risks
+without credentials, private state, or remote generations.
+
 Phase 4 is `Implemented`. No Mac execution service yet selects or runs a
 scraper/validator command; that is Phase 5. P4.O's Prefect
 feasibility gate failed before resource creation because the acceptable cloud

@@ -269,6 +269,10 @@ monitor:
   schema-v6 control state. Two generation-stable backups, zero-active cloud
   gates, initial/final local health, and a 96-second timed rollback passed.
 
+The sanitized host-shadow, backup, cutover, rollback, and final-runtime
+evidence is recorded in
+[`phase4-local-cutover-review-2026-07-14.md`](./phase4-local-cutover-review-2026-07-14.md).
+
 Phase 4 is `Implemented`. These packages establish contracts and fake-tested
 execution-safety/result behavior plus one operational local scheduler and
 deterministic baseline monitor. Phase 5 still owns scraper/validator command
