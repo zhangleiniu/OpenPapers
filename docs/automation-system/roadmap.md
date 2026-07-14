@@ -253,24 +253,45 @@ P2.S is accepted at the shadow boundary:
   `phase2-live-review-2026-07-13.md`. Conservative live source-shape gaps remain
   for later venue-family rollout.
 
-Phase 2 is `Shadow`, not `Implemented`. P2.1 through P2.5 and the P2.S manual
+Accepted P2.6 guarded automatic discovery effect:
+
+- `automation/production_discovery.py` composes the existing `DiscoveryService`,
+  Gemini provider construction, `JsonBudgetLedger`, and `ArtifactStore` into a
+  concrete `DiscoveryEffect` that requires explicit private artifact, budget,
+  and health-ledger paths plus a validated automatic-discovery policy block;
+- a separate versioned, process-safe automatic-discovery health ledger records
+  only a typed failure category, closed occurrence/systemic fingerprints,
+  venue, timestamps, and cooldown/circuit deadlines, never provider text or
+  credentials;
+- the guard checks a durable same-venue cooldown and a distinct-venue systemic
+  circuit before any production provider is constructed or budget reserved,
+  durably claims one in-flight attempt first, and finalizes it as eligible, a
+  guard skip (budget exhaustion), or a typed cooldown/circuit failure; and
+- fixture/fake tests prove restart-durable cooldown/circuit state, clock-
+  controlled expiry, venue-specific-versus-systemic fingerprint separation,
+  crash-safe in-flight blocking, corrupt-ledger closure, concurrent-writer
+  safety, and a fake `run_local_control_wakeup` round trip, with no live
+  provider call and no import of `automation.execution_pipeline`,
+  `automation.mac_worker`, or `automation.local_service`.
+
+Phase 2 is `Shadow`, not `Implemented`. P2.1 through P2.6 and the P2.S manual
 runtime are not deployed or scheduled, and there is no installed or production
 action dispatcher.
 
-Four newly defined packages in `work-packages.md` name the concrete path
-toward closing that gap without claiming it is closed. P2.6, the sole `Ready`
-package, provides a fixture-only production-capable discovery effect with
-required budgets plus durable cross-process cooldown/systemic-circuit state.
-P2.7 follows with the production-capable deterministic verification effect,
+Three remaining packages in `work-packages.md` name the concrete path toward
+closing that gap without claiming it is closed. P2.7, now the sole `Ready`
+package, provides the production-capable deterministic verification effect,
 full per-domain production crawl-policy review, and durable fetch-failure
-guardrails. P2.8 then composes both through the automatic local wakeup, P2.5,
-and P5.5 action retention using fakes and temporary state only. P2.8S is the
-separately authorized isolated live canary for that exact composition.
+guardrails reusing P2.6's accepted ledger conventions. P2.8 then composes both
+effects through the automatic local wakeup, P2.5, and P5.5 action retention
+using fakes and temporary state only. P2.8S is the separately authorized
+isolated live canary for that exact composition.
 
-None is implemented yet. P2.8 supplies the automatic verifier/action-source
-implementation prerequisite for P5.5S, while P2.8S supplies its real
-operational evidence; both must complete. Installation, production database
-use, and automatic scraper dispatch remain separately authorized P5.5S work.
+P2.7 and P2.8 are not implemented yet. P2.8 supplies the automatic
+verifier/action-source implementation prerequisite for P5.5S, while P2.8S
+supplies its real operational evidence; both must complete. Installation,
+production database use, and automatic scraper dispatch remain separately
+authorized P5.5S work.
 
 ## Phase 3: cases and notifications
 

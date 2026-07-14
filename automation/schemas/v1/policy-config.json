@@ -19,6 +19,7 @@
     "scheduling": {"$ref": "#/$defs/scheduling"},
     "reminders": {"$ref": "#/$defs/reminders"},
     "discovery_budget": {"$ref": "#/$defs/discovery_budget"},
+    "automatic_discovery": {"$ref": "#/$defs/automatic_discovery"},
     "codex_budget": {"$ref": "#/$defs/codex_budget"},
     "systemic_failure": {"$ref": "#/$defs/systemic_failure"},
     "crawl": {"$ref": "#/$defs/crawl"},
@@ -84,6 +85,15 @@
         "max_calls_per_venue_per_day": {"type": "integer", "minimum": 0},
         "max_concurrency": {"type": "integer", "minimum": 1},
         "max_second_provider_calls_per_day": {"type": "integer", "minimum": 0}
+      }
+    },
+    "automatic_discovery": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["same_failure_cooldown_hours", "systemic_circuit_hours"],
+      "properties": {
+        "same_failure_cooldown_hours": {"type": "integer", "minimum": 1, "maximum": 168},
+        "systemic_circuit_hours": {"type": "integer", "minimum": 1, "maximum": 168}
       }
     },
     "codex_budget": {

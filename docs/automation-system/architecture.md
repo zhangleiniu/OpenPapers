@@ -198,20 +198,26 @@ verifier, action store/dispatcher, deployed notification service or real
 transport, job submission, scraper execution, GCS integration, or
 production-state migration.
 
-The planned automatic Phase 2 path is deliberately split from that manual
-shadow. P2.6 will construct a production-capable discovery effect only when
+The automatic Phase 2 path is deliberately split from that manual shadow. P2.6
+has completed a production-capable discovery effect
+(`automation/production_discovery.py`) that constructs its provider only when
 explicit private artifact, attempt-budget, and automatic-health ledgers are
-present. The health ledger is versioned and process-safe: it retains only typed
-failure fingerprints/categories and bounded timestamps, enforces per-venue
-same-failure cooldown across wakeups, and opens a global circuit after the
-configured threshold of distinct venues. The venue occurrence fingerprint
-includes venue/year; a separate systemic fingerprint excludes them and uses
-only closed provider/model/role/error type/category/status fields. A durable
+present and validated. The health ledger is versioned and process-safe: it
+retains only typed failure fingerprints/categories and bounded timestamps,
+enforces per-venue same-failure cooldown across wakeups, and opens a global
+circuit after the configured threshold of distinct venues report the same
+systemic fingerprint. The venue occurrence fingerprint includes venue/year; a
+separate systemic fingerprint excludes them and uses only a closed set of
+provider/transport/output-shape categories and status—venue-specific content
+categories (registered-domain, claim, or milestone mismatches) are excluded, so
+unrelated per-venue content problems cannot open the shared circuit. A durable
 logical in-flight claim is written before provider construction so process
 death cannot bypass cooldown evidence, but an unclassified claim never counts
 toward the systemic threshold. Cooldown/circuit refusal occurs before provider
-construction or budget reservation. The ledger neither stores provider text
-nor shares semantics with P6's later Codex-trigger suppression.
+construction or budget reservation; budget exhaustion is a guard skip, not a
+health event. The ledger neither stores provider text nor shares semantics
+with P6's later Codex-trigger suppression. Nothing is installed or connected
+to `automation/local_service/production.py`.
 
 P2.7 will reuse that accepted ledger/configuration pattern under a separate
 verification namespace and add a production-capable `VerificationEffect`.

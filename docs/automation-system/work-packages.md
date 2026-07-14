@@ -73,9 +73,11 @@ parallel.
 P2.1R through P2.5 have completed the local verification, persistence,
 lifecycle, scheduling, and inert-routing slices. P2.S has completed the
 explicitly authorized 15-venue live shadow review using isolated roots and no
-production action. Phase 2 is now `Shadow`. P2.6 is the sole `Ready` package
-and owns the fixture-only automatic discovery effect plus durable automatic-call
-guardrails. P2.7 and P2.8 remain sequentially `Planned`; P2.8S is the blocked,
+production action. P2.6 has completed the fixture-only production-capable
+discovery effect plus durable per-venue cooldown and distinct-venue systemic
+circuit guardrails. Phase 2 is now `Shadow`. P2.7 is the sole `Ready` package
+and owns the fixture-only production-capable verification effect plus reviewed
+per-domain crawl policy. P2.8 remains `Planned`; P2.8S is the blocked,
 explicitly authorized live canary. P5.5S waits for both the accepted automatic
 composition and its live evidence. See "Phase 2 packages" below. P3.1 has
 completed the persistent
@@ -269,7 +271,7 @@ worker, Codex, promotion, or deployment behavior.
 
 ### P2.6 — guarded automatic discovery effect
 
-Status: `Ready`
+Status: `Complete`
 
 Depends on: Phase 2 gate (P2.5)
 
@@ -325,9 +327,40 @@ Acceptance:
 - static scope tests prove no import of `automation.execution_pipeline`,
   `automation.mac_worker`, or `automation.local_service`.
 
+Completed boundary: `automation/production_discovery.py` adds
+`AutomaticDiscoveryGuardPolicy` (an optional, backwards-compatible
+`automatic_discovery` policy block plus the existing systemic threshold),
+`AutomaticDiscoveryHealthLedger` (a versioned, locked, atomically replaced
+JSON ledger distinct from the attempt ledger), `AutomaticDiscoveryConfig`, and
+`ProductionDiscoveryEffect`. The effect durably claims one in-flight venue
+attempt before constructing `GeminiSearchGroundingProvider` through its
+existing `from_environment` entry point (fed a synthetic, config-derived
+environment mapping, never the process environment) and before any budget
+reservation; it finalizes that claim as eligible, a guard skip (budget
+exhaustion, which is deliberately never a health event), or a typed
+cooldown/circuit failure. A closed, non-venue-specific category set (transport,
+grounding, and output-shape problems) is systemic-eligible; venue-content
+validation categories (domain/claim/milestone mismatches) are not, so
+unrelated per-venue content problems cannot open the shared circuit.
+
+Fixture/fake tests in `automation/tests/test_production_discovery.py` cover a
+successful round trip that clears health state, a typed failure that opens a
+per-venue cooldown and blocks the next construction, cooldown expiry, budget
+exhaustion as a guard skip, three distinct venues with the same systemic
+fingerprint opening one circuit while venue-specific validation failures never
+do, circuit expiry independent of per-venue cooldown, cooldown/in-flight state
+surviving a new adapter process (including a crash-safe in-flight blocker that
+never counts toward the systemic threshold), a corrupt ledger failing closed
+before any provider construction, concurrent-writer safety, the required
+`automatic_discovery` policy block, explicit-path construction, low-confidence
+escalation returning only the primary result (no secondary provider is
+wired), a real `run_local_control_wakeup` round trip, and the static
+execution/service import boundary. Nothing is installed or connected to
+`automation/local_service/production.py`; Phase 2 remains `Shadow`.
+
 ### P2.7 — guarded automatic verification effect
 
-Status: `Planned`
+Status: `Ready`
 
 Depends on: P2.6
 
@@ -469,19 +502,18 @@ occur only in P2.S and remain isolated from production.
 | P2.4 | Complete | P2.2, P2.3 | Single-writer SQLite repository, schema/migration, evidence history, lease, idempotent consumption, and replay. Temporary databases in tests; no deployed migration. |
 | P2.5 | Complete | P2.4 | Verified evidence to state reducer, milestone scheduling, and typed action routing. Actions are returned as data and never executed. Replay all catalog venue/lifecycle shapes with fixtures. |
 | P2.S | Complete | P2.5 | Opt-in DNS/SSRF-safe live adapter and explicitly authorized 15-venue shadow review using reviewed crawl policy and isolated state/artifact roots. The record contains 28 targets, rejects the known readiness false positives, returns no queue intent, and performs no job, scraper, notification, or production-state write. |
-| P2.6 | Ready | Phase 2 gate | Fixture-only production-capable `DiscoveryEffect` with required budget/artifact ledgers plus durable per-venue cooldown and distinct-venue systemic circuit state. No live LLM call, installed caller, or production wiring. |
-| P2.7 | Planned | P2.6 | Fixture-only production-capable `VerificationEffect` plus fully reviewed per-domain production crawl policy and durable fetch-failure guardrails. Only bounded read-only robots/terms research is live; no live verifier request or production wiring. |
+| P2.6 | Complete | Phase 2 gate | Fixture-only production-capable `DiscoveryEffect` with required budget/artifact ledgers plus durable per-venue cooldown and distinct-venue systemic circuit state. No live LLM call, installed caller, or production wiring. |
+| P2.7 | Ready | P2.6 | Fixture-only production-capable `VerificationEffect` plus fully reviewed per-domain production crawl policy and durable fetch-failure guardrails. Only bounded read-only robots/terms research is live; no live verifier request or production wiring. |
 | P2.8 | Planned | P2.7 | Fixture-only automatic discovery→verification→P2.5→P5.5 retention composition with exact replay and failure closure. Uninstalled; no live call, dispatch, or production state. |
 | P2.8S | Blocked | P2.8 | Separately authorized isolated live canary for the exact P2.8 composition. It may retain a genuine action/job but never dispatch it or touch production/canonical state. |
 
 Phase 2 has passed its shadow gate with the reviewed record in
 `phase2-live-review-2026-07-13.md`. It remains `Shadow`, not `Implemented`,
 because live observation has no production action authority and source-shape
-coverage remains conservative. P2.6 is the sole next package; P2.7 and P2.8
-form the sequential uninstalled automatic path, and P2.8S is its separately
-authorized live evidence. P5.5S remains blocked until both P2.8 and P2.8S are
-complete. None is implemented yet—this is a documentation-only definition
-pass.
+coverage remains conservative. P2.6 is accepted; P2.7 is the sole next
+package. P2.7 and P2.8 form the sequential uninstalled automatic path, and
+P2.8S is its separately authorized live evidence. P5.5S remains blocked until
+both P2.8 and P2.8S are complete.
 
 ## Phase 3 packages — cases and notifications
 

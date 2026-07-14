@@ -155,13 +155,19 @@ PDF evidence retention grants no redistribution authority. Phase 2 is
 `Shadow`, not deployed or implemented; live source-profile coverage remains
 conservative.
 
-P2.6 is the sole next package. It will add a fixture-only,
-production-capable `DiscoveryEffect` that requires the existing attempt budget
-ledger plus durable cross-process cooldown and systemic-circuit state before an
-automatic provider call. P2.7 then owns deterministic verification and full
-per-domain production crawl-policy review; P2.8 owns the uninstalled automatic
-composition through P5.5 retention; and P2.8S owns its separately authorized
-isolated live evidence. P5.5S remains blocked until P2.8 and P2.8S complete.
+P2.6 has completed a fixture-only, production-capable `DiscoveryEffect`
+(`automation/production_discovery.py`) that requires the existing attempt
+budget ledger plus a durable, versioned, cross-process cooldown and
+systemic-circuit health ledger before any automatic provider call. The guard
+refuses before provider construction or budget reservation when a same-venue
+cooldown or a distinct-venue systemic circuit is open, and only a closed set
+of provider/transport/output-shape failure categories can open the circuit;
+venue-specific content problems cannot. Nothing is installed or connected to
+the deployed monitor. P2.7 is now the sole next package and owns
+deterministic verification plus full per-domain production crawl-policy
+review; P2.8 owns the uninstalled automatic composition through P5.5
+retention; and P2.8S owns its separately authorized isolated live evidence.
+P5.5S remains blocked until P2.8 and P2.8S complete.
 
 Phase 3.1 persistent unresolved cases, P3.2 reminder/digest policy, P3.3's
 fake-only notification delivery boundary, P3.4's persistent shadow-output

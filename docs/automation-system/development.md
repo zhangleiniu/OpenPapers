@@ -33,6 +33,7 @@ automation/scheduling.py
 automation/discovery.py
 automation/providers/gemini.py
 automation/run_discovery.py
+automation/production_discovery.py
 automation/verification.py
 automation/html_verification.py
 automation/pdf_verification.py
@@ -269,6 +270,42 @@ that untrusted, conflicting, continuous-conference, stale-readiness, and lost
 lease paths cannot return or persist an executable effect. P2.S live review is
 not part of the P2.5 tests; its separate authorization and reviewed result are
 recorded in `phase2-live-review-2026-07-13.md`.
+
+The P2.6 guarded automatic discovery effect checks are:
+
+```bash
+python -m unittest automation.tests.test_production_discovery -v
+python -m unittest automation.tests.test_discovery -v
+python -m unittest automation.tests.test_contracts -v
+python -m unittest automation.tests.test_local_control_plane -v
+```
+
+`automation/production_discovery.py` builds a concrete
+`automation.local_control_plane.DiscoveryEffect` around the existing
+`DiscoveryService`, `GeminiSearchGroundingProvider.from_environment`,
+`JsonBudgetLedger`, and `ArtifactStore`. It requires explicit private artifact,
+budget-ledger, and health-ledger paths plus a validated, backwards-compatible
+`automatic_discovery` policy block (existing policy artifacts without it
+remain valid for every other reader). Before any production provider is
+constructed or budget reserved, it durably checks and claims a separate
+versioned, process-safe automatic-discovery health ledger distinct from the
+attempt ledger: a same-venue/same-fingerprint cooldown and a distinct-venue
+systemic circuit (opened only by a closed set of provider/transport/
+output-shape failure categories, never venue-specific content categories)
+both block before construction. Budget exhaustion finalizes as a guard skip,
+never a cooldown. Tests use only fake providers and temporary private roots;
+they cover a successful round trip, typed-failure cooldown and its expiry,
+budget exhaustion as a guard skip, three distinct venues opening one systemic
+circuit while venue-specific validation failures never do, circuit expiry,
+cooldown/in-flight state surviving a new adapter process (including a
+crash-safe in-flight blocker that never counts toward the systemic
+threshold), corrupt-ledger closure before construction, concurrent-writer
+safety, the required policy block, explicit-path construction, low-confidence
+escalation returning only the primary result, a real
+`run_local_control_wakeup` round trip, and the static
+execution/service-import scope boundary. Nothing is installed or connected to
+`automation/local_service/production.py`, and no test makes a live provider
+call.
 
 A live fetch adapter must add transport-level DNS/SSRF protections and
 operational crawl controls before use; the existence of the injected interface

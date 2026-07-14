@@ -235,6 +235,29 @@ class ConfigurationTests(unittest.TestCase):
         self.assertTrue(DEFAULT_VENUE_CATALOG.name.endswith(".v1.json"))
         self.assertTrue(DEFAULT_POLICY_CONFIG.name.endswith(".v1.json"))
 
+    def test_automatic_discovery_policy_is_optional_and_bounded(self):
+        policy = load_policy_config()
+        self.assertEqual(
+            policy["automatic_discovery"]["same_failure_cooldown_hours"], 6)
+        self.assertEqual(
+            policy["automatic_discovery"]["systemic_circuit_hours"], 24)
+
+        without_block = load_policy_config()
+        del without_block["automatic_discovery"]
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "policy.json"
+            path.write_text(json.dumps(without_block), encoding="utf-8")
+            replayed = load_policy_config(path)
+        self.assertNotIn("automatic_discovery", replayed)
+
+        out_of_range = load_policy_config()
+        out_of_range["automatic_discovery"]["same_failure_cooldown_hours"] = 0
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "policy.json"
+            path.write_text(json.dumps(out_of_range), encoding="utf-8")
+            with self.assertRaises(ContractValidationError):
+                load_policy_config(path)
+
 
 if __name__ == "__main__":
     unittest.main()
