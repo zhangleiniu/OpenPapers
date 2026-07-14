@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "work_pool_name": "openpapers-mac",
+  "work_queue_name": "openpapers-scrape",
+  "job": {
+    "schema_version": 2,
+    "job_id": "job:0b62469fd5fec963e7d27f48d763cb3cd5347a48c604702d49896a3317f90072",
+    "job_fingerprint": "0b62469fd5fec963e7d27f48d763cb3cd5347a48c604702d49896a3317f90072",
+    "request_id": "action:icml:2026:pdf-ready",
+    "job_type": "scrape_existing",
+    "venue_id": "icml",
+    "year": 2026,
+    "requested_by": "action_router",
+    "input_artifact_ids": ["evidence:icml:2026:pdf-ready"],
+    "payload": {
+      "completeness_level": "archival",
+      "download_pdfs": true,
+      "expected_count": 100
+    }
+  }
+}

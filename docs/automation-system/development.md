@@ -417,6 +417,30 @@ back. Provider acceptance is not independent mailbox confirmation. The first
 authorized record is
 `docs/automation-system/phase3-delivery-review-2026-07-13.md`.
 
+The P4.1 immutable job, typed queue, and cloud-submission checks are:
+
+```bash
+python -m unittest automation.tests.test_job_queue -v
+python -m unittest automation.tests.test_contracts -v
+```
+
+`automation/job_queue.py` emits only version 2 jobs at the queue boundary,
+recomputes their full SHA-256 identity, and maps every existing job type to one
+fixed queue in the inert `openpapers-mac` process-pool blueprint. Only an
+explicitly supplied P2.5 existing-scraper action has a producer. The
+asynchronous submission coordinator uses the job ID as the idempotency key;
+the Prefect deployment adapter receives its client and deployment IDs by
+injection. Tests use a fake client and sanitized local fixtures and assert
+no flow-run creation for invalid jobs, queue drift, missing/misassigned
+deployments, or wrong keys.
+
+P4.1 has no command, live-client factory, pool/queue/deployment provisioning,
+worker, Mac/`launchd` setup, scheduler connection, control-state write,
+scraper/Codex execution, GCS result path, or production integration. Do not
+use its local blueprint as evidence that Prefect resources exist. P4.2 is the
+next package and may add only its separately stated fake-job worker/runbook
+boundary.
+
 Scheduling tests use an injected timezone-aware clock. Keep venue catalogs free
 of year-specific month/date assumptions; discovery records candidates, a
 deterministic verifier promotes supported dates into conference-year

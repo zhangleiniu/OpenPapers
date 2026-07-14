@@ -397,6 +397,27 @@ Acceptance:
 - logs appear in Prefect and artifacts contain a stable result manifest;
 - offline workers leave work queued and visible.
 
+Accepted P4.1 queue/submission foundation:
+
+- version 2 typed jobs derive and revalidate one full SHA-256 identity over
+  their request and execution semantics, while version 1 remains compatible
+  for retained validation;
+- a strict envelope maps scrape, validation, and Codex job types to three
+  fixed queues in the local `openpapers-mac` process work-pool blueprint and
+  rejects arbitrary queue, command, field, secret, or identity drift;
+- an explicitly supplied P2.5 existing-scraper action can produce only the
+  closed archival scrape job. Validation and Codex producers remain later
+  packages; and
+- the cloud submission coordinator and Prefect deployment adapter validate
+  before flow-run creation, confirm the deployment's configured pool/queue,
+  and use the job ID as the flow-run idempotency key. Sanitized fixtures and a
+  fake client prove exact replay and failure closure without changing Prefect,
+  GCP, Mac, scheduler, scraper, or control state.
+
+Phase 4 remains `Planned`: P4.1 is an unconnected local interface. It does not
+meet worker reboot/offline, logs, completed-scrape deduplication, immutable
+result/manifest, or cloud result-consumption acceptance criteria.
+
 ## Phase 5: execute existing scrapers
 
 Deliverables:

@@ -4,7 +4,7 @@ This document defines the target boundaries and safety invariants. Most of the
 components described here are planned; consult [roadmap.md](./roadmap.md) and
 the executable code before assuming a component exists.
 
-## Implemented foundation and Phase 1/2.S/P3.S boundaries
+## Implemented foundation and Phase 1/2.S/P3.S/P4.1 boundaries
 
 Phase 0 is implemented as a side-effect-free foundation and is not yet wired
 into the deployed monitor:
@@ -252,8 +252,34 @@ provider receipt proves API acceptance, not independent mailbox delivery.
 P3.S also refuses to retry a root whose one attempt ended `retryable`; P3.3's
 general explicit-retry capability remains available only outside this canary.
 No package wires Phase 3 into the deployed monitor or adds a scheduler,
-production recipient configuration, Prefect integration, or production-state
-authority.
+production recipient configuration, production Prefect integration, or
+production-state authority.
+
+P4.1 adds a local execution-queue contract and injected submission boundary:
+
+- `automation/schemas/v2/job.json` replaces caller-selected job identity with
+  a recomputable full SHA-256 identity over every execution-semantic field.
+  Version 1 jobs remain readable compatibility artifacts, but only version 2
+  jobs may cross the P4.1 queue boundary;
+- `automation/schemas/v1/job-queue-envelope.json` and
+  `automation/job_queue.py` bind each job type to one fixed queue in an inert
+  `openpapers-mac` process work-pool blueprint. Pool and queue names are
+  orchestration metadata outside the job identity, and semantic validation
+  rejects mismatches or arbitrary routing;
+- only the existing P2.5 `queue_existing_scraper` action has a producer: it
+  becomes a closed archival scrape payload without copying scraper class,
+  module, command, path, environment, or credential data into the job; and
+- the asynchronous cloud coordinator validates before calling an injected
+  submitter. The Prefect deployment adapter first confirms the deployment's
+  configured pool and queue, then passes one queue envelope, its fixed queue,
+  and the job ID as Prefect's idempotency key. It returns a bounded receipt
+  rather than a Prefect model.
+
+P4.1 tests use a fake Prefect client and local sanitized fixtures. No code
+constructs a live client, creates a work pool/queue/deployment, installs a Mac
+worker, persists or consumes a job, runs a command, publishes a result, or
+connects the boundary to the deployed monitor or production control state.
+Those capabilities remain P4.2 and later.
 
 ## Design principles
 
@@ -464,9 +490,12 @@ share the deployed monitor's database. `JobResultRegistry` is a pure executable
 model of the job protocol: an identical result replay is accepted as already
 seen, while a different result for the same job ID is rejected. P2.5 now
 composes retained verification replay with optimistic state updates locally.
-GCS generation preconditions, cloud restore/upload, deployed Phase 3 delivery,
-and job-result consumption remain future work. P3.S's isolated SQLite root is
-manual canary evidence, not a cloud state store or deployed migration.
+P4.1 derives immutable version 2 job IDs without storing a job or result and
+uses the same ID for a fake-tested Prefect submission idempotency key. GCS
+generation preconditions, cloud restore/upload, deployed Phase 3 delivery,
+durable job storage, and job-result consumption remain future work. P3.S's
+isolated SQLite root is manual canary evidence, not a cloud state store or
+deployed migration.
 
 Schema version 3 has no deployed migration or current operator action. Valid
 local version-1 and version-2 control databases migrate on open, preserving
@@ -503,11 +532,13 @@ stable case observations and registers pending immediate output for transition
 or meaningful case events. Recheck, review, and scraper-queue actions remain
 inert. Repository reminder projection can also register one grouped pending
 digest after excluding claimed slots. P3.S can deliver only its fixed
-synthetic digest and cannot select repository output. Production delivery,
-job creation/submission, and command selection remain later packages.
-Job payload contracts continue to enumerate approved fields for existing
-scraper, validation, and Codex-diagnosis jobs and cannot contain arbitrary
-shell commands.
+synthetic digest and cannot select repository output. P4.1 can convert an
+explicitly supplied existing-scraper action to an immutable job and submit it
+only through an injected boundary; it is not connected to this router or any
+production state. Production action persistence/submission and command
+selection remain later packages. Job payload contracts continue to enumerate
+approved fields for existing scraper, validation, and Codex-diagnosis jobs and
+cannot contain arbitrary shell commands.
 
 Examples:
 
@@ -517,6 +548,35 @@ Examples:
 - structural parse/validation failure after retries: Codex candidate;
 - multiple venues fail with the same infrastructure symptom: systemic
   incident, circuit breaker, and one notification.
+
+## Prefect queue protocol
+
+P4.1 fixes the future Mac execution topology as one `process` work pool named
+`openpapers-mac` with capability-separated queues:
+
+```text
+scrape_existing     -> openpapers-scrape
+validate_candidate  -> openpapers-validation
+codex_diagnosis     -> openpapers-codex
+```
+
+This mapping is code and contract data, not provisioned Prefect state. A
+version 2 job includes `request_id`, `job_fingerprint`, and `job_id`; the
+fingerprint is canonical SHA-256 over every field except the two derived
+identity fields, and `job_id` is `job:<full fingerprint>`. It intentionally
+contains no wall-clock creation field, so reconstructing an identical logical
+request at another time cannot invent a duplicate identity. Prefect records
+submission/run time separately.
+
+The queue envelope contains only its schema version, fixed pool, fixed queue,
+and validated job. The deployment ID is injected configuration and never
+enters the immutable job. Prefect associates that deployment with its work
+pool; the adapter also supplies the fixed queue on flow-run creation. Missing
+deployment configuration, an incorrectly assigned deployment, a forged
+identity, queue drift, an incorrect idempotency key, or an invalid Prefect
+response fails closed. P4.1 itself does not suppress a worker from repeating
+completed work; P4.3 duplicate-delivery behavior and P4.4 immutable results
+close that later acceptance path.
 
 ## Reminder lifecycle
 

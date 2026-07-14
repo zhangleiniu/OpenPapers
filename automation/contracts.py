@@ -27,6 +27,7 @@ class ContractName(str, Enum):
     CASE_STATE = "case_state"
     NOTIFICATION_INTENT = "notification_intent"
     JOB = "job"
+    JOB_QUEUE_ENVELOPE = "job_queue_envelope"
     JOB_RESULT = "job_result"
     CODEX_RESULT = "codex_result"
     VENUE_CATALOG = "venue_catalog"
@@ -41,6 +42,7 @@ _SCHEMA_FILES = {
     ContractName.CASE_STATE: "case-state.json",
     ContractName.NOTIFICATION_INTENT: "notification-intent.json",
     ContractName.JOB: "job.json",
+    ContractName.JOB_QUEUE_ENVELOPE: "job-queue-envelope.json",
     ContractName.JOB_RESULT: "job-result.json",
     ContractName.CODEX_RESULT: "codex-result.json",
     ContractName.VENUE_CATALOG: "venue-catalog.json",
@@ -51,6 +53,7 @@ _SUPPORTED_SCHEMA_VERSIONS = {
     contract: ({1, 2} if contract in {
         ContractName.VERIFICATION_REQUEST,
         ContractName.VERIFICATION_RESULT,
+        ContractName.JOB,
     } else {1})
     for contract in ContractName
 }

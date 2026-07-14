@@ -202,6 +202,24 @@ Phase 3 is `Shadow`: P3.S is manual and isolated, and no Phase 3 component is
 scheduled, deployed, connected to P3.4 output, or authorized to act on
 production state.
 
+P4.1's execution-queue foundation is implemented locally and is not wired into
+the deployed monitor:
+
+- version 2 typed jobs derive a full SHA-256 job ID from their request,
+  venue/year, type, requester, input artifacts, and closed payload while
+  retaining compatibility validation for version 1 artifacts;
+- `automation/job_queue.py` defines the inert `openpapers-mac` Prefect process
+  work-pool blueprint and separate scrape, validation, and Codex queues. A
+  strict queue envelope rejects pool, queue, job-type, identity, secret, and
+  arbitrary-field drift before submission; and
+- an explicitly supplied P2.5 existing-scraper action can build a scrape job,
+  while an injected Prefect deployment-client adapter uses the job ID as the
+  flow-run idempotency key. Tests use only a fake client; P4.1 creates no
+  Prefect resource or flow run and supplies no worker or command executor.
+
+Phase 4 remains `Planned`. P4.1 establishes contracts and an effect boundary,
+not an installed execution plane.
+
 The following does **not** exist yet:
 
 - scheduled or deployed LLM discovery;
@@ -209,6 +227,7 @@ The following does **not** exist yet:
 - scheduled or deployed case/action/reminder integration or notification
   delivery;
 - automated routing from discovery to a scrape job;
+- provisioned P4 work pools, queues, deployments, or submission wiring;
 - a Mac mini Prefect worker;
 - a Codex execution adapter;
 - automatic promotion into the canonical dataset or MustCite deployment.

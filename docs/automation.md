@@ -46,8 +46,13 @@ Resend adapter that can deliver only a fixed three-item synthetic canary after
 an approved-recipient fingerprint check. Its first isolated canary was accepted
 by the provider, but it cannot read P3.4 output and adds no production
 recipient, schedule, Prefect/Cloud Run integration, or production-state
-change. A production-integrated verifier/case/reminder flow and notification
-delivery, the Mac mini worker, Codex repair execution, and MustCite deployment
+change. P4.1 adds local version 2 immutable job identity, a strict typed queue
+envelope, an inert `openpapers-mac` process work-pool blueprint, and an
+injected fake-tested Prefect deployment submission adapter. It is not imported
+or called by the deployed monitor, creates no Prefect resource or flow run,
+and has no worker or executable command mapping. A production-integrated
+verifier/case/reminder flow and notification delivery, provisioned P4 Prefect
+resources, the Mac mini worker, Codex repair execution, and MustCite deployment
 are not implemented.
 
 Start at the [automation system development guide](./automation-system/README.md) for

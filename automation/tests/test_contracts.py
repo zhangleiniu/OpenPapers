@@ -22,6 +22,7 @@ from automation.contracts import (
 
 FIXTURES = Path(__file__).with_name("fixtures") / "phase0"
 PHASE2_FIXTURES = Path(__file__).with_name("fixtures") / "phase2"
+PHASE4_FIXTURES = Path(__file__).with_name("fixtures") / "phase4"
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -29,6 +30,8 @@ def load_fixture(name: str) -> dict:
     path = FIXTURES / name
     if not path.exists():
         path = PHASE2_FIXTURES / name
+    if not path.exists():
+        path = PHASE4_FIXTURES / name
     return json.loads(path.read_text(encoding="utf-8"))
 
 
@@ -40,7 +43,8 @@ class ContractTests(unittest.TestCase):
         ContractName.CONFERENCE_STATE: "conference-state.v1.json",
         ContractName.CASE_STATE: "case-state.v1.json",
         ContractName.NOTIFICATION_INTENT: "notification-intent.v1.json",
-        ContractName.JOB: "scrape-job.v1.json",
+        ContractName.JOB: "scrape-job.v2.json",
+        ContractName.JOB_QUEUE_ENVELOPE: "scrape-queue-envelope.v1.json",
         ContractName.JOB_RESULT: "job-result.v1.json",
         ContractName.CODEX_RESULT: "codex-result.v1.json",
     }
@@ -56,6 +60,7 @@ class ContractTests(unittest.TestCase):
         for contract, fixture_name in (
             (ContractName.VERIFICATION_REQUEST, "verification-request.v1.json"),
             (ContractName.VERIFICATION_RESULT, "verification-result.v1.json"),
+            (ContractName.JOB, "scrape-job.v1.json"),
         ):
             with self.subTest(contract=contract.value, version=1):
                 self.assertEqual(load_schema(contract, 2)["$schema"],

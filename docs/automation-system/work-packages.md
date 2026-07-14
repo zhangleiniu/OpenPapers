@@ -78,8 +78,10 @@ case slice, P3.2 has completed reminder aging and grouped digest data, P3.3 has
 completed the fake-only durable delivery boundary, and P3.4 has completed
 pending shadow-output integration. P3.S has completed one separately
 authorized synthetic delivery/fatigue canary, so Phase 3 is now `Shadow`.
-Phase 4 remains `Planned`; no later package is started or authorized by this
-status change.
+P4.1 has completed the immutable typed-job, fixed-queue, and fake-tested cloud
+submission boundary without creating external resources. Phase 4 remains
+`Planned`; P4.2 is the next ready package, and no worker installation or later
+execution behavior is authorized by P4.1.
 
 ### P2.1R — harden verifier contract semantics
 
@@ -412,10 +414,39 @@ must not erase or duplicate the durable case.
 
 ## Phase 4 packages — Mac mini execution plane
 
+### P4.1 — immutable typed queue and cloud submission boundary
+
+Status: `Complete`
+
+Depends on: Phase 3 gate
+
+Completed boundary: version 2 jobs derive a full SHA-256 `job_id` and
+`job_fingerprint` from the request/action identity, venue/year, job type,
+requester, input artifacts, and closed payload. Version 1 jobs remain valid
+compatibility artifacts but cannot cross the P4.1 queue boundary. The strict
+queue envelope maps existing scrape, validation, and Codex job types to
+separate fixed queues in the inert `openpapers-mac` process work-pool
+blueprint; pool/queue drift, forged identity, secrets, arbitrary commands, and
+unknown fields fail before submission.
+
+`automation/job_queue.py` converts only an explicitly supplied P2.5
+existing-scraper action into a closed archival scrape job. Its asynchronous
+cloud coordinator calls an injected submitter with the job ID as idempotency
+key. The Prefect adapter accepts an injected client and deployment mapping,
+confirms the deployment is assigned to the dedicated pool and fixed queue,
+passes one strict envelope, and returns a bounded receipt. Fixture/fake tests
+construct no live Prefect client and change no external state.
+
+P4.1 does not persist an action/job, connect P2.5 or Phase 3 to production,
+create a Prefect pool/queue/deployment/flow run, install/configure the Mac or a
+worker, execute a command/scraper/validator/Codex process, manage locks, disk,
+timeouts, cancellation, or offline delivery, publish/consume results, touch
+GCS, or begin P4.2 and later behavior.
+
 | ID | Status | Depends on | Objective and completion boundary |
 |---|---|---|---|
-| P4.1 | Planned | Phase 3 gate | Prefect work-pool and typed queue protocol, cloud submission boundary, and immutable job identity. No Mac installation. |
-| P4.2 | Planned | P4.1 | Mac worker package, health checks, and `launchd` runbook using fake jobs. No scraper or Codex execution. |
+| P4.1 | Complete | Phase 3 gate | Immutable v2 job identity, fixed Prefect process-pool/typed-queue protocol, and injected fake-tested cloud submission boundary. No external resource or Mac change. |
+| P4.2 | Ready | P4.1 | Mac worker package, health checks, and `launchd` runbook using fake jobs. No scraper or Codex execution. |
 | P4.3 | Planned | P4.2 | Venue/year locks, disk checks, timeout, cancellation, duplicate-delivery behavior, and offline queue semantics. |
 | P4.4 | Planned | P4.3 | Immutable GCS job-result/manifest publishing and cloud result consumer with generation preconditions and exactly-once logical consumption. |
 | P4.O | Planned | P4.4 | Explicit Mac/Prefect/GCS installation and reboot, SSH-disconnect, offline-worker, and recovery drills. External resources are changed only in this operator-authorized package. |
