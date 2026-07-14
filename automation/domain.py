@@ -73,6 +73,7 @@ class TransitionActor(str, Enum):
 
 class Writer(str, Enum):
     CLOUD_CONTROL_PLANE = "cloud_control_plane"
+    LOCAL_CONTROL_PLANE = "local_control_plane"
     MAC_WORKER = "mac_worker"
 
 
@@ -152,7 +153,10 @@ _ALLOWED_TRANSITIONS: dict[LifecycleState, frozenset[LifecycleState]] = {
 
 
 _WRITER_OWNERSHIP: dict[ArtifactKind, frozenset[Writer]] = {
-    ArtifactKind.CONTROL_STATE: frozenset({Writer.CLOUD_CONTROL_PLANE}),
+    ArtifactKind.CONTROL_STATE: frozenset({
+        Writer.CLOUD_CONTROL_PLANE,
+        Writer.LOCAL_CONTROL_PLANE,
+    }),
     ArtifactKind.SOURCE_SNAPSHOT: frozenset({Writer.CLOUD_CONTROL_PLANE}),
     ArtifactKind.DISCOVERY_RESULT: frozenset({Writer.CLOUD_CONTROL_PLANE}),
     ArtifactKind.VERIFICATION_RESULT: frozenset({Writer.CLOUD_CONTROL_PLANE}),

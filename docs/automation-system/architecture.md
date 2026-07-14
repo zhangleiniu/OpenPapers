@@ -352,6 +352,29 @@ result. P4.O's live client/IAM/installation path is paused; P4.L1 and later
 packages own the local replacement. Real manifest generation and result
 interpretation remain Phase 5.
 
+P4.L1 adds the first accepted local-first scheduling code without connecting
+the previously accepted domains:
+
+- `local_control_plane` is a target control-state writer role, while schema
+  version 5 persists exactly one immutable database owner. Existing version
+  1-4 databases are treated as cloud-owned and a local open refuses them before
+  migration; only a new empty database explicitly created as local can acquire
+  local ownership;
+- schema version 5 also retains bounded `active`/`completed` wakeups and stable
+  due selections keyed by venue, year, and exact persisted `next_check_at`;
+- `automation/local_scheduler.py` observes one injected aware clock, acquires
+  the existing singleton lease, records one wakeup, selects at most its hard
+  bound of due states, and exits. Exact completed replay returns the first
+  outcome, while later wakeups cannot reselect an unchanged schedule; and
+- an active wakeup left by interruption is durable ambiguity. It blocks later
+  wakeups after lease expiry instead of being reclaimed by age.
+
+P4.L1 accepts no effect callback, command, environment expansion, network
+client, or production path. Tests use fixtures, fake clocks, and temporary
+SQLite only. P4.L2 owns domain composition; P4.L3 owns an uninstalled service
+package; P4.LS owns authorized host shadow drills; and P4.LC alone may transfer
+production ownership after disabling the cloud writer.
+
 P4.O is paused after its external feasibility gate. The acceptable Prefect
 Cloud plan rejected the required hybrid process pool before resource creation;
 paying for that tier or self-hosting an orchestration stack is not justified.
@@ -574,11 +597,11 @@ Requirements:
   reducer interprets it;
 - retain enough immutable input to reproduce a transition or diagnosis.
 
-Phase 0's currently executable ownership model in `automation/domain.py`
-predates this decision: it assigns mutable control state to the cloud and
-immutable results to the Mac. P4.L1 must introduce an explicit local target
-ownership mode without weakening the no-overlap rule; the current cloud mode
-remains authoritative until cutover. P2.1's
+Phase 0's original executable ownership model assigned mutable control state
+to the cloud and immutable results to the Mac. P4.L1 now adds an explicit
+local target control role plus a durable per-database owner without weakening
+the no-overlap rule; the current cloud mode remains authoritative until
+cutover. P2.1's
 `FileSnapshotStore` proves local content-addressed source snapshot replay but
 is not the cloud state store or a GCS adapter. P2.4's
 `ControlStateRepository` implements schema-versioned local SQLite control
@@ -600,21 +623,23 @@ fixture flow returns no versioned job result. P4.3 stores only a private
 Mac-local active/completed safety marker keyed by that identity; it is not
 uploaded, consumed by cloud state, or validated as the job-result contract.
 P4.4 supplies strict manifests/results, create-only GCS-compatible publishing,
-exact-generation reads, and schema-version-4 exactly-once logical consumption.
-Its bucket is injected, its tests are fake/local, and it is not wired to the
-P4.3 worker or a production flow. P4.L1 owns the first local-writer and due-work
-changes. Deployed Phase 3 delivery, live job-result production/interpretation,
-optional backup/export, and production cutover remain future work.
+exact-generation reads, and the schema-version-4 exactly-once logical
+consumption table. P4.L1 advances the repository to schema version 5 with the
+immutable owner and due-work journal. Its runner is not wired to P4.3, P4.4,
+or a production flow. Deployed Phase 3 delivery, local domain composition,
+live job-result production/interpretation, optional backup/export, and
+production cutover remain future work.
 P3.S's isolated SQLite root is manual canary evidence, not a cloud state store
 or deployed migration.
 
-Schema version 4 has no deployed migration or current operator action. Valid
-local version-1, version-2, and version-3 control databases migrate on open,
-preserving verification, conference, case, and notification data. Before any
-future durable operator database is opened by version-4 code, stop overlapping
-writers and take a backup; rollback after migration requires restoring that
-backup because older code must reject, not downgrade or delete, a newer
-schema.
+Schema version 5 has no deployed migration or current operator action. Valid
+version-1 through version-4 control databases migrate on open only under the
+cloud role and preserve verification, conference, case, notification, and
+job-result data. A local role refuses those legacy cloud-owned databases.
+Before any future durable operator database is opened by version-5 code, stop
+overlapping writers and take a backup; rollback after migration requires
+restoring that backup because older code must reject, not downgrade or delete,
+a newer schema.
 
 Evaluate Firestore or PostgreSQL only after a concrete trigger: multiple
 control-plane writers, unavoidable overlapping state updates, a real-time

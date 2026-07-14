@@ -20,10 +20,14 @@ Cloud Scheduler starts a Cloud Run Job. The job executes
 and persists its SQLite state and immutable source snapshots in GCS.
 
 P4.4's job-result code is not part of this deployed topology. It provides a
-fake-tested injected GCS bucket boundary and a local schema-version-4
-consumption ledger, but constructs no client and has no configured bucket,
-prefix, IAM role, worker credential, flow, or migration here. Do not reuse the
-monitor tree or grant a shadow Mac process access to `control/state.sqlite3`.
+fake-tested injected GCS bucket boundary and schema-version-4 consumption
+tables, but constructs no client and has no configured bucket, prefix, IAM
+role, worker credential, flow, or migration here. P4.L1 advances the local
+repository schema to version 5 with an immutable owner and bounded scheduler
+journal; its fake-clock runner uses temporary local state only and is also not
+imported, installed, or scheduled here. Legacy version 1-4 databases remain
+cloud-owned. Do not reuse the monitor tree or grant a shadow Mac process access
+to `control/state.sqlite3`.
 The accepted local-first design keeps this deployment authoritative until a
 later package has passed isolated host drills. Its cutover must back up state,
 disable Cloud Scheduler before activating the local writer, verify health, and

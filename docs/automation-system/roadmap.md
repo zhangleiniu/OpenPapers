@@ -470,19 +470,36 @@ Accepted P4.4 immutable result protocol:
   and temporary databases cover partial publication, restart replay, lease
   loss, migration, generation conflict, and corruption without live GCS.
 
-Phase 4 remains `Planned`: P4.1-P4.4 are unconnected local interfaces. No Mac
-execution service has been installed, loaded, started, or operationally
-checked, and P4.3 selects or runs no command. P4.O's Prefect feasibility gate
-failed before resource creation because the acceptable cloud plan does not
-support the required hybrid process pool. P4.O is therefore `Paused`; paying
-for or self-hosting orchestration is not justified for this workload.
+Accepted P4.L1 local ownership and due-work foundation:
+
+- control-state schema version 5 binds a database to exactly one immutable
+  cloud or local owner. Legacy version 1-4 databases remain cloud-owned and a
+  local role refuses them before migration; no ownership-transfer API exists;
+- one plain-Python runner uses an injected aware clock and the existing
+  singleton lease to record a bounded wakeup and select persisted
+  `next_check_at <= now` conference-year state;
+- exact completed wakeup replay is a no-op, unchanged due schedules are stable
+  across later wakeups, and an interrupted active wakeup remains an explicit
+  recovery blocker after lease expiry; and
+- fake-clock and temporary-SQLite tests cover due/not-due, missed wakeups,
+  duplicate selection, hard bounds, lease contention, restart, ownership
+  mismatch, legacy state, and ambiguity without an external effect.
+
+Phase 4 remains `Planned`: P4.1-P4.4 and P4.L1 are unconnected local
+interfaces. No Mac execution service has been installed, loaded, started, or
+operationally checked, and no package selects or runs a command. P4.O's Prefect
+feasibility gate failed before resource creation because the acceptable cloud
+plan does not support the required hybrid process pool. P4.O is therefore
+`Paused`; paying for or self-hosting orchestration is not justified for this
+workload.
 
 The accepted [local-first decision](./local-first-decision.md) preserves the
 typed identity, safety, and immutable-result semantics while replacing the
-Prefect pull transport with a bounded local scheduler. P4.L1 is the next ready
-package. Reboot/SSH/missing-volume behavior, local log visibility, stable live
-results, shadow comparison, and a no-overlap production writer cutover remain
-later acceptance criteria.
+Prefect pull transport with a bounded local scheduler. P4.L1 implements only
+that scheduler's isolated ownership/selection core; P4.L2 is next. Domain
+composition, reboot/SSH/missing-volume behavior, local log visibility, stable
+live results, shadow comparison, and a no-overlap production writer cutover
+remain later acceptance criteria.
 
 ## Phase 5: execute existing scrapers
 

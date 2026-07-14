@@ -61,16 +61,20 @@ fixed Prefect pull/offline policy. It is not called by the deployed monitor or
 P4.2 fixture flow, selects no command, publishes no job result, and has not been
 installed or exercised on a real Mac/Prefect queue. P4.4 adds strict local
 manifest/result contracts, an injected GCS-compatible create-only publisher
-and exact-generation reader, control-state schema version 4 for
-lease-protected exactly-once logical consumption, and a thin local consumer.
+and exact-generation reader, the schema-version-4 tables for lease-protected
+exactly-once logical consumption, and a thin local consumer.
 Its tests use a fake bucket and temporary database; it constructs no GCS
 client, publishes or consumes no live object, applies no lifecycle transition,
 and is not imported by this deployment. P4.O's operator feasibility gate was
 rejected before Prefect resource creation because the acceptable cloud plan
 does not support its hybrid process pool. The accepted replacement is a
-local-first bounded scheduler, but P4.L1 has not yet implemented it. A
-production-integrated verifier/case/reminder flow and notification delivery,
-an installed Mac mini scheduler/executor, live result wiring and operational
+local-first bounded scheduler. P4.L1 now adds a schema-version-5 immutable
+cloud/local database owner, bounded wakeup/due-selection history, and a
+plain-Python fake-clock runner over temporary SQLite. Legacy databases remain
+cloud-owned; the runner is not imported here, accepts no action callback or
+command, and has not opened production state or been installed. A composed
+local verifier/lifecycle/case/reminder flow and notification delivery, an
+installed Mac mini scheduler/executor, live result wiring and operational
 drills, Codex repair execution, and MustCite deployment are not implemented.
 
 Start at the [automation system development guide](./automation-system/README.md) for

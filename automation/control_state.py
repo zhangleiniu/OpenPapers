@@ -28,6 +28,7 @@ from automation.contracts import (
 )
 from automation.domain import (
     ArtifactKind,
+    OwnershipError,
     Writer,
     assert_secret_free,
     assert_writer_allowed,
@@ -49,9 +50,11 @@ from automation.notifications import (
 from automation.verification import validate_verification_result
 
 
-CONTROL_SCHEMA_VERSION = 4
+CONTROL_SCHEMA_VERSION = 5
 DEFAULT_LEASE_TTL_SECONDS = 300
 MAX_LEASE_TTL_SECONDS = 86_400
+DEFAULT_SCHEDULER_SELECTION_LIMIT = 100
+MAX_SCHEDULER_SELECTION_LIMIT = 1000
 _CONTROL_LEASE_NAME = "control-state"
 
 
@@ -95,6 +98,10 @@ class JobResultConsumptionConflictError(ControlStateError):
     """Raised when one job ID is reused with different result semantics."""
 
 
+class SchedulerWakeupConflictError(ControlStateError):
+    """Raised when a wakeup identity changes meaning or remains ambiguous."""
+
+
 class StoredDataError(ControlStateError):
     """Raised when persisted JSON, identity, or fingerprints are corrupt."""
 
@@ -136,6 +143,54 @@ class StateWriteOutcome:
     """Result of an optimistic conference-state write."""
 
     record: StateRevision
+    applied: bool
+
+
+@dataclass(frozen=True)
+class DueWorkSelection:
+    """One stable selection of a persisted due conference-year schedule."""
+
+    selection_id: str
+    venue_id: str
+    year: int
+    next_check_at: str
+    selected_at: str
+    first_wakeup_id: str
+    state_revision: int
+    state_fingerprint: str
+
+
+@dataclass(frozen=True)
+class SchedulerWakeupRecord:
+    """One bounded scheduler invocation retained for replay and recovery."""
+
+    wakeup_id: str
+    scheduled_for: str
+    started_at: str
+    completed_at: str | None
+    status: str
+    due_cutoff_at: str
+    selection_limit: int
+    eligible_count: int | None
+    new_selection_count: int | None
+    duplicate_selection_count: int | None
+    truncated_count: int | None
+
+
+@dataclass(frozen=True)
+class SchedulerWakeupStartOutcome:
+    """Result of durably beginning a wakeup or replaying a completed one."""
+
+    record: SchedulerWakeupRecord
+    applied: bool
+
+
+@dataclass(frozen=True)
+class SchedulerWakeupOutcome:
+    """Result of a first wakeup completion or an exact completed replay."""
+
+    record: SchedulerWakeupRecord
+    selections: tuple[DueWorkSelection, ...]
     applied: bool
 
 
@@ -455,11 +510,73 @@ _MIGRATION_4 = (
     """,
 )
 
+_MIGRATION_5 = (
+    """
+    CREATE TABLE control_ownership (
+        ownership_id INTEGER PRIMARY KEY CHECK (ownership_id = 1),
+        owner_kind TEXT NOT NULL CHECK (
+            owner_kind IN ('cloud_control_plane', 'local_control_plane')
+        ),
+        established_at TEXT NOT NULL
+    )
+    """,
+    """
+    CREATE TABLE scheduler_wakeup (
+        wakeup_id TEXT PRIMARY KEY,
+        scheduled_for TEXT NOT NULL,
+        started_at TEXT NOT NULL,
+        completed_at TEXT,
+        status TEXT NOT NULL CHECK (status IN ('active', 'completed')),
+        due_cutoff_at TEXT NOT NULL,
+        selection_limit INTEGER NOT NULL CHECK (selection_limit >= 1),
+        eligible_count INTEGER CHECK (eligible_count >= 0),
+        new_selection_count INTEGER CHECK (new_selection_count >= 0),
+        duplicate_selection_count INTEGER CHECK (duplicate_selection_count >= 0),
+        truncated_count INTEGER CHECK (truncated_count >= 0),
+        CHECK (
+            (status = 'active' AND completed_at IS NULL
+                AND eligible_count IS NULL AND new_selection_count IS NULL
+                AND duplicate_selection_count IS NULL AND truncated_count IS NULL)
+            OR
+            (status = 'completed' AND completed_at IS NOT NULL
+                AND eligible_count IS NOT NULL AND new_selection_count IS NOT NULL
+                AND duplicate_selection_count IS NOT NULL
+                AND truncated_count IS NOT NULL)
+        )
+    )
+    """,
+    """
+    CREATE UNIQUE INDEX scheduler_one_active_wakeup
+    ON scheduler_wakeup (status) WHERE status = 'active'
+    """,
+    """
+    CREATE TABLE scheduler_due_selection (
+        selection_id TEXT PRIMARY KEY,
+        venue_id TEXT NOT NULL,
+        year INTEGER NOT NULL,
+        next_check_at TEXT NOT NULL,
+        selected_at TEXT NOT NULL,
+        first_wakeup_id TEXT NOT NULL,
+        state_revision INTEGER NOT NULL CHECK (state_revision >= 1),
+        state_fingerprint TEXT NOT NULL,
+        UNIQUE (venue_id, year, next_check_at),
+        FOREIGN KEY (first_wakeup_id) REFERENCES scheduler_wakeup (wakeup_id),
+        FOREIGN KEY (venue_id, year, state_revision)
+            REFERENCES conference_state_history (venue_id, year, revision)
+    )
+    """,
+    """
+    CREATE INDEX scheduler_due_selection_wakeup
+    ON scheduler_due_selection (first_wakeup_id, venue_id, year)
+    """,
+)
+
 _MIGRATIONS = {
     1: _MIGRATION_1,
     2: _MIGRATION_2,
     3: _MIGRATION_3,
     4: _MIGRATION_4,
+    5: _MIGRATION_5,
 }
 
 _REQUIRED_COLUMNS_V1 = {
@@ -523,11 +640,25 @@ _REQUIRED_COLUMNS_V4 = {
     },
 }
 
+_REQUIRED_COLUMNS_V5 = {
+    "control_ownership": {"ownership_id", "owner_kind", "established_at"},
+    "scheduler_wakeup": {
+        "wakeup_id", "scheduled_for", "started_at", "completed_at", "status",
+        "due_cutoff_at", "selection_limit", "eligible_count",
+        "new_selection_count", "duplicate_selection_count", "truncated_count",
+    },
+    "scheduler_due_selection": {
+        "selection_id", "venue_id", "year", "next_check_at", "selected_at",
+        "first_wakeup_id", "state_revision", "state_fingerprint",
+    },
+}
+
 _REQUIRED_COLUMNS_BY_VERSION = {
     1: _REQUIRED_COLUMNS_V1,
     2: _REQUIRED_COLUMNS_V2,
     3: _REQUIRED_COLUMNS_V3,
     4: _REQUIRED_COLUMNS_V4,
+    5: _REQUIRED_COLUMNS_V5,
 }
 
 
@@ -585,6 +716,28 @@ def _validate_owner(owner_id: str) -> None:
         raise ControlStateError("lease owner ID must contain 3 to 128 characters")
 
 
+def _validate_scheduler_identity(value: str, *, field: str, prefix: str) -> None:
+    if (
+        not isinstance(value, str)
+        or not value.startswith(prefix)
+        or not 10 <= len(value) <= 160
+        or any(character.isspace() for character in value)
+    ):
+        raise ControlStateError(f"{field} is invalid")
+
+
+def _validate_selection_limit(value: int) -> None:
+    if (
+        not isinstance(value, int)
+        or isinstance(value, bool)
+        or not 1 <= value <= MAX_SCHEDULER_SELECTION_LIMIT
+    ):
+        raise ControlStateError(
+            "scheduler selection limit must be between 1 and "
+            f"{MAX_SCHEDULER_SELECTION_LIMIT}"
+        )
+
+
 def _decode_json(raw: str, *, label: str) -> dict[str, Any]:
     try:
         payload = json.loads(raw)
@@ -602,7 +755,7 @@ def _system_clock() -> datetime:
 
 
 class ControlStateRepository:
-    """Versioned SQLite repository for the sole mutable cloud writer."""
+    """Versioned SQLite repository bound to one durable mutable owner."""
 
     def __init__(
         self,
@@ -612,6 +765,7 @@ class ControlStateRepository:
         clock: Callable[[], datetime] = _system_clock,
     ) -> None:
         assert_writer_allowed(writer, ArtifactKind.CONTROL_STATE)
+        self.writer = Writer(writer)
         self.path = Path(path)
         self._clock = clock
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -626,6 +780,7 @@ class ControlStateRepository:
         try:
             self._migrate()
             self._validate_schema()
+            self._validate_ownership()
         except Exception:
             self._connection.close()
             raise
@@ -678,6 +833,12 @@ class ControlStateRepository:
             raise SchemaMigrationError(
                 "refusing to migrate a populated unversioned database"
             )
+        if 0 < version < 5 and self.writer is Writer.LOCAL_CONTROL_PLANE:
+            raise OwnershipError(
+                "legacy control databases are cloud-owned and cannot be opened "
+                "by the local control plane"
+            )
+        original_version = version
         if version > 0:
             self._validate_schema(expected_version=version)
         for target_version in range(version + 1, CONTROL_SCHEMA_VERSION + 1):
@@ -686,6 +847,18 @@ class ControlStateRepository:
                 with self._write_transaction() as connection:
                     for statement in _MIGRATIONS[target_version]:
                         connection.execute(statement)
+                    if target_version == 5:
+                        owner = (
+                            self.writer
+                            if original_version == 0
+                            else Writer.CLOUD_CONTROL_PLANE
+                        )
+                        connection.execute(
+                            "INSERT INTO control_ownership "
+                            "(ownership_id, owner_kind, established_at) "
+                            "VALUES (1, ?, ?)",
+                            (owner.value, applied_at),
+                        )
                     connection.execute(
                         "INSERT INTO schema_migrations (version, applied_at) "
                         "VALUES (?, ?)",
@@ -698,6 +871,46 @@ class ControlStateRepository:
                 raise SchemaMigrationError(
                     f"control schema migration {target_version} failed: {exc}"
                 ) from exc
+
+    def _validate_ownership(self) -> None:
+        rows = self._connection.execute(
+            "SELECT ownership_id, owner_kind, established_at "
+            "FROM control_ownership"
+        ).fetchall()
+        if len(rows) != 1 or int(rows[0]["ownership_id"]) != 1:
+            raise SchemaMigrationError(
+                "control database ownership is missing or ambiguous"
+            )
+        try:
+            stored_owner = Writer(str(rows[0]["owner_kind"]))
+        except ValueError as exc:
+            raise SchemaMigrationError(
+                "control database ownership value is invalid"
+            ) from exc
+        if stored_owner not in {
+            Writer.CLOUD_CONTROL_PLANE,
+            Writer.LOCAL_CONTROL_PLANE,
+        }:
+            raise SchemaMigrationError(
+                "control database owner is not a control-plane role"
+            )
+        established_at = _timestamp(
+            str(rows[0]["established_at"]), field="ownership established_at"
+        )
+        if established_at != rows[0]["established_at"]:
+            raise SchemaMigrationError(
+                "control database ownership timestamp is not canonical"
+            )
+        if stored_owner is not self.writer:
+            raise OwnershipError(
+                f"control database is owned by {stored_owner.value}, not "
+                f"{self.writer.value}"
+            )
+
+    @property
+    def control_owner(self) -> Writer:
+        """Return the already-validated immutable database owner."""
+        return self.writer
 
     def _validate_schema(self, *, expected_version: int | None = None) -> None:
         version = CONTROL_SCHEMA_VERSION if expected_version is None else expected_version
@@ -839,6 +1052,377 @@ class ControlStateRepository:
             row["expires_at"], field="stored lease expiry"
         ) <= now:
             raise LeaseLostError("control lease has expired")
+
+    def begin_scheduler_wakeup(
+        self,
+        wakeup_id: str,
+        *,
+        scheduled_for: datetime | str,
+        due_cutoff_at: datetime | str,
+        selection_limit: int = DEFAULT_SCHEDULER_SELECTION_LIMIT,
+        lease: LeaseHandle,
+    ) -> SchedulerWakeupStartOutcome:
+        """Durably claim one local wakeup before inspecting due state."""
+        if self.writer is not Writer.LOCAL_CONTROL_PLANE:
+            raise OwnershipError("scheduler wakeups require local control ownership")
+        _validate_scheduler_identity(
+            wakeup_id, field="scheduler wakeup ID", prefix="scheduler-wakeup:"
+        )
+        _validate_selection_limit(selection_limit)
+        scheduled = _parse_timestamp(scheduled_for, field="wakeup scheduled_for")
+        cutoff = _parse_timestamp(due_cutoff_at, field="wakeup due_cutoff_at")
+        if scheduled > cutoff:
+            raise ControlStateError("wakeup cannot be scheduled after its due cutoff")
+        scheduled_text = _timestamp(scheduled, field="wakeup scheduled_for")
+        cutoff_text = _timestamp(cutoff, field="wakeup due_cutoff_at")
+        started_text = _timestamp(self._now(), field="wakeup started_at")
+        with self._write_transaction() as connection:
+            self._require_lease(connection, lease, self._now())
+            active = connection.execute(
+                "SELECT wakeup_id FROM scheduler_wakeup WHERE status = 'active'"
+            ).fetchone()
+            if active is not None:
+                raise SchedulerWakeupConflictError(
+                    "a scheduler wakeup is active or ambiguously interrupted"
+                )
+            existing = connection.execute(
+                "SELECT * FROM scheduler_wakeup WHERE wakeup_id = ?",
+                (wakeup_id,),
+            ).fetchone()
+            if existing is not None:
+                record = self._scheduler_wakeup_from_row(existing)
+                if (
+                    record.scheduled_for != scheduled_text
+                    or record.selection_limit != selection_limit
+                ):
+                    raise SchedulerWakeupConflictError(
+                        "scheduler wakeup ID changed meaning"
+                    )
+                return SchedulerWakeupStartOutcome(record, applied=False)
+            connection.execute(
+                """
+                INSERT INTO scheduler_wakeup (
+                    wakeup_id, scheduled_for, started_at, completed_at, status,
+                    due_cutoff_at, selection_limit, eligible_count,
+                    new_selection_count, duplicate_selection_count,
+                    truncated_count
+                ) VALUES (?, ?, ?, NULL, 'active', ?, ?, NULL, NULL, NULL, NULL)
+                """,
+                (
+                    wakeup_id,
+                    scheduled_text,
+                    started_text,
+                    cutoff_text,
+                    selection_limit,
+                ),
+            )
+        return SchedulerWakeupStartOutcome(
+            SchedulerWakeupRecord(
+                wakeup_id=wakeup_id,
+                scheduled_for=scheduled_text,
+                started_at=started_text,
+                completed_at=None,
+                status="active",
+                due_cutoff_at=cutoff_text,
+                selection_limit=selection_limit,
+                eligible_count=None,
+                new_selection_count=None,
+                duplicate_selection_count=None,
+                truncated_count=None,
+            ),
+            applied=True,
+        )
+
+    def complete_scheduler_wakeup(
+        self,
+        wakeup_id: str,
+        *,
+        lease: LeaseHandle,
+        completed_at: datetime | str,
+    ) -> SchedulerWakeupOutcome:
+        """Select bounded due state and atomically complete an active wakeup."""
+        if self.writer is not Writer.LOCAL_CONTROL_PLANE:
+            raise OwnershipError("scheduler wakeups require local control ownership")
+        _validate_scheduler_identity(
+            wakeup_id, field="scheduler wakeup ID", prefix="scheduler-wakeup:"
+        )
+        completed = _parse_timestamp(completed_at, field="wakeup completed_at")
+        completed_text = _timestamp(completed, field="wakeup completed_at")
+        with self._write_transaction() as connection:
+            self._require_lease(connection, lease, self._now())
+            row = connection.execute(
+                "SELECT * FROM scheduler_wakeup WHERE wakeup_id = ?",
+                (wakeup_id,),
+            ).fetchone()
+            if row is None:
+                raise SchedulerWakeupConflictError("scheduler wakeup was not started")
+            record = self._scheduler_wakeup_from_row(row)
+            if record.status == "completed":
+                selections = self._scheduler_selections_for_wakeup(
+                    connection, wakeup_id
+                )
+                return SchedulerWakeupOutcome(record, selections, applied=False)
+            if completed < _parse_timestamp(
+                record.started_at, field="stored wakeup started_at"
+            ):
+                raise ControlStateError(
+                    "wakeup completion cannot precede its start time"
+                )
+            state_rows = connection.execute(
+                "SELECT * FROM conference_state_current ORDER BY venue_id, year"
+            ).fetchall()
+            due_records: list[StateRevision] = []
+            cutoff = _parse_timestamp(
+                record.due_cutoff_at, field="stored wakeup due_cutoff_at"
+            )
+            for state_row in state_rows:
+                state_record = self._state_from_row(state_row)
+                next_check_at = state_record.state["next_check_at"]
+                if next_check_at is None:
+                    continue
+                next_check = _parse_timestamp(
+                    next_check_at, field="conference state next_check_at"
+                )
+                if next_check <= cutoff:
+                    due_records.append(state_record)
+            due_records.sort(key=lambda item: (
+                item.state["next_check_at"], item.venue_id, item.year
+            ))
+            eligible_count = len(due_records)
+            bounded = due_records[:record.selection_limit]
+            truncated_count = eligible_count - len(bounded)
+            new_selections: list[DueWorkSelection] = []
+            duplicate_count = 0
+            for state_record in bounded:
+                next_check_at = str(state_record.state["next_check_at"])
+                identity = {
+                    "venue_id": state_record.venue_id,
+                    "year": state_record.year,
+                    "next_check_at": next_check_at,
+                }
+                selection_id = "due-selection:" + artifact_fingerprint(identity)
+                existing = connection.execute(
+                    "SELECT * FROM scheduler_due_selection "
+                    "WHERE venue_id = ? AND year = ? AND next_check_at = ?",
+                    (state_record.venue_id, state_record.year, next_check_at),
+                ).fetchone()
+                if existing is not None:
+                    stored = self._scheduler_selection_from_row(existing)
+                    if stored.selection_id != selection_id:
+                        raise StoredDataError(
+                            "stored due-selection identity does not match"
+                        )
+                    duplicate_count += 1
+                    continue
+                selected_at = completed_text
+                connection.execute(
+                    """
+                    INSERT INTO scheduler_due_selection (
+                        selection_id, venue_id, year, next_check_at, selected_at,
+                        first_wakeup_id, state_revision, state_fingerprint
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        selection_id,
+                        state_record.venue_id,
+                        state_record.year,
+                        next_check_at,
+                        selected_at,
+                        wakeup_id,
+                        state_record.revision,
+                        state_record.state_fingerprint,
+                    ),
+                )
+                new_selections.append(DueWorkSelection(
+                    selection_id=selection_id,
+                    venue_id=state_record.venue_id,
+                    year=state_record.year,
+                    next_check_at=next_check_at,
+                    selected_at=selected_at,
+                    first_wakeup_id=wakeup_id,
+                    state_revision=state_record.revision,
+                    state_fingerprint=state_record.state_fingerprint,
+                ))
+            connection.execute(
+                """
+                UPDATE scheduler_wakeup SET
+                    completed_at = ?, status = 'completed', eligible_count = ?,
+                    new_selection_count = ?, duplicate_selection_count = ?,
+                    truncated_count = ?
+                WHERE wakeup_id = ? AND status = 'active'
+                """,
+                (
+                    completed_text,
+                    eligible_count,
+                    len(new_selections),
+                    duplicate_count,
+                    truncated_count,
+                    wakeup_id,
+                ),
+            )
+            completed_row = connection.execute(
+                "SELECT * FROM scheduler_wakeup WHERE wakeup_id = ?",
+                (wakeup_id,),
+            ).fetchone()
+            completed_record = self._scheduler_wakeup_from_row(completed_row)
+        return SchedulerWakeupOutcome(
+            completed_record, tuple(new_selections), applied=True
+        )
+
+    def get_scheduler_wakeup(
+        self, wakeup_id: str
+    ) -> SchedulerWakeupRecord | None:
+        """Return one validated wakeup record without mutating it."""
+        row = self._connection.execute(
+            "SELECT * FROM scheduler_wakeup WHERE wakeup_id = ?", (wakeup_id,)
+        ).fetchone()
+        return self._scheduler_wakeup_from_row(row) if row is not None else None
+
+    def list_scheduler_wakeups(self) -> tuple[SchedulerWakeupRecord, ...]:
+        """Return validated wakeup history in deterministic order."""
+        rows = self._connection.execute(
+            "SELECT * FROM scheduler_wakeup ORDER BY started_at, wakeup_id"
+        ).fetchall()
+        return tuple(self._scheduler_wakeup_from_row(row) for row in rows)
+
+    def list_due_work_selections(self) -> tuple[DueWorkSelection, ...]:
+        """Return every validated stable due selection in deterministic order."""
+        rows = self._connection.execute(
+            "SELECT * FROM scheduler_due_selection "
+            "ORDER BY selected_at, venue_id, year, selection_id"
+        ).fetchall()
+        return tuple(self._scheduler_selection_from_row(row) for row in rows)
+
+    def _scheduler_selections_for_wakeup(
+        self,
+        connection: sqlite3.Connection,
+        wakeup_id: str,
+    ) -> tuple[DueWorkSelection, ...]:
+        rows = connection.execute(
+            "SELECT * FROM scheduler_due_selection WHERE first_wakeup_id = ? "
+            "ORDER BY next_check_at, venue_id, year",
+            (wakeup_id,),
+        ).fetchall()
+        return tuple(self._scheduler_selection_from_row(row) for row in rows)
+
+    def _scheduler_wakeup_from_row(
+        self, row: sqlite3.Row
+    ) -> SchedulerWakeupRecord:
+        wakeup_id = str(row["wakeup_id"])
+        _validate_scheduler_identity(
+            wakeup_id, field="stored scheduler wakeup ID", prefix="scheduler-wakeup:"
+        )
+        status = str(row["status"])
+        if status not in {"active", "completed"}:
+            raise StoredDataError("stored scheduler wakeup status is invalid")
+        scheduled_for = _timestamp(
+            str(row["scheduled_for"]), field="stored wakeup scheduled_for"
+        )
+        started_at = _timestamp(
+            str(row["started_at"]), field="stored wakeup started_at"
+        )
+        due_cutoff_at = _timestamp(
+            str(row["due_cutoff_at"]), field="stored wakeup due_cutoff_at"
+        )
+        completed_at = (
+            None
+            if row["completed_at"] is None
+            else _timestamp(
+                str(row["completed_at"]), field="stored wakeup completed_at"
+            )
+        )
+        selection_limit = int(row["selection_limit"])
+        _validate_selection_limit(selection_limit)
+        counts = tuple(
+            None if row[name] is None else int(row[name])
+            for name in (
+                "eligible_count",
+                "new_selection_count",
+                "duplicate_selection_count",
+                "truncated_count",
+            )
+        )
+        if status == "active" and (completed_at is not None or any(
+            count is not None for count in counts
+        )):
+            raise StoredDataError("stored active wakeup has completion data")
+        if status == "completed" and (completed_at is None or any(
+            count is None or count < 0 for count in counts
+        )):
+            raise StoredDataError("stored completed wakeup is incomplete")
+        if status == "completed" and (
+            counts[1] + counts[2] + counts[3] != counts[0]
+        ):
+            raise StoredDataError("stored completed wakeup counts are inconsistent")
+        return SchedulerWakeupRecord(
+            wakeup_id=wakeup_id,
+            scheduled_for=scheduled_for,
+            started_at=started_at,
+            completed_at=completed_at,
+            status=status,
+            due_cutoff_at=due_cutoff_at,
+            selection_limit=selection_limit,
+            eligible_count=counts[0],
+            new_selection_count=counts[1],
+            duplicate_selection_count=counts[2],
+            truncated_count=counts[3],
+        )
+
+    def _scheduler_selection_from_row(
+        self, row: sqlite3.Row
+    ) -> DueWorkSelection:
+        selection_id = str(row["selection_id"])
+        _validate_scheduler_identity(
+            selection_id,
+            field="stored due-selection ID",
+            prefix="due-selection:",
+        )
+        venue_id = str(row["venue_id"])
+        year = int(row["year"])
+        next_check_at = _timestamp(
+            str(row["next_check_at"]), field="stored selection next_check_at"
+        )
+        selected_at = _timestamp(
+            str(row["selected_at"]), field="stored selection selected_at"
+        )
+        first_wakeup_id = str(row["first_wakeup_id"])
+        _validate_scheduler_identity(
+            first_wakeup_id,
+            field="stored selection wakeup ID",
+            prefix="scheduler-wakeup:",
+        )
+        state_revision = int(row["state_revision"])
+        state_fingerprint = str(row["state_fingerprint"])
+        expected_id = "due-selection:" + artifact_fingerprint({
+            "venue_id": venue_id,
+            "year": year,
+            "next_check_at": next_check_at,
+        })
+        if selection_id != expected_id:
+            raise StoredDataError("stored due-selection identity is invalid")
+        state_row = self._connection.execute(
+            "SELECT * FROM conference_state_history "
+            "WHERE venue_id = ? AND year = ? AND revision = ?",
+            (venue_id, year, state_revision),
+        ).fetchone()
+        if state_row is None:
+            raise StoredDataError("stored due selection has no state revision")
+        state_record = self._state_from_row(state_row)
+        if (
+            state_record.state_fingerprint != state_fingerprint
+            or state_record.state["next_check_at"] != next_check_at
+        ):
+            raise StoredDataError("stored due selection does not match state")
+        return DueWorkSelection(
+            selection_id=selection_id,
+            venue_id=venue_id,
+            year=year,
+            next_check_at=next_check_at,
+            selected_at=selected_at,
+            first_wakeup_id=first_wakeup_id,
+            state_revision=state_revision,
+            state_fingerprint=state_fingerprint,
+        )
 
     def accept_verification(
         self,

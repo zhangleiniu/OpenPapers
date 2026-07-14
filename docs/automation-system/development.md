@@ -498,24 +498,41 @@ python -m unittest automation.tests.test_job_queue -v
 against the full P4.1 v2 job. Its injected bucket adapter writes the manifest
 before the result with `if_generation_match=0`, accepts only byte-identical
 replay after a failed precondition, and pins reads to observed generations.
-Control-state schema version 4 stores one exact pair under the cloud lease;
+Control-state schema version 4 introduced one exact pair under the cloud lease;
 `automation/job_result_consumer.py` only composes the read and record steps.
 Tests use a fake bucket and temporary SQLite database and cover partial-write
 recovery, conflict, generation drift, migration, restart replay, lease loss,
 and corruption.
 
 P4.4 constructs no GCS client, reads no credential, changes no external
-resource, connects no worker, and applies no result to lifecycle state. Before
-opening any future durable control database with schema-v4 code, stop
+resource, connects no worker, and applies no result to lifecycle state.
+
+The P4.L1 local ownership and bounded due-work checks are:
+
+```bash
+python -m unittest automation.tests.test_local_scheduler -v
+python -m unittest automation.tests.test_control_state -v
+python -m unittest automation.tests.test_domain -v
+python -m unittest automation.tests.test_scheduling -v
+```
+
+Control-state schema version 5 adds one immutable cloud/local owner plus
+bounded wakeup and stable due-selection history. Existing version 1-4
+databases remain cloud-owned and refuse local migration. The plain-Python
+runner uses one injected aware clock and the existing lease; tests cover
+due/not-due, missed and duplicate wakeups, hard bounds, contention, restart,
+owner mismatch, and durable active-run ambiguity using fixtures and temporary
+SQLite only. It has no action callback, command, environment expansion,
+orchestration import, network client, CLI, or production path.
+
+Before opening any future durable control database with schema-v5 code, stop
 overlapping writers and take a backup; rollback requires restoring that backup.
-P4.O is paused after its Prefect feasibility gate failed before resource
-creation. Follow the accepted local-first decision and select P4.L1 next. That
-package uses fake clocks and temporary SQLite only: it must not open or migrate
-deployed state, call a network service, install a daemon, or run a scraper.
-P4.L2 owns local domain composition, P4.L3 owns an uninstalled headless service
-package, P4.LS owns authorized host shadow drills, and P4.LC owns the explicit
-no-overlap writer cutover. Phase 5 owns command selection, execution, real
-manifest generation, and result interpretation.
+P4.O remains paused after its Prefect feasibility gate failed before resource
+creation. P4.L2 is the next package and owns local domain composition; P4.L3
+owns an uninstalled headless service package, P4.LS owns authorized host shadow
+drills, and P4.LC owns the explicit no-overlap writer cutover. Phase 5 owns
+command selection, execution, real manifest generation, and result
+interpretation.
 
 Scheduling tests use an injected timezone-aware clock. Keep venue catalogs free
 of year-specific month/date assumptions; discovery records candidates, a

@@ -203,8 +203,9 @@ scheduled, deployed, connected to P3.4 output, or authorized to act on
 production state.
 
 P4.1's execution-queue foundation, P4.2's fake-only Mac package, P4.3's local
-safety supervisor, and P4.4's immutable result protocol are implemented
-locally and are not wired into the deployed monitor:
+safety supervisor, P4.4's immutable result protocol, and P4.L1's local
+ownership/due-work foundation are implemented locally and are not wired into
+the deployed monitor:
 
 - version 2 typed jobs derive a full SHA-256 job ID from their request,
   venue/year, type, requester, input artifacts, and closed payload while
@@ -234,18 +235,29 @@ locally and are not wired into the deployed monitor:
   4 records one lease-protected logical consumption, and
   `automation/job_result_consumer.py` is the thin composition boundary. Tests
   use a fake bucket and temporary database only.
-Phase 4 remains `Planned`. P4.1-P4.4 establish contracts and fake-tested local
-safety/result behavior, not an operational execution plane. No command is
-selected or run, no live immutable result is published or consumed, and no GCS
-client/resource, worker, or Prefect resource is installed or connected.
+- control-state schema version 5 binds each database to one immutable cloud or
+  local control owner. Existing version 1-4 databases remain cloud-owned;
+  only a new empty database explicitly created for the local role can become
+  local-owned; and
+- `automation/local_scheduler.py` acquires the local singleton lease for one
+  bounded fake-clock wakeup, selects persisted `next_check_at <= now` state,
+  suppresses exact and cross-wakeup duplicates, and leaves an interrupted
+  wakeup ambiguous rather than expiring it automatically. It returns inert
+  due-work data and accepts no effect callback or command.
+Phase 4 remains `Planned`. These packages establish contracts and fake-tested
+local safety/scheduling/result behavior, not an operational execution plane.
+No action is composed, no command is selected or run, no live immutable result
+is published or consumed, and no GCS client/resource, worker, Prefect resource,
+or local daemon is installed or connected.
 
 P4.O is `Paused`. Its operator feasibility gate found that the acceptable
 Prefect Cloud plan cannot create the required hybrid process pool; the failed
 apply created none of the planned pool, queues, or deployments. The accepted
 [local-first decision](./local-first-decision.md) replaces that transport with
-a bounded local scheduler and system LaunchDaemon. P4.L1 is the next ready
-package. The existing Cloud Run monitor remains the sole production scheduler
-and writer until a separately authorized, no-overlap cutover.
+a bounded local scheduler and system LaunchDaemon. P4.L1 implements only the
+isolated scheduling core; P4.L2 is the next ready package. The existing Cloud
+Run monitor remains the sole production scheduler and writer until a
+separately authorized, no-overlap cutover.
 
 The following does **not** exist yet:
 
@@ -254,7 +266,7 @@ The following does **not** exist yet:
 - scheduled or deployed case/action/reminder integration or notification
   delivery;
 - automated routing from discovery to a scrape job;
-- a local due-work scheduler or installed OpenPapers LaunchDaemon;
+- composed local control-plane work or an installed OpenPapers LaunchDaemon;
 - an installed or connected Mac mini execution service;
 - a Codex execution adapter;
 - automatic promotion into the canonical dataset or MustCite deployment.

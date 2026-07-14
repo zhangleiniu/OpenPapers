@@ -94,8 +94,9 @@ labels.
 
 ## Immediate implementation boundary
 
-P4.L1 is the only next ready implementation package. It defines local
-single-writer ownership and a clock-injected due-work planner/runner over
-temporary state. It makes no network request, installs no daemon, changes no
-production database, runs no scraper, and does not modify the current cloud
-deployment. Later packages own composition, installation, drills, and cutover.
+P4.L1 has implemented local single-writer ownership and a clock-injected,
+bounded due-work planner/runner over temporary state. It makes no network
+request, installs no daemon, changes no production database, runs no scraper,
+and does not modify the current cloud deployment. P4.L2 is the next ready
+package and owns fixture-only domain composition; later packages still own
+service packaging, installation, drills, and cutover.

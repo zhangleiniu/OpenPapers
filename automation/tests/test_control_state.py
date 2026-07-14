@@ -22,6 +22,7 @@ from automation.control_state import (
     _MIGRATION_1,
     _MIGRATION_2,
     _MIGRATION_3,
+    _MIGRATION_4,
 )
 from automation.cases import CaseObservation, case_event_payload, observe_case
 from automation.contracts import artifact_fingerprint
@@ -91,7 +92,7 @@ class SchemaAndBoundaryTests(unittest.TestCase):
                 versions = repository._connection.execute(
                     "SELECT version FROM schema_migrations"
                 ).fetchall()
-                self.assertEqual([row[0] for row in versions], [1, 2, 3, 4])
+                self.assertEqual([row[0] for row in versions], [1, 2, 3, 4, 5])
 
             with ControlStateRepository(path) as reopened:
                 self.assertEqual(reopened.schema_version, CONTROL_SCHEMA_VERSION)
@@ -130,7 +131,7 @@ class SchemaAndBoundaryTests(unittest.TestCase):
             connection.close()
 
             with ControlStateRepository(path, clock=MutableClock()) as repository:
-                self.assertEqual(repository.schema_version, 4)
+                self.assertEqual(repository.schema_version, 5)
                 self.assertEqual(
                     repository.get_conference_state("icml", 2026).state, state
                 )
@@ -138,7 +139,9 @@ class SchemaAndBoundaryTests(unittest.TestCase):
                 versions = repository._connection.execute(
                     "SELECT version FROM schema_migrations ORDER BY version"
                 ).fetchall()
-                self.assertEqual([row[0] for row in versions], [1, 2, 3, 4])
+                self.assertEqual(
+                    [row[0] for row in versions], [1, 2, 3, 4, 5]
+                )
 
     def test_valid_version_two_database_migrates_without_losing_cases(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -206,13 +209,15 @@ class SchemaAndBoundaryTests(unittest.TestCase):
             connection.close()
 
             with ControlStateRepository(path, clock=MutableClock()) as repository:
-                self.assertEqual(repository.schema_version, 4)
+                self.assertEqual(repository.schema_version, 5)
                 self.assertEqual(repository.get_case(state["case_id"]).state, state)
                 self.assertEqual(repository.get_notification("missing"), None)
                 versions = repository._connection.execute(
                     "SELECT version FROM schema_migrations ORDER BY version"
                 ).fetchall()
-                self.assertEqual([row[0] for row in versions], [1, 2, 3, 4])
+                self.assertEqual(
+                    [row[0] for row in versions], [1, 2, 3, 4, 5]
+                )
 
     def test_valid_version_three_database_migrates_additive_result_ledger(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -233,12 +238,14 @@ class SchemaAndBoundaryTests(unittest.TestCase):
             connection.close()
 
             with ControlStateRepository(path, clock=MutableClock()) as repository:
-                self.assertEqual(repository.schema_version, 4)
+                self.assertEqual(repository.schema_version, 5)
                 self.assertEqual(repository.replay_job_result_consumptions(), ())
                 versions = repository._connection.execute(
                     "SELECT version FROM schema_migrations ORDER BY version"
                 ).fetchall()
-                self.assertEqual([row[0] for row in versions], [1, 2, 3, 4])
+                self.assertEqual(
+                    [row[0] for row in versions], [1, 2, 3, 4, 5]
+                )
 
     def test_unrecognized_and_future_databases_fail_without_mutation(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -293,12 +300,66 @@ class SchemaAndBoundaryTests(unittest.TestCase):
             connection.close()
             self.assertEqual(tables, {"schema_migrations"})
 
-    def test_only_cloud_control_plane_can_construct_repository(self):
+    def test_control_plane_roles_are_distinct_from_mac_worker(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "state.sqlite3"
             with self.assertRaises(OwnershipError):
                 ControlStateRepository(path, writer=Writer.MAC_WORKER)
             self.assertFalse(path.exists())
+
+    def test_local_owner_is_persisted_and_mismatched_reopen_fails(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "local.sqlite3"
+            with ControlStateRepository(
+                path, writer=Writer.LOCAL_CONTROL_PLANE, clock=MutableClock()
+            ) as repository:
+                self.assertEqual(
+                    repository.control_owner, Writer.LOCAL_CONTROL_PLANE
+                )
+            with self.assertRaisesRegex(OwnershipError, "owned by"):
+                ControlStateRepository(path, writer=Writer.CLOUD_CONTROL_PLANE)
+            with ControlStateRepository(
+                path, writer=Writer.LOCAL_CONTROL_PLANE, clock=MutableClock()
+            ) as reopened:
+                self.assertEqual(reopened.schema_version, 5)
+
+    def test_legacy_database_cannot_be_claimed_local_or_lose_cloud_owner(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "legacy-v4.sqlite3"
+            connection = sqlite3.connect(path)
+            for statement in (
+                *_MIGRATION_1, *_MIGRATION_2, *_MIGRATION_3, *_MIGRATION_4
+            ):
+                connection.execute(statement)
+            connection.executemany(
+                "INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)",
+                tuple(
+                    (version, f"2026-07-13T20:3{version}:00Z")
+                    for version in range(1, 5)
+                ),
+            )
+            connection.execute("PRAGMA user_version = 4")
+            connection.commit()
+            connection.close()
+
+            before = path.read_bytes()
+            with self.assertRaisesRegex(OwnershipError, "cloud-owned"):
+                ControlStateRepository(path, writer=Writer.LOCAL_CONTROL_PLANE)
+            self.assertEqual(path.read_bytes(), before)
+            with ControlStateRepository(path) as cloud:
+                self.assertEqual(cloud.control_owner, Writer.CLOUD_CONTROL_PLANE)
+
+    def test_missing_ownership_row_fails_closed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "state.sqlite3"
+            with ControlStateRepository(path):
+                pass
+            connection = sqlite3.connect(path)
+            connection.execute("DELETE FROM control_ownership")
+            connection.commit()
+            connection.close()
+            with self.assertRaisesRegex(SchemaMigrationError, "ownership"):
+                ControlStateRepository(path)
 
     def test_module_has_no_reducer_router_network_or_orchestration_import(self):
         tree = ast.parse(MODULE.read_text(encoding="utf-8"))

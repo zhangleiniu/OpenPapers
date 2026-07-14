@@ -153,10 +153,15 @@ class ResultAndBoundaryTests(unittest.TestCase):
         assert_writer_allowed(
             Writer.CLOUD_CONTROL_PLANE, ArtifactKind.CONTROL_STATE)
         assert_writer_allowed(
+            Writer.LOCAL_CONTROL_PLANE, ArtifactKind.CONTROL_STATE)
+        assert_writer_allowed(
             Writer.CLOUD_CONTROL_PLANE, ArtifactKind.VERIFICATION_RESULT)
         assert_writer_allowed(Writer.MAC_WORKER, ArtifactKind.JOB_RESULT)
         with self.assertRaisesRegex(OwnershipError, "cannot write"):
             assert_writer_allowed(Writer.MAC_WORKER, ArtifactKind.CONTROL_STATE)
+        with self.assertRaisesRegex(OwnershipError, "cannot write"):
+            assert_writer_allowed(
+                Writer.LOCAL_CONTROL_PLANE, ArtifactKind.VERIFICATION_RESULT)
         with self.assertRaisesRegex(OwnershipError, "cannot write"):
             assert_writer_allowed(
                 Writer.CLOUD_CONTROL_PLANE, ArtifactKind.JOB_RESULT)

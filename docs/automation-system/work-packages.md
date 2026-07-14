@@ -88,9 +88,11 @@ GCS-compatible publication, exact-generation reads, and lease-protected
 exactly-once logical cloud consumption using injected fakes and temporary
 state. P4.O is `Paused`: its live feasibility gate failed before resource
 creation because the acceptable Prefect Cloud plan cannot create the required
-hybrid process pool. The accepted local-first redesign preserves reusable P4
-contracts and makes P4.L1 the only next `Ready` package. Phase 4 remains
-`Planned`, and the existing Cloud Run monitor remains the production baseline.
+hybrid process pool. P4.L1 has completed the immutable local-owner and bounded
+fake-clock due-work scheduler foundation using only temporary SQLite. The
+accepted local-first redesign preserves reusable P4 contracts and makes P4.L2
+the only next `Ready` package. Phase 4 remains `Planned`, and the existing
+Cloud Run monitor remains the production baseline.
 
 ### P2.1R — harden verifier contract semantics
 
@@ -575,7 +577,7 @@ replacement is documented in
 
 ### P4.L1 — local ownership and due-work scheduler foundation
 
-Status: `Ready`
+Status: `Complete`
 
 Depends on: P4.4 and the accepted local-first decision
 
@@ -618,9 +620,30 @@ Acceptance:
 - durable docs distinguish this foundation from installation, shadow use, and
   cutover.
 
+Completed boundary: `local_control_plane` is now an explicit target
+control-state role, and schema version 5 persists one immutable owner per
+database. Valid legacy version 1-4 databases remain cloud-owned and refuse a
+local open before migration; only a new empty database explicitly created for
+the local role can be local-owned, and no transfer API exists.
+
+`automation/local_scheduler.py` observes one injected aware clock, acquires the
+existing local singleton lease, records one bounded wakeup, and selects
+persisted conference state with `next_check_at <= now`. Due identity is the
+venue/year/exact schedule timestamp, so completed exact replay and later
+wakeups over unchanged state cannot produce duplicate work. Interrupted active
+wakeups remain durable ambiguity and block automatic restart rather than aging
+out. The runner returns inert typed selection data, accepts no effect callback,
+command, or environment expansion, and has no orchestration or network import.
+
+Tests use only the existing conference-state fixture, fake clocks, and
+temporary SQLite. No domain action is composed, no deployment or production
+database is opened, and no website, Vertex AI, Resend, Prefect, GCS, daemon,
+external volume, scraper, validator, Codex, promotion, or MustCite operation is
+called. P4.L2 owns local control-domain composition.
+
 ### Later local-first packages
 
-- **P4.L2 — local control composition (`Planned`, depends P4.L1):** compose
+- **P4.L2 — local control composition (`Ready`, depends P4.L1):** compose
   accepted discovery, verification, lifecycle, case, reminder, and inert action
   boundaries under the local lease. Fixture/fake only; no delivery or execution.
 - **P4.L3 — headless service package (`Planned`, depends P4.L2):** add a
@@ -643,8 +666,8 @@ Acceptance:
 | P4.3 | Complete | P4.2 | Mac-local venue/year locks, disk gates, injected-handle timeout/cancellation, completed-delivery suppression, ambiguous-claim recovery closure, and fixed Prefect pull/offline semantics. No command or result path. |
 | P4.4 | Complete | P4.3 | Strict immutable manifest/result contracts, create-only GCS-compatible publishing, exact-generation reads, and lease-protected exactly-once logical consumption. Fake/local only; no external resource or execution. |
 | P4.O | Paused | P4.4 | Prefect feasibility gate failed before resource creation; the required paid/self-hosted transport is not justified. |
-| P4.L1 | Ready | P4.4 + local-first decision | Plain-Python local ownership and clock-injected due-work scheduler foundation using only fixtures and temporary SQLite. No external or production effect. |
-| P4.L2 | Planned | P4.L1 | Compose accepted control-plane domains under local ownership with fake effects only. |
+| P4.L1 | Complete | P4.4 + local-first decision | Plain-Python immutable local ownership and clock-injected bounded due-work scheduler foundation using only fixtures and temporary SQLite. No external or production effect. |
+| P4.L2 | Ready | P4.L1 | Compose accepted control-plane domains under local ownership with fake effects only. |
 | P4.L3 | Planned | P4.L2 | Credential-free headless LaunchDaemon package and host-safe health/rollback behavior; no installation. |
 | P4.LS | Planned | P4.L3 | Authorized isolated Mac installation, coexistence health gates, and operational shadow drills. No production authority. |
 | P4.LC | Planned | P4.LS | Authorized backup and no-overlap production writer cutover with timed rollback. |
