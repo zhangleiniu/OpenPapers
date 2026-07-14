@@ -203,9 +203,9 @@ scheduled, deployed, connected to P3.4 output, or authorized to act on
 production state.
 
 P4.1's execution-queue foundation, P4.2's fake-only Mac package, P4.3's local
-safety supervisor, P4.4's immutable result protocol, and P4.L1's local
-ownership/due-work foundation are implemented locally and are not wired into
-the deployed monitor:
+safety supervisor, P4.4's immutable result protocol, P4.L1's local
+ownership/due-work foundation, and P4.L2's fixture-only control composition are
+implemented locally and are not wired into the deployed monitor:
 
 - version 2 typed jobs derive a full SHA-256 job ID from their request,
   venue/year, type, requester, input artifacts, and closed payload while
@@ -244,20 +244,29 @@ the deployed monitor:
   suppresses exact and cross-wakeup duplicates, and leaves an interrupted
   wakeup ambiguous rather than expiring it automatically. It returns inert
   due-work data and accepts no effect callback or command.
+- control-state schema version 6 retains bounded plan counts separately while
+  a selected wakeup remains active. `automation/local_control_plane.py` holds
+  that same local lease across injected fake discovery and verification,
+  strict retention/lifecycle reduction, case and pending shadow-output
+  integration, and one due reminder projection. It completes the wakeup only
+  after every selected schedule advances or clears.
 Phase 4 remains `Planned`. These packages establish contracts and fake-tested
 local safety/scheduling/result behavior, not an operational execution plane.
-No action is composed, no command is selected or run, no live immutable result
-is published or consumed, and no GCS client/resource, worker, Prefect resource,
+P4.L2 composes only fixture effects and pending notification records; every
+recheck, review, and scrape action remains inert typed data. No command is
+selected or run, no delivery attempt occurs, no live immutable result is
+published or consumed, and no GCS client/resource, worker, Prefect resource,
 or local daemon is installed or connected.
 
 P4.O is `Paused`. Its operator feasibility gate found that the acceptable
 Prefect Cloud plan cannot create the required hybrid process pool; the failed
 apply created none of the planned pool, queues, or deployments. The accepted
 [local-first decision](./local-first-decision.md) replaces that transport with
-a bounded local scheduler and system LaunchDaemon. P4.L1 implements only the
-isolated scheduling core; P4.L2 is the next ready package. The existing Cloud
-Run monitor remains the sole production scheduler and writer until a
-separately authorized, no-overlap cutover.
+a bounded local scheduler and system LaunchDaemon. P4.L1 and P4.L2 now
+implement the isolated scheduler and fixture-only domain composition; P4.L3 is
+the next ready package. The existing Cloud Run monitor remains the sole
+production scheduler and writer until a separately authorized, no-overlap
+cutover.
 
 The following does **not** exist yet:
 
@@ -266,7 +275,7 @@ The following does **not** exist yet:
 - scheduled or deployed case/action/reminder integration or notification
   delivery;
 - automated routing from discovery to a scrape job;
-- composed local control-plane work or an installed OpenPapers LaunchDaemon;
+- an installed OpenPapers LaunchDaemon or live local control effects;
 - an installed or connected Mac mini execution service;
 - a Codex execution adapter;
 - automatic promotion into the canonical dataset or MustCite deployment.
@@ -372,6 +381,9 @@ without claiming a delivery attempt. P3.S adds one concrete transport only
 behind a manual synthetic-only canary; it cannot read P3.4 output. None is
 connected to the deployed monitor. No Phase 2 command can execute an action or
 write production state, and no Phase 3 path can deliver a production event.
+P4.L2 can replay those accepted domains under one isolated local lease using
+fake effects and temporary SQLite; it still cannot call a live provider,
+deliver a notification, submit a job, or execute an action.
 
 Keep Phase 1 additive. It may report what a verified later phase could do, but
 must not create a job, write lifecycle state, invoke a scraper, or promote data.

@@ -525,14 +525,34 @@ owner mismatch, and durable active-run ambiguity using fixtures and temporary
 SQLite only. It has no action callback, command, environment expansion,
 orchestration import, network client, CLI, or production path.
 
-Before opening any future durable control database with schema-v5 code, stop
+The P4.L2 fixture-only local composition checks are:
+
+```bash
+python -m unittest automation.tests.test_local_control_plane -v
+python -m unittest automation.tests.test_local_scheduler -v
+python -m unittest automation.tests.test_control_state -v
+python -m unittest automation.tests.test_lifecycle -v
+python -m unittest automation.tests.test_notification_integration -v
+python -m unittest automation.tests.test_reminders -v
+```
+
+Schema version 6 adds a separate bounded wakeup-plan record so selections can
+remain active while composed work runs. `automation/local_control_plane.py`
+holds one local lease across injected fake discovery and verification, strict
+retention/lifecycle reduction, case and pending-shadow integration, and one due
+reminder projection. It completes only after each selected schedule advances or
+clears. Exact completed replay invokes no fake; any failure after selection
+leaves durable ambiguity. Tests use only sanitized fixtures, fake effects and
+clocks, and temporary SQLite. They create no delivery attempt, job, command,
+network call, daemon, host mutation, or production-state write.
+
+Before opening any future durable control database with schema-v6 code, stop
 overlapping writers and take a backup; rollback requires restoring that backup.
 P4.O remains paused after its Prefect feasibility gate failed before resource
-creation. P4.L2 is the next package and owns local domain composition; P4.L3
-owns an uninstalled headless service package, P4.LS owns authorized host shadow
-drills, and P4.LC owns the explicit no-overlap writer cutover. Phase 5 owns
-command selection, execution, real manifest generation, and result
-interpretation.
+creation. P4.L3 is the next package and owns an uninstalled headless service
+package, P4.LS owns authorized host shadow drills, and P4.LC owns the explicit
+no-overlap writer cutover. Phase 5 owns command selection, execution, real
+manifest generation, and result interpretation.
 
 Scheduling tests use an injected timezone-aware clock. Keep venue catalogs free
 of year-specific month/date assumptions; discovery records candidates, a

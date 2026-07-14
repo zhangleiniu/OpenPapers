@@ -24,10 +24,12 @@ fake-tested injected GCS bucket boundary and schema-version-4 consumption
 tables, but constructs no client and has no configured bucket, prefix, IAM
 role, worker credential, flow, or migration here. P4.L1 advances the local
 repository schema to version 5 with an immutable owner and bounded scheduler
-journal; its fake-clock runner uses temporary local state only and is also not
-imported, installed, or scheduled here. Legacy version 1-4 databases remain
-cloud-owned. Do not reuse the monitor tree or grant a shadow Mac process access
-to `control/state.sqlite3`.
+journal. P4.L2 adds schema-version-6 active plan state and fixture-only
+discovery/verification/lifecycle/case/reminder composition. Both use temporary
+local state in tests and neither is imported, installed, or scheduled here.
+P4.L2 makes no live call, delivery attempt, job, or command. Legacy version 1-4
+databases remain cloud-owned. Do not reuse the monitor tree or grant a shadow
+Mac process access to `control/state.sqlite3`.
 The accepted local-first design keeps this deployment authoritative until a
 later package has passed isolated host drills. Its cutover must back up state,
 disable Cloud Scheduler before activating the local writer, verify health, and

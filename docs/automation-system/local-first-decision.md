@@ -95,8 +95,12 @@ labels.
 ## Immediate implementation boundary
 
 P4.L1 has implemented local single-writer ownership and a clock-injected,
-bounded due-work planner/runner over temporary state. It makes no network
-request, installs no daemon, changes no production database, runs no scraper,
-and does not modify the current cloud deployment. P4.L2 is the next ready
-package and owns fixture-only domain composition; later packages still own
-service packaging, installation, drills, and cutover.
+bounded due-work planner/runner over temporary state. P4.L2 now composes the
+accepted discovery, verification, lifecycle, case, reminder, pending-shadow,
+and inert-action boundaries under that local lease using fake effects only. A
+selected wakeup remains active until every selected schedule advances or
+clears, and partial failure remains durable ambiguity. Neither package makes a
+network request, delivers a notification, submits or executes a job, installs a
+daemon, changes a production database, runs a scraper, or modifies the current
+cloud deployment. P4.L3 is the next ready package; later packages still own
+installation, drills, and cutover.

@@ -4,7 +4,7 @@ This document defines the target boundaries and safety invariants. Most of the
 components described here are planned; consult [roadmap.md](./roadmap.md) and
 the executable code before assuming a component exists.
 
-## Implemented foundation and Phase 1/2.S/P3.S/P4.4 boundaries
+## Implemented foundation and Phase 1/2.S/P3.S/P4.L2 boundaries
 
 Phase 0 is implemented as a side-effect-free foundation and is not yet wired
 into the deployed monitor:
@@ -371,9 +371,32 @@ the previously accepted domains:
 
 P4.L1 accepts no effect callback, command, environment expansion, network
 client, or production path. Tests use fixtures, fake clocks, and temporary
-SQLite only. P4.L2 owns domain composition; P4.L3 owns an uninstalled service
-package; P4.LS owns authorized host shadow drills; and P4.LC alone may transfer
-production ownership after disabling the cloud writer.
+SQLite only. P4.L2 owns domain composition; later packages retain service,
+host-drill, and production-transfer authority.
+
+P4.L2 composes those accepted local domains without adding a live adapter:
+
+- schema version 6 adds an immutable bounded plan record separate from the v5
+  active/completed wakeup row. Due selections and their counts are retained
+  while the wakeup remains active, and final completion copies the counts only
+  after composed work succeeds;
+- `automation/local_control_plane.py` holds one local singleton lease across a
+  catalog-bounded injected discovery effect, a separately injected strict
+  verification effect, verification retention, lifecycle reduction, case and
+  pending shadow-output integration, and one repository reminder projection;
+- every fake artifact is revalidated against the existing contracts and exact
+  venue/year, future-dated or over-limit output fails closed, and the selected
+  schedule must advance or clear before completion; and
+- exact completed replay calls no effect. Any failure after selection leaves
+  the wakeup active and therefore blocks automatic recovery rather than
+  repeating work of uncertain outcome.
+
+P4.L2 tests use only sanitized fixtures, fake effects/clocks, and temporary
+SQLite. It makes no delivery attempt, submits no job, interprets no job result,
+selects or runs no command, and adds no live provider, network, daemon, host,
+external-volume, production-state, or deployment path. P4.L3 owns the
+credential-free service package; P4.LS and P4.LC retain installation and
+cutover authority.
 
 P4.O is paused after its external feasibility gate. The acceptable Prefect
 Cloud plan rejected the required hybrid process pool before resource creation;
@@ -625,21 +648,24 @@ uploaded, consumed by cloud state, or validated as the job-result contract.
 P4.4 supplies strict manifests/results, create-only GCS-compatible publishing,
 exact-generation reads, and the schema-version-4 exactly-once logical
 consumption table. P4.L1 advances the repository to schema version 5 with the
-immutable owner and due-work journal. Its runner is not wired to P4.3, P4.4,
-or a production flow. Deployed Phase 3 delivery, local domain composition,
-live job-result production/interpretation, optional backup/export, and
-production cutover remain future work.
+immutable owner and due-work journal. P4.L2 advances it additively to version 6
+with active plan state and composes only fake discovery/verification plus
+accepted lifecycle/case/reminder and pending-output boundaries. Neither runner
+is wired to P4.3, P4.4, or a production flow. Deployed Phase 3 delivery, live
+local effects, job-result production/interpretation, optional backup/export,
+and production cutover remain future work.
 P3.S's isolated SQLite root is manual canary evidence, not a cloud state store
 or deployed migration.
 
-Schema version 5 has no deployed migration or current operator action. Valid
+Schema version 6 has no deployed migration or current operator action. Valid
 version-1 through version-4 control databases migrate on open only under the
 cloud role and preserve verification, conference, case, notification, and
-job-result data. A local role refuses those legacy cloud-owned databases.
-Before any future durable operator database is opened by version-5 code, stop
-overlapping writers and take a backup; rollback after migration requires
-restoring that backup because older code must reject, not downgrade or delete,
-a newer schema.
+job-result data. A local role refuses those legacy cloud-owned databases;
+valid version-5 databases retain their persisted owner while gaining only the
+plan table. Before any future durable operator database is opened by
+version-6 code, stop overlapping writers and take a backup; rollback after
+migration requires restoring that backup because older code must reject, not
+downgrade or delete, a newer schema.
 
 Evaluate Firestore or PostgreSQL only after a concrete trigger: multiple
 control-plane writers, unavoidable overlapping state updates, a real-time

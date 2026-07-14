@@ -90,9 +90,11 @@ state. P4.O is `Paused`: its live feasibility gate failed before resource
 creation because the acceptable Prefect Cloud plan cannot create the required
 hybrid process pool. P4.L1 has completed the immutable local-owner and bounded
 fake-clock due-work scheduler foundation using only temporary SQLite. The
-accepted local-first redesign preserves reusable P4 contracts and makes P4.L2
-the only next `Ready` package. Phase 4 remains `Planned`, and the existing
-Cloud Run monitor remains the production baseline.
+accepted local-first redesign preserves reusable P4 contracts, and P4.L2 has
+completed fixture-only discovery/verification/lifecycle/case/reminder and inert
+action composition under the local lease. P4.L3 is now the only next `Ready`
+package. Phase 4 remains `Planned`, and the existing Cloud Run monitor remains
+the production baseline.
 
 ### P2.1R — harden verifier contract semantics
 
@@ -641,12 +643,39 @@ database is opened, and no website, Vertex AI, Resend, Prefect, GCS, daemon,
 external volume, scraper, validator, Codex, promotion, or MustCite operation is
 called. P4.L2 owns local control-domain composition.
 
+### P4.L2 — fixture-only local control composition
+
+Status: `Complete`
+
+Depends on: P4.L1
+
+Completed boundary: control-state schema version 6 adds one bounded immutable
+plan record per scheduler wakeup. The repository retains selected due work and
+counts while the v5 wakeup remains active, and copies those counts into a
+completed wakeup only after the caller's composed domain work succeeds. The
+P4.L1 runner preserves its effect-free select-and-complete behavior.
+
+`automation/local_control_plane.py` holds one local singleton lease across a
+catalog-bounded injected discovery effect, a separately injected strict
+verification effect, verification retention, P2.5 lifecycle reduction, P3.4
+case and pending immediate-output integration, and one repository reminder
+projection with optional pending grouped output. Every artifact is revalidated,
+venue/year and observation time are exact, verification output is bounded, and
+each selected schedule must advance or clear before completion. Exact completed
+replay invokes neither fake effect. An exception after selection leaves the
+wakeup durably active and blocks automatic continuation.
+
+Tests use sanitized fixtures, fake effects, fake clocks, and temporary local
+SQLite only. Pending notification records have zero attempts; recheck, review,
+and scrape actions remain inert typed outcome data. P4.L2 adds no live provider,
+network/client call, notification delivery, job construction/submission,
+command/executor, scraper, validator, Codex, result interpretation, daemon,
+host/external-volume operation, production migration, ownership transfer,
+promotion, MustCite, or deployment behavior.
+
 ### Later local-first packages
 
-- **P4.L2 — local control composition (`Ready`, depends P4.L1):** compose
-  accepted discovery, verification, lifecycle, case, reminder, and inert action
-  boundaries under the local lease. Fixture/fake only; no delivery or execution.
-- **P4.L3 — headless service package (`Planned`, depends P4.L2):** add a
+- **P4.L3 — headless service package (`Ready`, depends P4.L2):** add a
   credential-free system LaunchDaemon renderer, bounded logs/health, internal
   state paths, missing-volume fail-closed behavior, and scoped rollback. Tests
   do not install it.
@@ -667,8 +696,8 @@ called. P4.L2 owns local control-domain composition.
 | P4.4 | Complete | P4.3 | Strict immutable manifest/result contracts, create-only GCS-compatible publishing, exact-generation reads, and lease-protected exactly-once logical consumption. Fake/local only; no external resource or execution. |
 | P4.O | Paused | P4.4 | Prefect feasibility gate failed before resource creation; the required paid/self-hosted transport is not justified. |
 | P4.L1 | Complete | P4.4 + local-first decision | Plain-Python immutable local ownership and clock-injected bounded due-work scheduler foundation using only fixtures and temporary SQLite. No external or production effect. |
-| P4.L2 | Ready | P4.L1 | Compose accepted control-plane domains under local ownership with fake effects only. |
-| P4.L3 | Planned | P4.L2 | Credential-free headless LaunchDaemon package and host-safe health/rollback behavior; no installation. |
+| P4.L2 | Complete | P4.L1 | Compose accepted discovery, verification, lifecycle, case, reminder, pending-shadow, and inert-action boundaries under one local lease with fake effects and temporary SQLite only. |
+| P4.L3 | Ready | P4.L2 | Credential-free headless LaunchDaemon package and host-safe health/rollback behavior; no installation. |
 | P4.LS | Planned | P4.L3 | Authorized isolated Mac installation, coexistence health gates, and operational shadow drills. No production authority. |
 | P4.LC | Planned | P4.LS | Authorized backup and no-overlap production writer cutover with timed rollback. |
 

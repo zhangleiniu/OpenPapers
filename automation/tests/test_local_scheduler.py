@@ -160,6 +160,57 @@ class LocalSchedulerTests(unittest.TestCase):
             self.assertEqual(outcome.record.truncated_count, 1)
             self.assertEqual(len(outcome.selections), 2)
 
+    def test_due_plan_stays_active_until_explicit_finish(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "state.sqlite3"
+            clock = MutableClock()
+            seed_states(
+                path,
+                (conference_state(next_check_at="2026-07-14T13:00:00Z"),),
+                clock=clock,
+            )
+            with ControlStateRepository(
+                path,
+                writer=Writer.LOCAL_CONTROL_PLANE,
+                clock=clock,
+            ) as repository:
+                lease = repository.acquire_lease("fixture-composed-wakeup")
+                wakeup_id = scheduler_wakeup_id(NOW)
+                repository.begin_scheduler_wakeup(
+                    wakeup_id,
+                    scheduled_for=NOW,
+                    due_cutoff_at=NOW,
+                    selection_limit=10,
+                    lease=lease,
+                )
+                plan = repository.plan_scheduler_wakeup(
+                    wakeup_id,
+                    lease=lease,
+                    selected_at=NOW,
+                )
+                self.assertEqual(plan.record.status, "active")
+                self.assertIsNone(plan.record.eligible_count)
+                self.assertEqual(plan.eligible_count, 1)
+                self.assertEqual(plan.new_selection_count, 1)
+                self.assertEqual(len(plan.selections), 1)
+                self.assertFalse(
+                    repository.plan_scheduler_wakeup(
+                        wakeup_id,
+                        lease=lease,
+                        selected_at=NOW,
+                    ).applied
+                )
+
+                completed = repository.finish_scheduler_wakeup(
+                    wakeup_id,
+                    lease=lease,
+                    completed_at=NOW,
+                )
+                self.assertTrue(completed.applied)
+                self.assertEqual(completed.record.status, "completed")
+                self.assertEqual(completed.record.new_selection_count, 1)
+                repository.release_lease(lease)
+
     def test_live_lease_and_ambiguous_restart_fail_closed(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "state.sqlite3"

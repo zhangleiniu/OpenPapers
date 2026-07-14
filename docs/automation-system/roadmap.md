@@ -485,7 +485,24 @@ Accepted P4.L1 local ownership and due-work foundation:
   duplicate selection, hard bounds, lease contention, restart, ownership
   mismatch, legacy state, and ambiguity without an external effect.
 
-Phase 4 remains `Planned`: P4.1-P4.4 and P4.L1 are unconnected local
+Accepted P4.L2 fixture-only local control composition:
+
+- control-state schema version 6 retains bounded plan counts while a due
+  wakeup remains active and marks it completed only after every composed
+  selection succeeds. Partial domain commits therefore leave durable
+  ambiguity instead of suppressing uncertain work as completed;
+- one plain-Python coordinator holds the local lease across catalog-bounded
+  injected fake discovery, separately injected strict verification, retained
+  lifecycle reduction, case/pending-shadow integration, and one due reminder
+  projection;
+- strict venue/year/time/bundle bounds and a schedule-advance requirement fail
+  closed, while exact completed replay makes no fake call; and
+- fixture/fake-clock/temporary-SQLite tests prove state, case, reminder,
+  pending-intent, inert-action, replay, ownership, and interruption behavior
+  without delivery, execution, network, daemon, external volume, or production
+  authority.
+
+Phase 4 remains `Planned`: P4.1-P4.4, P4.L1, and P4.L2 remain local/fake-only
 interfaces. No Mac execution service has been installed, loaded, started, or
 operationally checked, and no package selects or runs a command. P4.O's Prefect
 feasibility gate failed before resource creation because the acceptable cloud
@@ -495,11 +512,11 @@ workload.
 
 The accepted [local-first decision](./local-first-decision.md) preserves the
 typed identity, safety, and immutable-result semantics while replacing the
-Prefect pull transport with a bounded local scheduler. P4.L1 implements only
-that scheduler's isolated ownership/selection core; P4.L2 is next. Domain
-composition, reboot/SSH/missing-volume behavior, local log visibility, stable
-live results, shadow comparison, and a no-overlap production writer cutover
-remain later acceptance criteria.
+Prefect pull transport with a bounded local scheduler. P4.L1 implements its
+isolated ownership/selection core and P4.L2 composes accepted domains with fake
+effects only. P4.L3 is next; reboot/SSH/missing-volume behavior, local log
+visibility, stable live results, shadow comparison, and a no-overlap production
+writer cutover remain later acceptance criteria.
 
 ## Phase 5: execute existing scrapers
 

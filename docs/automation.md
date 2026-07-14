@@ -68,14 +68,18 @@ client, publishes or consumes no live object, applies no lifecycle transition,
 and is not imported by this deployment. P4.O's operator feasibility gate was
 rejected before Prefect resource creation because the acceptable cloud plan
 does not support its hybrid process pool. The accepted replacement is a
-local-first bounded scheduler. P4.L1 now adds a schema-version-5 immutable
+local-first bounded scheduler. P4.L1 adds a schema-version-5 immutable
 cloud/local database owner, bounded wakeup/due-selection history, and a
-plain-Python fake-clock runner over temporary SQLite. Legacy databases remain
-cloud-owned; the runner is not imported here, accepts no action callback or
-command, and has not opened production state or been installed. A composed
-local verifier/lifecycle/case/reminder flow and notification delivery, an
-installed Mac mini scheduler/executor, live result wiring and operational
-drills, Codex repair execution, and MustCite deployment are not implemented.
+plain-Python fake-clock runner over temporary SQLite. P4.L2 advances that
+isolated repository to schema version 6 with active plan state and composes
+injected fake discovery/verification, lifecycle reduction, case and pending
+shadow-output integration, due reminders, and inert actions under one local
+lease. Legacy databases remain cloud-owned; neither runner is imported here,
+calls a live effect, delivers a notification, submits or executes a job, opens
+production state, or has been installed. Live local control effects and
+notification delivery, an installed Mac mini scheduler/executor, live result
+wiring and operational drills, Codex repair execution, and MustCite deployment
+are not implemented.
 
 Start at the [automation system development guide](./automation-system/README.md) for
 the implemented foundation, target architecture, roadmap, and zero-context

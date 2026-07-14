@@ -50,7 +50,7 @@ from automation.notifications import (
 from automation.verification import validate_verification_result
 
 
-CONTROL_SCHEMA_VERSION = 5
+CONTROL_SCHEMA_VERSION = 6
 DEFAULT_LEASE_TTL_SECONDS = 300
 MAX_LEASE_TTL_SECONDS = 86_400
 DEFAULT_SCHEDULER_SELECTION_LIMIT = 100
@@ -182,6 +182,19 @@ class SchedulerWakeupStartOutcome:
     """Result of durably beginning a wakeup or replaying a completed one."""
 
     record: SchedulerWakeupRecord
+    applied: bool
+
+
+@dataclass(frozen=True)
+class SchedulerDuePlan:
+    """Bounded due selections retained while their wakeup remains active."""
+
+    record: SchedulerWakeupRecord
+    selections: tuple[DueWorkSelection, ...]
+    eligible_count: int
+    new_selection_count: int
+    duplicate_selection_count: int
+    truncated_count: int
     applied: bool
 
 
@@ -571,12 +584,32 @@ _MIGRATION_5 = (
     """,
 )
 
+_MIGRATION_6 = (
+    """
+    CREATE TABLE scheduler_wakeup_plan (
+        wakeup_id TEXT PRIMARY KEY,
+        planned_at TEXT NOT NULL,
+        eligible_count INTEGER NOT NULL CHECK (eligible_count >= 0),
+        new_selection_count INTEGER NOT NULL CHECK (new_selection_count >= 0),
+        duplicate_selection_count INTEGER NOT NULL
+            CHECK (duplicate_selection_count >= 0),
+        truncated_count INTEGER NOT NULL CHECK (truncated_count >= 0),
+        CHECK (
+            new_selection_count + duplicate_selection_count + truncated_count
+                = eligible_count
+        ),
+        FOREIGN KEY (wakeup_id) REFERENCES scheduler_wakeup (wakeup_id)
+    )
+    """,
+)
+
 _MIGRATIONS = {
     1: _MIGRATION_1,
     2: _MIGRATION_2,
     3: _MIGRATION_3,
     4: _MIGRATION_4,
     5: _MIGRATION_5,
+    6: _MIGRATION_6,
 }
 
 _REQUIRED_COLUMNS_V1 = {
@@ -653,12 +686,20 @@ _REQUIRED_COLUMNS_V5 = {
     },
 }
 
+_REQUIRED_COLUMNS_V6 = {
+    "scheduler_wakeup_plan": {
+        "wakeup_id", "planned_at", "eligible_count", "new_selection_count",
+        "duplicate_selection_count", "truncated_count",
+    },
+}
+
 _REQUIRED_COLUMNS_BY_VERSION = {
     1: _REQUIRED_COLUMNS_V1,
     2: _REQUIRED_COLUMNS_V2,
     3: _REQUIRED_COLUMNS_V3,
     4: _REQUIRED_COLUMNS_V4,
     5: _REQUIRED_COLUMNS_V5,
+    6: _REQUIRED_COLUMNS_V6,
 }
 
 
@@ -1133,21 +1174,21 @@ class ControlStateRepository:
             applied=True,
         )
 
-    def complete_scheduler_wakeup(
+    def plan_scheduler_wakeup(
         self,
         wakeup_id: str,
         *,
         lease: LeaseHandle,
-        completed_at: datetime | str,
-    ) -> SchedulerWakeupOutcome:
-        """Select bounded due state and atomically complete an active wakeup."""
+        selected_at: datetime | str,
+    ) -> SchedulerDuePlan:
+        """Select bounded due state while leaving the wakeup durably active."""
         if self.writer is not Writer.LOCAL_CONTROL_PLANE:
             raise OwnershipError("scheduler wakeups require local control ownership")
         _validate_scheduler_identity(
             wakeup_id, field="scheduler wakeup ID", prefix="scheduler-wakeup:"
         )
-        completed = _parse_timestamp(completed_at, field="wakeup completed_at")
-        completed_text = _timestamp(completed, field="wakeup completed_at")
+        selected = _parse_timestamp(selected_at, field="wakeup selected_at")
+        selected_text = _timestamp(selected, field="wakeup selected_at")
         with self._write_transaction() as connection:
             self._require_lease(connection, lease, self._now())
             row = connection.execute(
@@ -1161,12 +1202,52 @@ class ControlStateRepository:
                 selections = self._scheduler_selections_for_wakeup(
                     connection, wakeup_id
                 )
-                return SchedulerWakeupOutcome(record, selections, applied=False)
-            if completed < _parse_timestamp(
+                return SchedulerDuePlan(
+                    record,
+                    selections,
+                    record.eligible_count,
+                    record.new_selection_count,
+                    record.duplicate_selection_count,
+                    record.truncated_count,
+                    applied=False,
+                )
+            if selected < _parse_timestamp(
                 record.started_at, field="stored wakeup started_at"
             ):
                 raise ControlStateError(
-                    "wakeup completion cannot precede its start time"
+                    "wakeup selection cannot precede its start time"
+                )
+            existing_plan = connection.execute(
+                "SELECT * FROM scheduler_wakeup_plan WHERE wakeup_id = ?",
+                (wakeup_id,),
+            ).fetchone()
+            if existing_plan is not None:
+                selections = self._scheduler_selections_for_wakeup(
+                    connection, wakeup_id
+                )
+                counts = tuple(int(existing_plan[name]) for name in (
+                    "eligible_count",
+                    "new_selection_count",
+                    "duplicate_selection_count",
+                    "truncated_count",
+                ))
+                planned_at = _timestamp(
+                    str(existing_plan["planned_at"]),
+                    field="stored wakeup planned_at",
+                )
+                if (
+                    planned_at != existing_plan["planned_at"]
+                    or _parse_timestamp(
+                        planned_at, field="stored wakeup planned_at"
+                    ) < _parse_timestamp(
+                        record.started_at, field="stored wakeup started_at"
+                    )
+                    or sum(counts[1:]) != counts[0]
+                    or len(selections) != counts[1]
+                ):
+                    raise StoredDataError("stored scheduler plan is inconsistent")
+                return SchedulerDuePlan(
+                    record, selections, *counts, applied=False
                 )
             state_rows = connection.execute(
                 "SELECT * FROM conference_state_current ORDER BY venue_id, year"
@@ -1214,7 +1295,7 @@ class ControlStateRepository:
                         )
                     duplicate_count += 1
                     continue
-                selected_at = completed_text
+                selection_timestamp = selected_text
                 connection.execute(
                     """
                     INSERT INTO scheduler_due_selection (
@@ -1227,7 +1308,7 @@ class ControlStateRepository:
                         state_record.venue_id,
                         state_record.year,
                         next_check_at,
-                        selected_at,
+                        selection_timestamp,
                         wakeup_id,
                         state_record.revision,
                         state_record.state_fingerprint,
@@ -1238,27 +1319,98 @@ class ControlStateRepository:
                     venue_id=state_record.venue_id,
                     year=state_record.year,
                     next_check_at=next_check_at,
-                    selected_at=selected_at,
+                    selected_at=selection_timestamp,
                     first_wakeup_id=wakeup_id,
                     state_revision=state_record.revision,
                     state_fingerprint=state_record.state_fingerprint,
                 ))
             connection.execute(
                 """
-                UPDATE scheduler_wakeup SET
-                    completed_at = ?, status = 'completed', eligible_count = ?,
-                    new_selection_count = ?, duplicate_selection_count = ?,
-                    truncated_count = ?
-                WHERE wakeup_id = ? AND status = 'active'
+                INSERT INTO scheduler_wakeup_plan (
+                    wakeup_id, planned_at, eligible_count,
+                    new_selection_count, duplicate_selection_count,
+                    truncated_count
+                ) VALUES (?, ?, ?, ?, ?, ?)
                 """,
                 (
-                    completed_text,
+                    wakeup_id,
+                    selected_text,
                     eligible_count,
                     len(new_selections),
                     duplicate_count,
                     truncated_count,
-                    wakeup_id,
                 ),
+            )
+        return SchedulerDuePlan(
+            record,
+            tuple(new_selections),
+            eligible_count,
+            len(new_selections),
+            duplicate_count,
+            truncated_count,
+            applied=True,
+        )
+
+    def finish_scheduler_wakeup(
+        self,
+        wakeup_id: str,
+        *,
+        lease: LeaseHandle,
+        completed_at: datetime | str,
+    ) -> SchedulerWakeupOutcome:
+        """Mark a successfully planned local wakeup complete under its lease."""
+        if self.writer is not Writer.LOCAL_CONTROL_PLANE:
+            raise OwnershipError("scheduler wakeups require local control ownership")
+        _validate_scheduler_identity(
+            wakeup_id, field="scheduler wakeup ID", prefix="scheduler-wakeup:"
+        )
+        completed = _parse_timestamp(completed_at, field="wakeup completed_at")
+        completed_text = _timestamp(completed, field="wakeup completed_at")
+        with self._write_transaction() as connection:
+            self._require_lease(connection, lease, self._now())
+            row = connection.execute(
+                "SELECT * FROM scheduler_wakeup WHERE wakeup_id = ?",
+                (wakeup_id,),
+            ).fetchone()
+            if row is None:
+                raise SchedulerWakeupConflictError("scheduler wakeup was not started")
+            record = self._scheduler_wakeup_from_row(row)
+            selections = self._scheduler_selections_for_wakeup(
+                connection, wakeup_id
+            )
+            if record.status == "completed":
+                return SchedulerWakeupOutcome(record, selections, applied=False)
+            plan = connection.execute(
+                "SELECT * FROM scheduler_wakeup_plan WHERE wakeup_id = ?",
+                (wakeup_id,),
+            ).fetchone()
+            if plan is None:
+                raise SchedulerWakeupConflictError(
+                    "scheduler wakeup has not planned due work"
+                )
+            counts = tuple(int(plan[name]) for name in (
+                "eligible_count",
+                "new_selection_count",
+                "duplicate_selection_count",
+                "truncated_count",
+            ))
+            planned_at = _parse_timestamp(
+                str(plan["planned_at"]), field="stored wakeup planned_at"
+            )
+            if sum(counts[1:]) != counts[0] or len(selections) != counts[1]:
+                raise StoredDataError("stored scheduler plan is inconsistent")
+            if completed < _parse_timestamp(
+                record.started_at, field="stored wakeup started_at"
+            ) or completed < planned_at:
+                raise ControlStateError(
+                    "wakeup completion cannot precede its start or plan time"
+                )
+            connection.execute(
+                "UPDATE scheduler_wakeup SET completed_at = ?, status = 'completed', "
+                "eligible_count = ?, new_selection_count = ?, "
+                "duplicate_selection_count = ?, truncated_count = ? "
+                "WHERE wakeup_id = ? AND status = 'active'",
+                (completed_text, *counts, wakeup_id),
             )
             completed_row = connection.execute(
                 "SELECT * FROM scheduler_wakeup WHERE wakeup_id = ?",
@@ -1266,7 +1418,26 @@ class ControlStateRepository:
             ).fetchone()
             completed_record = self._scheduler_wakeup_from_row(completed_row)
         return SchedulerWakeupOutcome(
-            completed_record, tuple(new_selections), applied=True
+            completed_record, selections, applied=True
+        )
+
+    def complete_scheduler_wakeup(
+        self,
+        wakeup_id: str,
+        *,
+        lease: LeaseHandle,
+        completed_at: datetime | str,
+    ) -> SchedulerWakeupOutcome:
+        """Select and complete an effect-free wakeup for P4.L1 compatibility."""
+        self.plan_scheduler_wakeup(
+            wakeup_id,
+            lease=lease,
+            selected_at=completed_at,
+        )
+        return self.finish_scheduler_wakeup(
+            wakeup_id,
+            lease=lease,
+            completed_at=completed_at,
         )
 
     def get_scheduler_wakeup(
