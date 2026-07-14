@@ -569,8 +569,9 @@ effects only. P4.L3 packages the one-shot host boundary and leaves its ordinary
 CLI effect unconfigured. P4.LS installed and drilled the separately marked
 scheduler-only mode. P4.LC completed generation-bound state transfer,
 capability-equivalent deterministic monitoring, no-overlap local ownership,
-health checks, and timed rollback. P5.1 has now completed the pure command
-selection boundary; P5.2 is next.
+health checks, and timed rollback. P5.1 completed the pure command-selection
+boundary, and P5.2 completed the isolated fake-tested staging/process boundary
+without runtime wiring or an actual scrape. P5.3 is next.
 
 ## Phase 5: execute existing scrapers
 
@@ -607,9 +608,27 @@ Accepted P5.1 approved-command registry:
   isolated staging root. No interpreter or root is resolved, no subprocess is
   started, and the registry is not connected to the production LaunchDaemon.
 
-Phase 5 remains `Planned`: P5.2-P5.S still own staging execution,
-checkpoints/resume, supervision, independent validation, manifests/results,
-failure classification, and authorized shadow runs.
+Accepted P5.2 isolated staging executor:
+
+- `automation/staging_executor.py` accepts only a strict version-2
+  `scrape_existing` job, reuses P5.1's fixed `main.py` specification, and binds
+  it to an explicitly trusted interpreter/repository plus a private per-job
+  staging root disjoint from a separately declared canonical data root;
+- the child environment is exact and non-inherited, disables dotenv, and binds
+  only scraper data/log output to staging. No shell, caller path/argv/flag/env,
+  validator, or Codex capability crosses the boundary;
+- strict atomic checkpoints suppress exact process-success replay, resume
+  confirmed failed/timed-out/cancelled attempts in the same data root, and
+  leave start/supervision/unconfirmed-stop uncertainty as non-expiring manual
+  recovery; and
+- the concrete standard-library process adapter is dormant and unwired.
+  Temporary fake repository/executable roots and fake launchers/handles/clocks
+  cover all behavior without running a scraper, validator, network call, or
+  canonical-data operation.
+
+Phase 5 remains `Planned`: P5.3-P5.S still own independent validation,
+manifests/results, readiness and failure routing, runtime composition, and
+authorized shadow runs.
 
 ## Phase 6: Codex diagnosis and repair
 

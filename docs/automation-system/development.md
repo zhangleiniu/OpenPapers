@@ -612,6 +612,30 @@ root, staging/data path, or environment and must not import/invoke the scraper,
 validator, subprocess, local service, or a network/cloud dependency. P5.2 owns
 isolated staging execution; P5.3 owns validator execution and manifests.
 
+The P5.2 isolated staging and fake-supervision checks are:
+
+```bash
+python -m unittest automation.tests.test_staging_executor -v
+python -m unittest automation.tests.test_command_registry -v
+python -m unittest automation.tests.test_mac_worker_safety -v
+python -m unittest automation.tests.test_job_queue -v
+```
+
+`automation/staging_executor.py` accepts only a strict existing-scraper job,
+binds P5.1's fixed `main.py` invocation to trusted runtime paths and one
+private job-fingerprint root, and requires explicit disjoint canonical data.
+Its exact child environment inherits nothing, disables dotenv, and binds data
+and logs only to staging. Atomic checkpoints allow same-root resume after a
+confirmed stopped failure, timeout, or cancellation; process success is
+suppressed on replay, while running/ambiguous state blocks automatically.
+
+Focused tests must inject fake launchers/handles/clocks and use a temporary
+fake repository, fake executable, staging root, and canonical root. Do not
+invoke the concrete subprocess adapter, `main.py`, a scraper, or the validator.
+P5.2 has no CLI/runtime connection and produces no manifest/result or
+validation claim. P5.3 owns independent validator execution and manifests;
+P5.4 owns composition with existing locks/disk gates and result routing.
+
 Scheduling tests use an injected timezone-aware clock. Keep venue catalogs free
 of year-specific month/date assumptions; discovery records candidates, a
 deterministic verifier promotes supported dates into conference-year

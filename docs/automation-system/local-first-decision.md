@@ -121,4 +121,6 @@ state separate, and paused/drained cloud before local activation. Initial and
 final local health passed; a real rollback stopped local before cloud resume,
 recovered remote state, and completed in 96 seconds. The Mac is authoritative,
 the retained cloud schedule is paused, P5.1 has completed pure fixed command
-selection without a runtime connection, and P5.2 is next.
+selection and P5.2 has completed the isolated fake-tested existing-scraper
+staging/process boundary. Neither has a runtime connection or has executed a
+scraper/validator; P5.3 is next.

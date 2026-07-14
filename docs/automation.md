@@ -90,13 +90,19 @@ cutover, local/co-resident health gates, and 96-second timed rollback passed.
 P5.1 adds a pure local registry that maps strict scrape/validation jobs to two
 fixed repository entry points and literal typed arguments. It rejects Codex,
 shell, paths, caller flags, and environment expansion, and is not imported by
-or connected to this deployment.
+or connected to this deployment. P5.2 adds an isolated existing-scraper
+staging executor with trusted runtime binding, private canonical-disjoint
+per-job roots, strict atomic checkpoints, same-root resume, timeout,
+cancellation, and ambiguous-stop closure. Its subprocess adapter has no CLI or
+caller; tests use fake launchers and temporary roots and execute neither a
+scraper nor validator.
 
 The local LaunchDaemon is now authoritative and the retained Cloud Scheduler
 job is paused. Live discovery/verification and Phase 3 case-delivery effects,
-a Mac mini scraper/validator staging executor, live result wiring, Codex repair
-execution, and MustCite deployment are not implemented. P5.1 command selection
-is inert data only and does not change that runtime boundary.
+connected scraper/validator execution, independent validation/manifests, live
+result wiring, Codex repair execution, and MustCite deployment are not
+implemented. P5.1/P5.2 remain unconnected code boundaries and do not change
+the installed runtime.
 
 Start at the [automation system development guide](./automation-system/README.md) for
 the implemented foundation, target architecture, roadmap, and zero-context

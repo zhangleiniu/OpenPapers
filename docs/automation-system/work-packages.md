@@ -99,7 +99,8 @@ authorized marker-gated scheduler-only installation plus coexistence and host
 drills without production authority. P4.LC has completed the generation-bound
 backup, capability-equivalent local monitor, no-overlap writer transfer,
 health gates, and 96-second timed rollback. Phase 4 is implemented; P5.1 is now
-complete at the pure registry boundary, and P5.2 is now the only next `Ready`
+complete at the pure registry boundary and P5.2 is complete at the isolated
+fake-tested staging/process boundary. P5.3 is now the only next `Ready`
 package. The local LaunchDaemon is authoritative and the retained Cloud
 Scheduler job is paused.
 
@@ -834,11 +835,46 @@ It changes no service, cloud resource, credential, schema, persisted state, or
 deployment. P5.2 owns isolated staging execution and supervision; P5.3 owns
 independent validation and manifest generation.
 
+### P5.2 — isolated staging execution and supervision
+
+Status: `Complete`
+
+Depends on: P5.1
+
+Completed boundary: `automation/staging_executor.py` accepts only one strict
+version-2 `scrape_existing` job and revalidates P5.1's fixed `main.py`
+specification. Explicit normalized absolute configuration binds a trusted
+repository/entry point and executable whose metadata is not group/other
+writable to a private per-job root derived from the full immutable job
+fingerprint. The staging root must be disjoint from both the repository and a
+separately declared canonical data root. The exact child environment inherits
+nothing, disables dotenv, and sets
+only unbuffered Python plus staging-bound scraper data/log paths.
+
+A strict atomic current checkpoint is created before execution and records a
+closed process-only state and monotonic attempt. Confirmed nonzero exits,
+timeouts, cancellations, and pre-start cancellation may resume through the
+same data root; the P5.1 invocation retains the core scraper's default resume
+behavior. Confirmed process success suppresses exact replay. A start or
+supervision fault, corrupt/foreign state, or unconfirmed process-group stop
+becomes durable ambiguity and never auto-expires. Checkpoint transitions and
+compare-before-replace updates reject skipped-state and concurrent drift.
+
+The module includes a no-shell standard-library subprocess adapter with a
+private log and bounded TERM/KILL supervision, but it has no CLI or caller and
+is not connected to P4.3, the scheduler, the installed LaunchDaemon, or
+production state. Tests use only a temporary fake repository/executable,
+separate temporary staging/canonical roots, fake clocks, and fake process
+launchers/handles. No scraper, validator, network request, canonical-data
+operation, manifest/result, service, or cloud resource is used or changed.
+P5.3 owns independent validation and manifest generation; P5.4 owns runtime
+composition and failure classification.
+
 | ID | Status | Depends on | Objective and completion boundary |
 |---|---|---|---|
 | P5.1 | Complete | Phase 4 gate | Pure approved registry maps strict scrape/validation jobs to fixed repository entry points and literal arguments, rejecting Codex, shell, paths, caller flags, and environment expansion. No process or runtime connection. |
-| P5.2 | Ready | P5.1 | Staging executor for existing scrapers with isolated data roots, checkpoints, resume, timeout, and cancellation. No canonical promotion. |
-| P5.3 | Planned | P5.2 | Independent validation and manifest generation for counts, metadata, duplicate IDs, PDF existence/size/signature, and applicable completeness levels. |
+| P5.2 | Complete | P5.1 | Existing-scraper staging executor with private canonical-disjoint roots, strict checkpoints, same-root resume, process-success replay suppression, timeout/cancellation, and ambiguous-stop closure. Fake/temporary only; no actual run or runtime connection. |
+| P5.3 | Ready | P5.2 | Independent validation and manifest generation for counts, metadata, duplicate IDs, PDF existence/size/signature, and applicable completeness levels. |
 | P5.4 | Planned | P5.3 | Readiness routing and end-to-end job to staging to validation to immutable result, with transient/operational/structural failure classification. |
 | P5.S | Planned | P5.4 | Approved shadow/canary executions of already-supported scrapers. Invalid or partial output remains outside canonical data. |
 
