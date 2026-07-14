@@ -45,6 +45,7 @@ automation/notifications.py
 automation/notification_integration.py
 automation/job_queue.py
 automation/mac_worker/
+automation/local_service/
 automation/config/venue_catalog.v1.json
 automation/config/policies.v1.json
 ```
@@ -461,7 +462,8 @@ restrictive umask, placeholders, and no credential or shell.
 The runbook at `automation/mac_worker/README.md` records this as a frozen
 prototype. Do not install its Prefect plist, create its work pool, or treat its
 health command as evidence of a live local scheduler. New local service work
-belongs only to P4.L3 after P4.L1 and P4.L2 are accepted.
+belongs to the separate completed `automation/local_service/` P4.L3 package;
+the Prefect prototype remains unchanged.
 
 The P4.3 local safety and replay checks are:
 
@@ -549,8 +551,31 @@ network call, daemon, host mutation, or production-state write.
 Before opening any future durable control database with schema-v6 code, stop
 overlapping writers and take a backup; rollback requires restoring that backup.
 P4.O remains paused after its Prefect feasibility gate failed before resource
-creation. P4.L3 is the next package and owns an uninstalled headless service
-package, P4.LS owns authorized host shadow drills, and P4.LC owns the explicit
+creation.
+
+The P4.L3 uninstalled headless-service checks are:
+
+```bash
+python -m unittest automation.tests.test_local_service -v
+```
+
+`automation/local_service/` derives SQLite and bounded atomic health/run
+records below one private internal root, which must be disjoint from the
+external execution volume. Its typed local health gate runs before an injected
+wakeup and its default mount probe only observes availability; tests replace
+both with fakes and use temporary paths. Missing/unsafe storage, probe failure,
+or corrupt records makes no effect call and does not open control SQLite.
+
+The pure plist renderer fixes one low-impact hourly system LaunchDaemon with
+no shell, environment, keepalive, socket, credential, or launchd-managed log.
+Rollback data names only its exact label/plist and preserves state, records,
+repository, external data, and unrelated labels. The standalone command has
+no concrete effect and must return `effect_unconfigured`. Do not create or
+access a role account/volume, write the plist to a host path, call the service
+manager, or claim operational health in P4.L3 tests.
+
+P4.LS is the next package and owns authorized isolated installation and host
+drills; P4.LC owns the explicit
 no-overlap writer cutover. Phase 5 owns command selection, execution, real
 manifest generation, and result interpretation.
 

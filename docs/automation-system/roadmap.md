@@ -502,9 +502,26 @@ Accepted P4.L2 fixture-only local control composition:
   without delivery, execution, network, daemon, external volume, or production
   authority.
 
-Phase 4 remains `Planned`: P4.1-P4.4, P4.L1, and P4.L2 remain local/fake-only
-interfaces. No Mac execution service has been installed, loaded, started, or
-operationally checked, and no package selects or runs a command. P4.O's Prefect
+Accepted P4.L3 headless local service package:
+
+- strict normalized configuration derives control SQLite and atomic bounded
+  health/run records below a private internal root that must be disjoint from
+  the external execution volume;
+- typed macOS/Python/repository/internal-storage/volume health checks and a
+  concrete local-only mount probe block before an injected wakeup or control
+  database. Tests use a fake probe, fake clock/effect, and temporary paths;
+- a pure renderer returns a fixed, credential-free, low-impact hourly system
+  LaunchDaemon with no shell, environment, keepalive, socket, or unbounded
+  launchd logs; and
+- exact rollback data names only the OpenPapers label and plist while
+  preserving state/logs, repository, external data, and unrelated services.
+  No install, removal, service-manager call, account access, or host drill is
+  performed.
+
+Phase 4 remains `Planned`: P4.1-P4.4 and P4.L1-P4.L3 remain local/fake-only
+interfaces or uninstalled packaging. No Mac execution service has been
+installed, loaded, started, or operationally checked, and no package selects
+or runs a command. P4.O's Prefect
 feasibility gate failed before resource creation because the acceptable cloud
 plan does not support the required hybrid process pool. P4.O is therefore
 `Paused`; paying for or self-hosting orchestration is not justified for this
@@ -514,9 +531,10 @@ The accepted [local-first decision](./local-first-decision.md) preserves the
 typed identity, safety, and immutable-result semantics while replacing the
 Prefect pull transport with a bounded local scheduler. P4.L1 implements its
 isolated ownership/selection core and P4.L2 composes accepted domains with fake
-effects only. P4.L3 is next; reboot/SSH/missing-volume behavior, local log
-visibility, stable live results, shadow comparison, and a no-overlap production
-writer cutover remain later acceptance criteria.
+effects only. P4.L3 packages their future one-shot host boundary but leaves its
+CLI effect unconfigured. P4.LS is next; reboot/SSH/missing-volume host drills,
+local log visibility under launchd, stable live results, shadow comparison,
+and a no-overlap production writer cutover remain later acceptance criteria.
 
 ## Phase 5: execute existing scrapers
 

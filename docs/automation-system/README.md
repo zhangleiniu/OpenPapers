@@ -205,7 +205,8 @@ production state.
 P4.1's execution-queue foundation, P4.2's fake-only Mac package, P4.3's local
 safety supervisor, P4.4's immutable result protocol, P4.L1's local
 ownership/due-work foundation, and P4.L2's fixture-only control composition are
-implemented locally and are not wired into the deployed monitor:
+implemented locally. P4.L3's uninstalled headless service package is also
+implemented locally. None is wired into the deployed monitor:
 
 - version 2 typed jobs derive a full SHA-256 job ID from their request,
   venue/year, type, requester, input artifacts, and closed payload while
@@ -249,22 +250,29 @@ implemented locally and are not wired into the deployed monitor:
   that same local lease across injected fake discovery and verification,
   strict retention/lifecycle reduction, case and pending shadow-output
   integration, and one due reminder projection. It completes the wakeup only
-  after every selected schedule advances or clears.
+  after every selected schedule advances or clears; and
+- `automation/local_service/` derives control SQLite and bounded health/run
+  records below one private internal root, checks an explicit external
+  execution volume before an injected effect, renders a credential-free
+  low-impact system LaunchDaemon, and exposes an exact OpenPapers-only rollback
+  scope. Its standalone command has no concrete effect and fails closed.
 Phase 4 remains `Planned`. These packages establish contracts and fake-tested
 local safety/scheduling/result behavior, not an operational execution plane.
 P4.L2 composes only fixture effects and pending notification records; every
 recheck, review, and scrape action remains inert typed data. No command is
 selected or run, no delivery attempt occurs, no live immutable result is
 published or consumed, and no GCS client/resource, worker, Prefect resource,
-or local daemon is installed or connected.
+or local daemon is installed or connected. The rendered P4.L3 definition is
+inert packaging, not installation or operational health evidence.
 
 P4.O is `Paused`. Its operator feasibility gate found that the acceptable
 Prefect Cloud plan cannot create the required hybrid process pool; the failed
 apply created none of the planned pool, queues, or deployments. The accepted
 [local-first decision](./local-first-decision.md) replaces that transport with
-a bounded local scheduler and system LaunchDaemon. P4.L1 and P4.L2 now
-implement the isolated scheduler and fixture-only domain composition; P4.L3 is
-the next ready package. The existing Cloud Run monitor remains the sole
+a bounded local scheduler and system LaunchDaemon. P4.L1 and P4.L2 implement
+the isolated scheduler and fixture-only domain composition, while P4.L3
+implements only the credential-free uninstalled service package. P4.LS is the
+next ready package. The existing Cloud Run monitor remains the sole
 production scheduler and writer until a separately authorized, no-overlap
 cutover.
 
@@ -384,6 +392,10 @@ write production state, and no Phase 3 path can deliver a production event.
 P4.L2 can replay those accepted domains under one isolated local lease using
 fake effects and temporary SQLite; it still cannot call a live provider,
 deliver a notification, submit a job, or execute an action.
+P4.L3 can wrap an injected fake wakeup behind private internal paths, a
+missing-volume gate, bounded secret-safe records, and a rendered system plist;
+the repository command deliberately has no concrete effect and nothing has
+been installed or exercised on a host.
 
 Keep Phase 1 additive. It may report what a verified later phase could do, but
 must not create a job, write lifecycle state, invoke a scraper, or promote data.

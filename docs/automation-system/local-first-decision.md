@@ -92,7 +92,7 @@ co-resident services. An OpenPapers rollback may stop or replace only the
 OpenPapers daemon and its isolated files; it must not reload unrelated launchd
 labels.
 
-## Immediate implementation boundary
+## Current implementation boundary
 
 P4.L1 has implemented local single-writer ownership and a clock-injected,
 bounded due-work planner/runner over temporary state. P4.L2 now composes the
@@ -102,5 +102,10 @@ selected wakeup remains active until every selected schedule advances or
 clears, and partial failure remains durable ambiguity. Neither package makes a
 network request, delivers a notification, submits or executes a job, installs a
 daemon, changes a production database, runs a scraper, or modifies the current
-cloud deployment. P4.L3 is the next ready package; later packages still own
-installation, drills, and cutover.
+cloud deployment. P4.L3 now adds only an uninstalled credential-free system
+LaunchDaemon renderer, private internal state/record paths, a missing-volume
+gate before an injected effect, bounded secret-safe health/run artifacts, and
+an exact OpenPapers-only rollback scope. Its standalone command has no concrete
+effect and fails closed. P4.LS is the next ready package; it and later packages
+still own account/path provisioning, installation, host drills, live wiring,
+and cutover.

@@ -4,7 +4,7 @@ This document defines the target boundaries and safety invariants. Most of the
 components described here are planned; consult [roadmap.md](./roadmap.md) and
 the executable code before assuming a component exists.
 
-## Implemented foundation and Phase 1/2.S/P3.S/P4.L2 boundaries
+## Implemented foundation and Phase 1/2.S/P3.S/P4.L3 boundaries
 
 Phase 0 is implemented as a side-effect-free foundation and is not yet wired
 into the deployed monitor:
@@ -394,9 +394,34 @@ P4.L2 composes those accepted local domains without adding a live adapter:
 P4.L2 tests use only sanitized fixtures, fake effects/clocks, and temporary
 SQLite. It makes no delivery attempt, submits no job, interprets no job result,
 selects or runs no command, and adds no live provider, network, daemon, host,
-external-volume, production-state, or deployment path. P4.L3 owns the
-credential-free service package; P4.LS and P4.LC retain installation and
-cutover authority.
+external-volume, production-state, or deployment path.
+
+P4.L3 adds the credential-free service package without granting installation
+or live-effect authority:
+
+- `automation/local_service/` accepts normalized absolute paths and derives
+  control SQLite plus bounded health/run artifacts under one private internal
+  root. That root and its control child must be private non-symlinked
+  directories, and the root must be disjoint from the configured external
+  execution volume;
+- a local-only mount probe and typed health vocabulary fail before the
+  injected wakeup boundary or control database when macOS, Python, repository,
+  internal storage, or the external volume is unavailable;
+- health is atomically replaced and run history is an atomic fixed-shape ring
+  capped at 256 records. Paths, role names, raw exceptions, provider text, and
+  credentials are excluded, and corrupt/unsafe record storage blocks work;
+- a pure renderer returns a fixed `org.openpapers.local-control` system
+  LaunchDaemon with an explicit role account, hourly calendar wakeup,
+  restrictive umask, low-impact hints, no environment/shell/keepalive/socket,
+  and `/dev/null` launchd streams; and
+- rollback is structured data naming only that label and its canonical plist.
+  Internal state/logs, repository, external data, and unrelated labels are
+  preserved, and no helper installs, removes, or invokes the service manager.
+
+P4.L3 tests use fake clocks, fake effects, fake volume probes, and temporary
+private directories. The standalone command has no concrete effect and
+returns `effect_unconfigured` without opening control SQLite. P4.LS and P4.LC
+retain installation, host drills, live wiring, and cutover authority.
 
 P4.O is paused after its external feasibility gate. The acceptable Prefect
 Cloud plan rejected the required hybrid process pool before resource creation;
@@ -650,8 +675,11 @@ exact-generation reads, and the schema-version-4 exactly-once logical
 consumption table. P4.L1 advances the repository to schema version 5 with the
 immutable owner and due-work journal. P4.L2 advances it additively to version 6
 with active plan state and composes only fake discovery/verification plus
-accepted lifecycle/case/reminder and pending-output boundaries. Neither runner
-is wired to P4.3, P4.4, or a production flow. Deployed Phase 3 delivery, live
+accepted lifecycle/case/reminder and pending-output boundaries. P4.L3 packages
+an injected one-shot boundary around private internal paths, an external-volume
+gate, bounded records, and an uninstalled plist; it adds no schema and its CLI
+has no concrete effect. None is wired to P4.3, P4.4, or a production flow.
+Deployed Phase 3 delivery, live
 local effects, job-result production/interpretation, optional backup/export,
 and production cutover remain future work.
 P3.S's isolated SQLite root is manual canary evidence, not a cloud state store

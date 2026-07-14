@@ -92,9 +92,11 @@ hybrid process pool. P4.L1 has completed the immutable local-owner and bounded
 fake-clock due-work scheduler foundation using only temporary SQLite. The
 accepted local-first redesign preserves reusable P4 contracts, and P4.L2 has
 completed fixture-only discovery/verification/lifecycle/case/reminder and inert
-action composition under the local lease. P4.L3 is now the only next `Ready`
-package. Phase 4 remains `Planned`, and the existing Cloud Run monitor remains
-the production baseline.
+action composition under the local lease. P4.L3 has completed the uninstalled
+credential-free headless service package with private internal paths, bounded
+records, a missing-volume gate, and scoped rollback. P4.LS is now the only next
+`Ready` package. Phase 4 remains `Planned`, and the existing Cloud Run monitor
+remains the production baseline.
 
 ### P2.1R — harden verifier contract semantics
 
@@ -673,13 +675,50 @@ command/executor, scraper, validator, Codex, result interpretation, daemon,
 host/external-volume operation, production migration, ownership transfer,
 promotion, MustCite, or deployment behavior.
 
+### P4.L3 — headless local service package
+
+Status: `Complete`
+
+Depends on: P4.L2
+
+Completed boundary: `automation/local_service/` defines strict normalized
+absolute configuration and derives control SQLite plus atomic bounded health
+and run records below one private internal root. That root must be disjoint
+from the configured external execution volume, and both it and its control
+child must be private non-symlinked directories. Typed
+macOS/Python/repository/internal-storage/volume health checks run before the
+injected wakeup boundary; the default volume probe only observes whether the
+configured path is an available mount and never mounts it. Missing/unsafe
+storage, probe failure, or corrupt record history makes no effect call and
+does not open control SQLite.
+
+The pure renderer returns a fixed `org.openpapers.local-control` system
+LaunchDaemon for an explicit role user. It wakes at load and on one
+hourly calendar minute, exits after one invocation, uses a restrictive umask
+and low-impact hints, and contains no shell, environment dictionary,
+keepalive, socket, inbound listener, credential, or launchd-managed log file.
+Application health is atomically replaced; run history retains at most the
+configured hard-bounded count of fixed-shape records and excludes paths,
+account names, raw exceptions, and provider text.
+
+Rollback is inert structured data naming only the exact OpenPapers label and
+`/Library/LaunchDaemons/org.openpapers.local-control.plist`; it preserves the
+internal root, control state, records, repository, external data, and every
+unrelated label. Tests use fake clocks, fake effects, fake volume probes, and
+temporary private directories. The standalone command deliberately has no
+concrete effect and returns `effect_unconfigured` without opening state.
+
+P4.L3 does not create/access an account or real external volume, render to a
+host path, copy/install/load/start/stop/remove a plist, call the service
+manager, run a reboot/SSH/coexistence/recovery drill, connect a live discovery,
+verification, notification, job, command, scraper, result, cloud, Codex,
+promotion, MustCite, or production-state effect, or perform ownership transfer
+or cutover. P4.LS owns isolated host installation and drills; P4.LC owns
+production transfer.
+
 ### Later local-first packages
 
-- **P4.L3 — headless service package (`Ready`, depends P4.L2):** add a
-  credential-free system LaunchDaemon renderer, bounded logs/health, internal
-  state paths, missing-volume fail-closed behavior, and scoped rollback. Tests
-  do not install it.
-- **P4.LS — isolated host shadow and drills (`Planned`, depends P4.L3):** under
+- **P4.LS — isolated host shadow and drills (`Ready`, depends P4.L3):** under
   separate authorization, install the OpenPapers daemon against isolated state
   and exercise duplicate wakeup, SSH disconnect, reboot, missing volume,
   ambiguous claim, recovery, and co-resident-service health gates. The cloud
@@ -697,8 +736,8 @@ promotion, MustCite, or deployment behavior.
 | P4.O | Paused | P4.4 | Prefect feasibility gate failed before resource creation; the required paid/self-hosted transport is not justified. |
 | P4.L1 | Complete | P4.4 + local-first decision | Plain-Python immutable local ownership and clock-injected bounded due-work scheduler foundation using only fixtures and temporary SQLite. No external or production effect. |
 | P4.L2 | Complete | P4.L1 | Compose accepted discovery, verification, lifecycle, case, reminder, pending-shadow, and inert-action boundaries under one local lease with fake effects and temporary SQLite only. |
-| P4.L3 | Ready | P4.L2 | Credential-free headless LaunchDaemon package and host-safe health/rollback behavior; no installation. |
-| P4.LS | Planned | P4.L3 | Authorized isolated Mac installation, coexistence health gates, and operational shadow drills. No production authority. |
+| P4.L3 | Complete | P4.L2 | Credential-free headless LaunchDaemon renderer, fixed private internal paths, bounded health/run records, missing-volume closure, and exact rollback scope. Fake/temporary only; no installation or concrete effect. |
+| P4.LS | Ready | P4.L3 | Authorized isolated Mac installation, coexistence health gates, and operational shadow drills. No production authority. |
 | P4.LC | Planned | P4.LS | Authorized backup and no-overlap production writer cutover with timed rollback. |
 
 Code implementation, Mac installation, cloud configuration, and operational
