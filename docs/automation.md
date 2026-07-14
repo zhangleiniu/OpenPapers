@@ -108,14 +108,19 @@ the exact candidate, routes ready/partial/retry/cancelled/ambiguous outcomes
 with transient/operational/structural classes, and exactly replays a
 manifest-only publication failure. Its tests use fake launchers, disk state,
 publishers, and temporary roots; it has no installed caller or authorized real
-scrape.
+scrape. P5.S adds a separate manual `--live` command with a private marked
+root, canonical/repository write-denying macOS sandbox, and create-only local
+result store. Its authorized COLT 2025 archival run recovered from a confirmed
+timeout, independently validated 181 papers and PDFs, suppressed exact replay,
+and preserved canonical/local/cloud/co-resident gates. It remains uninstalled
+and cannot promote data or change control state.
 
 The local LaunchDaemon is now authoritative and the retained Cloud Scheduler
 job is paused. Live discovery/verification and Phase 3 case-delivery effects,
-connected or authorized scraper/validator execution, live result wiring,
-Codex repair execution, and MustCite deployment are not implemented.
-P5.1/P5.2/P5.3/P5.4 remain unconnected code boundaries and do not change the
-installed runtime.
+automatic scraper/validator execution, connected result wiring, Codex repair
+execution, and MustCite deployment are not implemented.
+P5.1/P5.2/P5.3/P5.4 remain unconnected to the installed runtime; P5.S is a
+manual shadow-only caller and changes no service or deployment.
 
 Start at the [automation system development guide](./automation-system/README.md) for
 the implemented foundation, target architecture, roadmap, and zero-context

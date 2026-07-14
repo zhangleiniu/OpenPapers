@@ -77,6 +77,13 @@ separate control database. Hourly wakeups before the monitor slot still run
 the local due scheduler. Exact daily replay does not repeat monitoring or
 notification; an interrupted active claim remains ambiguous and blocks work.
 
+P5.S does not change this service. Its existing-scraper canary is a separate
+manual `--live` process with a private repository-external root, a fixed macOS
+sandbox denying canonical/repository writes, and local create-only results.
+The authorized COLT 2025 run did not alter the plist, production runtime,
+monitor/control state, schedule, or any co-resident label. No local-service
+mode imports or invokes the P5.S command or P5.4 coordinator.
+
 ## Focused verification
 
 From the repository root:

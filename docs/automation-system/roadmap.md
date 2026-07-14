@@ -18,7 +18,7 @@ phase-level outcomes and status.
 | 2 | Evidence verification and lifecycle state | Shadow (P2.S 15-venue live review, 2026-07-13) |
 | 3 | Cases and fatigue-resistant notifications | Shadow (P3.S one-delivery canary, 2026-07-13) |
 | 4 | Local Mac scheduler, execution safety, and immutable results | Implemented (single-writer cutover and timed rollback, 2026-07-14) |
-| 5 | Automatic execution of existing scrapers | Planned |
+| 5 | Automatic execution of existing scrapers | Shadow (P5.S COLT 2025 real canary, 2026-07-14) |
 | 6 | Budgeted Codex diagnosis and repair proposals | Planned |
 | 7 | Dataset promotion and MustCite deployment | Planned |
 | 8 | Venue rollout and operational hardening | Planned |
@@ -664,8 +664,29 @@ Accepted P5.4 guarded composition and readiness routing:
   and temporary roots prove this without a real scraper, network/cloud client,
   canonical write, statistics update, service connection, or deployment.
 
-Phase 5 remains `Planned`: P5.S still owns authorized real shadow runs and the
-evidence required before any runtime connection or implementation claim.
+P5.S has completed the first authorized real shadow:
+
+- a manual `--live` boundary creates one strict archival job below a private,
+  marked, repository-external root and uses a fixed macOS sandbox profile to
+  deny child writes to the primary checkout and canonical dataset;
+- COLT 2025 was selected as a stable, fixed-volume, bounded archival sample.
+  A confirmed nonzero environment failure and then a deliberate one-second
+  timeout both cleared only their exact claims and retained partial output in
+  staging for same-job recovery;
+- attempt 3 resumed the same job/root, captured 181 papers and 181 valid PDFs,
+  produced an issue-free P5.3 report, and published a strict manifest/result
+  to a private create-only local store;
+- independent `validate_year.py` and cross-artifact replay passed, while an
+  exact fourth delivery returned `duplicate_completed` without changing the
+  process log, staging, artifacts, results, or canonical fingerprint; and
+- live cloud paused/zero-active, local label, 5/5 co-resident, disk, process,
+  and scoped-rollback gates remained healthy. The sanitized record is
+  [`phase5-existing-scraper-shadow-review-2026-07-14.md`](./phase5-existing-scraper-shadow-review-2026-07-14.md).
+
+Phase 5 is now `Shadow`, not `Implemented`. The command remains manual and
+uninstalled; no verified action is persisted or automatically dispatched, no
+production runtime invokes P5.4, and no result can promote canonical data or
+change conference state.
 
 ## Phase 6: Codex diagnosis and repair
 

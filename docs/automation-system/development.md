@@ -689,6 +689,44 @@ service caller, canonical writer, statistics generator, promotion path, or
 real scrape authorization. P5.S owns the first actual shadow/canary and host
 recovery proof.
 
+The P5.S manual existing-scraper shadow checks are:
+
+```bash
+.venv/bin/python -m unittest \
+  automation.tests.test_execution_shadow \
+  automation.tests.test_run_execution_shadow -v
+.venv/bin/python -m automation.run_execution_shadow \
+  --shadow-root /private/p5s-review \
+  --canonical-data-root /reviewed/repository/data \
+  --repository-root /reviewed/repository \
+  --python-executable /reviewed/regular/venv/python \
+  --venue colt --year 2025 --expected-count 181 \
+  --timeout-seconds 3600
+```
+
+The second command must refuse before creating a root because `--live` is
+absent. An authorized run requires a normalized regular (not symlinked)
+interpreter that resolves the reviewed environment, a fresh or exactly marked
+private repository-external root, the live local-label/cloud-zero-overlap/disk/
+co-resident gates, and a retained canonical fingerprint. On macOS the fixed
+sandbox profile denies every child write outside the exact shadow root,
+including repository and canonical roots, while allowing isolated staging.
+
+P5.S first used a one-second timeout and required confirmed process-group stop,
+a cleared claim, and zero artifact/result files before resuming the exact same
+job and root. The accepted COLT 2025 run then produced 181 papers and 181 valid
+PDFs, passed a separate `postprocessing/validate_year.py` archival check, and
+published only to the private create-only local store. Exact replay must return
+`duplicate_completed` without changing the process log or any retained tree.
+The durable review is
+`phase5-existing-scraper-shadow-review-2026-07-14.md`.
+
+This command is manual and uninstalled. Do not place it in a plist or scheduler,
+point it at P2/P3 output, use a GCS client, update statistics, promote data,
+deploy MustCite, enable Cloud Scheduler, or invoke Codex. An ambiguous claim or
+unconfirmed stop requires retained-root manual recovery and must never be
+cleared merely to force replay.
+
 Scheduling tests use an injected timezone-aware clock. Keep venue catalogs free
 of year-specific month/date assumptions; discovery records candidates, a
 deterministic verifier promotes supported dates into conference-year

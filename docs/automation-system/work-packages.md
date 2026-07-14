@@ -102,9 +102,11 @@ health gates, and 96-second timed rollback. Phase 4 is implemented; P5.1 is
 complete at the pure registry boundary, P5.2 is complete at the isolated
 fake-tested staging/process boundary, and P5.3 is complete at the independent
 staged-validation/manifest boundary. P5.4 is complete at the fixture-only
-guarded composition/result-routing boundary. P5.S is now the only next
-`Ready` package. The local LaunchDaemon is authoritative and the retained Cloud
-Scheduler job is paused.
+guarded composition/result-routing boundary. P5.S has completed one real COLT
+2025 timeout/resume/success/replay shadow with canonical write denial and
+private immutable results. Phase 5 is `Shadow`; no automatic runtime connection
+or canonical promotion is authorized. The local LaunchDaemon is authoritative
+and the retained Cloud Scheduler job is paused.
 
 ### P2.1R — harden verifier contract semantics
 
@@ -942,7 +944,24 @@ host recovery evidence.
 | P5.2 | Complete | P5.1 | Existing-scraper staging executor with private canonical-disjoint roots, strict checkpoints, same-root resume, process-success replay suppression, timeout/cancellation, and ambiguous-stop closure. Fake/temporary only; no actual run or runtime connection. |
 | P5.3 | Complete | P5.2 | Strict candidate inventory/manifest plus bound independent validation report/manifest for count, metadata, duplicate IDs, PDF existence/size/signature, and completeness levels. Temporary fixture roots only; no runtime, result, or canonical write. |
 | P5.4 | Complete | P5.3 | Fixture-only guarded job-to-staging-to-validation-to-immutable-result composition with readiness routing, replay recovery, and transient/operational/structural classification. No runtime connection or real scrape. |
-| P5.S | Ready | P5.4 | Approved shadow/canary executions of already-supported scrapers. Invalid or partial output remains outside canonical data. |
+| P5.S | Complete | P5.4 | Manual sandboxed COLT 2025 archival shadow: confirmed failure and timeout recovery, 181/181 independent validation, private create-only result, exact duplicate suppression, canonical invariance, coexistence, and scoped rollback. No installed or automatic caller. |
+
+P5.S completed boundary: `automation/execution_shadow.py` and the explicit
+`automation.run_execution_shadow --live` command bind P5.4 to a private marked
+root, a fixed macOS child sandbox denying repository/canonical writes, and a
+local create-only result store. The authorized COLT 2025 job retained a
+confirmed stopped failure, a deliberate confirmed timeout with four staged
+entries and no artifacts/results, same-root attempt-3 success with 181 papers
+and 181 valid PDFs, independent zero-issue validation, and an exact
+`duplicate_completed` replay that changed no retained tree or process log.
+Live cloud/local/co-resident gates and the canonical fingerprint remained
+unchanged. The record is
+[`phase5-existing-scraper-shadow-review-2026-07-14.md`](./phase5-existing-scraper-shadow-review-2026-07-14.md).
+
+This does not connect P2.5 actions, the local scheduler, or the installed
+LaunchDaemon to P5.4. Phase 5 is `Shadow`; automatic dispatch and promotion
+remain unimplemented, and Phase 6 remains planned rather than inherited by
+this canary.
 
 A structural failure in one venue opens a separate venue-specific bug thread.
 The rollout thread resumes after that fix has its own tests and commit.

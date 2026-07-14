@@ -48,8 +48,12 @@ result or canonical write is produced. P5.4's fixture-only coordinator is also
 not imported or configured: fake launchers, disk state, publishers, and
 temporary roots alone exercise the existing lock/claim, staging, validation,
 immutable-result, readiness, and failure-routing boundaries. It supplies no
-concrete client or authorized real process. These Phase 5 packages add no
-local/cloud service change, credential, or operator action.
+concrete client or installed process. P5.S adds a separate manual Mac-only
+shadow command and private create-only filesystem publisher. One authorized
+COLT 2025 run recovered from timeout, independently validated 181 papers/PDFs,
+and suppressed exact replay without using this cloud deployment. The command
+is not imported by either local production or retained cloud runtime and adds
+no bucket, IAM, credential, schedule, plist, or canonical operation.
 P4.LC completed the authorized no-overlap cutover on 2026-07-14. The local
 LaunchDaemon is now authoritative and this Cloud Scheduler job is paused. The
 Cloud Run job, secrets, and GCS monitor tree are retained as the tested

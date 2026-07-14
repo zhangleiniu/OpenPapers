@@ -522,6 +522,25 @@ processes, disk observations and publishers plus temporary roots. The module
 has no CLI, concrete cloud client, canonical writer, promotion authority, or
 installed caller; P5.S owns any real shadow execution.
 
+P5.S adds a separate manual shadow boundary without connecting that
+coordinator to the installed runtime. `automation.execution_shadow` derives
+private state, staging, artifact, result, sandbox, and review subtrees below an
+exactly marked repository-external root. A fixed macOS sandbox launcher retains
+P5.2's no-shell process-group supervision while denying every child write
+outside that root, including the primary checkout and declared canonical root.
+A standard-library local publisher creates the fixed P4.4 manifest/result names once and accepts only
+byte-identical replay; it constructs no GCS client.
+
+The authorized COLT 2025 archival canary classified a confirmed environment
+failure and a deliberate one-second timeout as resumable, kept partial output
+only in staging, then resumed the same immutable job/root to 181 papers and 181
+valid PDFs with no independent validation issue. Exact replay returned
+`duplicate_completed` without changing the process log or retained trees.
+Canonical fingerprints, live cloud paused/zero-active state, the local label,
+and co-resident health remained unchanged. The boundary is manual,
+uninstalled, and unable to promote data or affect conference state, so Phase 5
+is `Shadow`, not `Implemented`.
+
 ## Design principles
 
 1. **Discovery is not proof.** An LLM can find candidate facts and URLs, but a
@@ -552,7 +571,7 @@ installed caller; P5.S owns any real shadow execution.
 | Notification service | Local control plane | Immediate transitions and periodic digests | Send duplicate stateless alerts |
 | Dashboard export | Active single writer | Emit a derived, public-safe status snapshot as a side effect of an already-authorized commit | Serve queries, hold state, authenticate a consumer, or push updates |
 | Approved command registry | Pure local code | Map typed Phase 5 jobs to fixed repository entry points and literal arguments | Accept shell, paths, caller flags, environment, or Codex jobs |
-| Staging executor | Mac mini (unwired) | Bind an approved existing scraper to a private canonical-disjoint root and supervise resumable process state | Validate/promote output, inherit ambient environment, or auto-restart ambiguous work |
+| Staging executor | Mac mini (manual shadow only) | Bind an approved existing scraper to a private canonical-disjoint root and supervise resumable process state | Validate/promote output, inherit ambient environment, or auto-restart ambiguous work |
 | Staging validator | Mac mini (unwired) | Safely inventory confirmed staged output and retain strict independent validation/manifests | Run a process, publish a result, route readiness, or read/write canonical data |
 | Local execution supervisor | Mac mini | Run approved typed jobs with locks and resource gates | Expose a public command endpoint |
 | Scrape executor | Mac mini | Run existing repository commands | Modify scraper code |

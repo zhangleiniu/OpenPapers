@@ -225,7 +225,13 @@ def _validate_config(config: P5ExecutionConfig) -> None:
     if any(_normalized(path) != path for path in roots):
         raise P5ExecutionError("P5.4 roots must be normalized")
     for index, left in enumerate(roots):
-        for right in roots[index + 1 :]:
+        for right_index, right in enumerate(roots[index + 1 :], start=index + 1):
+            if {index, right_index} == {1, 4}:
+                # The repository's ordinary canonical root is repository/data.
+                # P5.2 requires staging to be disjoint from both roots but does
+                # not require the repository and its canonical child to be
+                # disjoint from one another.
+                continue
             if _within(left, right) or _within(right, left):
                 raise P5ExecutionError("P5.4 state and data roots must be disjoint")
 

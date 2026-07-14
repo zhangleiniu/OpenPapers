@@ -288,7 +288,13 @@ monitor:
   validation, and P4.4 publication. Closed readiness routes and explicit
   transient/operational/structural classes preserve same-root retry,
   ambiguity closure, partial-output isolation, and byte-identical recovery
-  from manifest-only publication failure.
+  from manifest-only publication failure; and
+- P5.S adds `automation/execution_shadow.py` plus an explicit manual `--live`
+  command. It binds P5.4 to a private marked root, a macOS child sandbox that
+  denies repository/canonical writes, and a create-only local result store.
+  One COLT 2025 archival job passed confirmed timeout recovery, 181/181
+  independent validation, immutable publication, exact duplicate suppression,
+  coexistence checks, and scoped rollback without canonical change.
 
 The sanitized host-shadow, backup, cutover, rollback, and final-runtime
 evidence is recorded in
@@ -300,8 +306,9 @@ deterministic baseline monitor. P5.1 implements scraper/validator command
 selection, and P5.2 implements the isolated existing-scraper staging/process
 boundary. P5.3 implements independent fixture-only staged validation and
 manifest generation. P5.4 implements fixture-only guarded composition,
-immutable result construction, and readiness/failure routing. P5.S and later
-still own authorized shadow execution and runtime integration.
+immutable result construction, and readiness/failure routing. P5.S has
+completed one authorized manual shadow; later work still owns automatic
+runtime integration.
 P4.L2 composes only fixture effects and pending notification records; every
 recheck, review, and scrape action remains inert typed data. No command is
 selected by the installed runtime or run, no delivery attempt occurs, no live
@@ -312,8 +319,11 @@ launchers and temporary fixture roots; no scraper or validator has run. The
 production daemon preserves only the existing deterministic
 monitor/notification baseline plus local due-work selection; it cannot resolve
 or execute a typed job or scraper. No production caller invokes P5.3.
-P5.4 likewise has no installed caller; its tests use only fake launchers, disk
-state, publishers, and temporary roots.
+P5.4 still has no installed caller. Only the separate P5.S manual boundary has
+called it with a real process; that boundary is not imported by the production
+daemon, publishes only to private local files, and cannot promote canonical
+data or change conference state. Its sanitized record is
+[`phase5-existing-scraper-shadow-review-2026-07-14.md`](./phase5-existing-scraper-shadow-review-2026-07-14.md).
 
 P4.O is `Paused`. Its operator feasibility gate found that the acceptable
 Prefect Cloud plan cannot create the required hybrid process pool; the failed
@@ -330,7 +340,8 @@ the Cloud Scheduler job is paused and retained only for rollback. P5.1 is
 complete at the pure selection boundary, P5.2 is complete at the isolated
 fake-tested staging/process boundary, P5.3 is complete at the fixture-only
 validation/manifest boundary, P5.4 is complete at the fixture-only guarded
-composition/result-routing boundary, and P5.S is the next ready package.
+composition/result-routing boundary, and P5.S has completed one real manual
+shadow. Phase 5 is `Shadow`, not automatically connected or implemented.
 
 The following does **not** exist yet:
 
@@ -341,8 +352,8 @@ The following does **not** exist yet:
 - automated routing from discovery to a scrape job;
 - live discovery/verification, Phase 3 case delivery, or typed job execution
   effects in the installed OpenPapers LaunchDaemon;
-- a connected scraper/validator execution adapter or any executed staged job;
-- a connected or authorized live result/readiness route from staged output;
+- an installed or automatically connected scraper/validator execution adapter;
+- a connected automatic result/readiness route from staged output;
 - a Codex execution adapter;
 - automatic promotion into the canonical dataset or MustCite deployment.
 

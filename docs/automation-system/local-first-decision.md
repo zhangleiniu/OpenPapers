@@ -125,4 +125,10 @@ selection and P5.2 has completed the isolated fake-tested existing-scraper
 staging/process boundary. Neither has a runtime connection or has executed a
 scraper/validator. P5.3 subsequently completed a separate fixture-only
 staged-validation and manifest boundary without runtime wiring, actual
-execution, result routing, or canonical writes. P5.4 is next.
+execution, result routing, or canonical writes. P5.4 subsequently completed
+fixture-only guarded composition. P5.S then used a separate manual, sandboxed
+boundary for one COLT 2025 archival shadow with confirmed timeout recovery,
+181/181 independent validation, private create-only results, exact duplicate
+suppression, canonical invariance, and scoped rollback. It did not connect
+execution to the LaunchDaemon or automatic local control path. Phase 5 is
+therefore `Shadow`, not `Implemented`.
