@@ -1,11 +1,12 @@
 # Mac worker package and launchd runbook
 
-This directory is the P4.2 Mac-side foundation. It is not an installed worker
-and is not connected to Prefect Cloud, GCP, the deployed monitor, production
-scheduling, or an executable scraper/Codex path. Its Prefect flow only validates
-typed queue envelopes and returns a `simulated` fixture observation. Actual Mac
-installation and operational drills belong to P4.O and require separate
-operator authorization.
+This directory contains the P4.2 Mac-side foundation and P4.3 local safety
+semantics. It is not an installed worker and is not connected to Prefect Cloud,
+GCP, the deployed monitor, production scheduling, or an executable
+scraper/Codex path. Its Prefect flow only validates typed queue envelopes and
+returns a `simulated` fixture observation. The P4.3 supervisor is exercised
+only with injected fake handles; actual Mac installation and operational
+drills belong to P4.O and require separate operator authorization.
 
 ## Package boundary
 
@@ -14,6 +15,10 @@ operator authorization.
   flow, and a local-settings probe that makes no API request.
 - `health.py` checks local prerequisites and never reads Codex authentication
   file contents or reports configured paths, API URLs, or credentials.
+- `safety.py` provides a private local claim/completion journal, venue/year
+  locks, disk gates, bounded timeout/cancellation supervision, completed-job
+  replay suppression, and a fixed Prefect pull/offline policy. It accepts no
+  command and its local marker is not a P4.4 job result.
 - `requirements.txt` is isolated from the core scraper and cloud-monitor
   dependency sets.
 - `launchd/org.openpapers.prefect-worker.plist.example` is an inert template.
@@ -41,11 +46,33 @@ execute a Codex process. The Prefect check establishes only that the selected
 local profile contains an API URL and key; it does not contact Prefect or prove
 that the pool, queues, or deployments exist.
 
+## P4.3 safety and recovery contract
+
+The local safety supervisor revalidates the P4.1 queue envelope, takes one
+non-blocking lock for its venue/year, and checks both minimum free bytes and
+minimum free fraction before it creates a job claim. The claim is durable
+before an injected fake starter runs. Only typed confirmed success atomically
+becomes a completed marker, and exact replay then skips the starter.
+
+Confirmed stopped failure, cancellation, or timeout clears the claim so an
+explicit Prefect retry can use the same job ID. An active claim on reopen,
+invalid outcome, post-start supervision error, cancellation failure, or
+unconfirmed stop is ambiguous and remains `recovery_required`. Never delete or
+age out such a claim merely to make a delivery run again; it blocks every job
+for that venue/year. Preserve the private journal and correlate it with future
+Prefect and P4.4 artifact history under an authorized recovery procedure.
+
+Prefect is the sole future queue owner. When the worker is offline, no envelope
+is delivered and the Mac creates no local queued record. Leave the work queued
+and visible in Prefect; do not add a local buffer or TTL, resubmit it, or mint a
+new job ID. P4.3 proves this policy with fakes only. P4.O must still exercise
+real reboot, SSH-disconnect, offline visibility, and recovery behavior.
+
 ## Future P4.O installation procedure
 
-Do not perform this section as part of P4.2. P4.O must separately authorize
-the Mac/Prefect/GCS changes and record the resulting reboot, SSH-disconnect,
-offline-worker, and recovery drills.
+Do not perform this section as part of P4.2 or P4.3. P4.O must separately
+authorize the Mac/Prefect/GCS changes and record the resulting reboot,
+SSH-disconnect, offline-worker, and recovery drills.
 
 1. Confirm a dedicated non-administrator login account, a Python 3.12 virtual
    environment, repository/data/log directories owned by that account, and a
@@ -118,10 +145,10 @@ Preserve logs before replacing a failed configuration. Restore the backed-up
 plist, re-run `plutil -lint`, and bootstrap it only after determining that the
 old version is still compatible with the configured Prefect resources. If the
 worker is offline, leave queued work in Prefect; do not recreate jobs with new
-IDs or manually mark them complete. P4.3 will define duplicate/offline
-semantics, and P4.4 will define immutable result recovery. Never repair an
-offline worker by editing the cloud-owned SQLite database from the Mac.
+IDs or manually mark them complete. P4.3 leaves ambiguous claims closed for
+review, and P4.4 will define immutable result recovery. Never repair an offline
+worker by editing the cloud-owned SQLite database from the Mac.
 
-P4.2 itself requires no rollback or runtime action: no plist was loaded, no
-profile was changed, no worker was started, and no external resource exists
-because of this package.
+P4.2/P4.3 require no current rollback or runtime action: no plist was loaded,
+no profile was changed, no worker was started, no P4.3 journal was created by
+an operator, and no external resource exists because of these packages.

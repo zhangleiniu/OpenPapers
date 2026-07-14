@@ -131,7 +131,7 @@ class MacFixtureRuntimeTests(unittest.TestCase):
         self.assertFalse(openpapers_mac_fixture_job.persist_result)
         self.assertFalse(openpapers_mac_fixture_job.cache_result_in_memory)
 
-    def test_package_has_no_execution_storage_or_deployed_flow_dependency(self):
+    def test_package_has_no_command_cloud_storage_or_deployed_flow_dependency(self):
         forbidden_imports = {
             "subprocess",
             "main",
@@ -139,6 +139,10 @@ class MacFixtureRuntimeTests(unittest.TestCase):
             "postprocessing",
             "sqlite3",
             "google",
+            "http",
+            "requests",
+            "socket",
+            "urllib",
             "control_state",
             "prefect_flows",
             "notifications",

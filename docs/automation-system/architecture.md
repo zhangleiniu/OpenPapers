@@ -4,7 +4,7 @@ This document defines the target boundaries and safety invariants. Most of the
 components described here are planned; consult [roadmap.md](./roadmap.md) and
 the executable code before assuming a component exists.
 
-## Implemented foundation and Phase 1/2.S/P3.S/P4.2 boundaries
+## Implemented foundation and Phase 1/2.S/P3.S/P4.3 boundaries
 
 Phase 0 is implemented as a side-effect-free foundation and is not yet wired
 into the deployed monitor:
@@ -299,9 +299,31 @@ P4.2 adds the receiving package without broadening that authority:
   the plist. P4.2 itself installs, configures, loads, or starts nothing.
 
 Tests use fake jobs, fake Prefect settings signals, temporary paths, and local
-fixtures. P4.3 still owns locks, disk thresholds, timeouts, cancellation,
-completed-job deduplication, and offline semantics; P4.4 owns immutable result
-publishing/consumption; P4.O owns real installation and operational drills.
+fixtures. P4.3 adds the local safety boundary without adding an executable
+command:
+
+- `automation/mac_worker/safety.py` revalidates each envelope before local
+  state, then holds a non-blocking process-safe venue/year lock across disk,
+  claim, and fake supervision work;
+- a private versioned Mac journal writes an exact active claim before calling
+  an injected starter and atomically promotes that claim only after confirmed
+  success. Confirmed completion suppresses exact replay. A prior active claim
+  is never expired automatically and blocks every later job for that
+  venue/year until recovery rather than risking overlapping work;
+- both a minimum-free-byte and free-fraction threshold must pass under the
+  lock. The injected handle receives a bounded runtime and cancellation signal;
+  confirmed failure, timeout, or cancellation clears only its claim so the
+  same immutable job ID may retry, while an unconfirmed stop or supervision
+  fault leaves the claim blocking; and
+- the fixed offline contract keeps Prefect as the sole pull-queue owner. No
+  delivery means no local claim, buffer, expiry, resubmission, or replacement
+  job identity is created.
+
+P4.3 tests use fake handles, fake disk usage, temporary private directories,
+and child processes. The local marker is neither a job result nor a manifest
+and cannot authorize cloud state. P4.4 still owns immutable result
+publishing/consumption; P4.O owns real installation and operational drills;
+Phase 5 owns command selection and execution.
 
 ## Design principles
 
@@ -514,11 +536,13 @@ seen, while a different result for the same job ID is rejected. P2.5 now
 composes retained verification replay with optimistic state updates locally.
 P4.1 derives immutable version 2 job IDs without storing a job or result and
 uses the same ID for a fake-tested Prefect submission idempotency key. P4.2's
-fixture flow returns no versioned job result and stores no durable state. GCS
-generation preconditions, cloud restore/upload, deployed Phase 3 delivery,
-durable job storage, and job-result consumption remain future work. P3.S's
-isolated SQLite root is manual canary evidence, not a cloud state store or
-deployed migration.
+fixture flow returns no versioned job result. P4.3 stores only a private
+Mac-local active/completed safety marker keyed by that identity; it is not
+uploaded, consumed by cloud state, or validated as the job-result contract.
+GCS generation preconditions, cloud restore/upload, deployed Phase 3 delivery,
+immutable job-result storage, and job-result consumption remain future work.
+P3.S's isolated SQLite root is manual canary evidence, not a cloud state store
+or deployed migration.
 
 Schema version 3 has no deployed migration or current operator action. Valid
 local version-1 and version-2 control databases migrate on open, preserving
@@ -609,6 +633,22 @@ mistaken for P4.4's immutable result protocol. Local health output contains no
 paths or settings values. The Codex marker signal proves only secure local file
 metadata, and the Prefect signal proves only local configuration; neither is a
 live authentication or operational canary.
+
+P4.3 wraps a future approved executor behind an injected starter/handle
+protocol; neither the queue envelope nor the Prefect flow accepts a callable or
+command. Before the fake starter can run, the supervisor revalidates P4.1,
+takes the venue/year lock, verifies disk policy, and durably claims the job.
+Only a typed confirmed success becomes a local completed marker. Exact replay
+returns `duplicate_completed` without calling the starter. Cleanly stopped
+failure, cancellation, and timeout permit retry with the same ID; ambiguous
+claims block every job for their venue/year, and unconfirmed stops return
+`recovery_required` and are never reclaimed by age. These observations and
+markers are not P4.4 results.
+
+Prefect remains authoritative for queued work. Because its future worker pulls
+runs, an offline Mac receives no envelope and creates no local state; queued
+work must remain visible server-side without a local TTL, buffer, resubmission,
+or new job ID. This is fake-tested policy, not an operational offline drill.
 
 ## Reminder lifecycle
 

@@ -81,9 +81,11 @@ authorized synthetic delivery/fatigue canary, so Phase 3 is now `Shadow`.
 P4.1 has completed the immutable typed-job, fixed-queue, and fake-tested cloud
 submission boundary without creating external resources. P4.2 has completed
 the fake-only Mac receiving package, secret-safe local health checks, and
-uninstalled `launchd` runbook. Phase 4 remains `Planned`; P4.3 is the next
-ready package, and no worker installation or executable job behavior is
-authorized by P4.2.
+uninstalled `launchd` runbook. P4.3 has completed local locks, disk gates,
+supervision, duplicate suppression, and offline policy over injected fakes.
+Phase 4 remains `Planned`; P4.4 is the next ready package, and no worker
+installation, command execution, or result publication is authorized by
+P4.3.
 
 ### P2.1R — harden verifier contract semantics
 
@@ -477,12 +479,45 @@ persist jobs, manage P4.3 locks/disk/timeouts/cancellation/dedup/offline state,
 publish or consume P4.4 results, or perform P4.O operational drills. It changes
 no Phase 3 case/notification semantics.
 
+### P4.3 — local execution safety, duplicate delivery, and offline semantics
+
+Status: `Complete`
+
+Depends on: P4.2
+
+Completed boundary: `automation/mac_worker/safety.py` revalidates one P4.1
+envelope before touching local state and holds a process-safe non-blocking
+venue/year lock across its disk check, durable claim, and injected fake-handle
+supervision. Private journal records contain only the stable version, job
+identity/type, venue, and year. A claim is written before the fake starter and
+atomically promoted to a local completed marker only after a typed confirmed
+success. Exact completed replay skips the starter; an existing active claim is
+never expired automatically, blocks every job for that venue/year, and returns
+recovery-required.
+
+Both minimum free bytes and free fraction must pass before a claim/start. The
+injected handle receives a bounded runtime and cancellation signal. Confirmed
+failure, timeout, or cancellation clears the active claim and permits an
+explicit retry under the same immutable job ID. An invalid outcome,
+post-start exception, cancellation failure, or unconfirmed stop retains the
+claim and blocks replay. Stable observations contain no configured path, raw
+exception, command, result, or artifact claim.
+
+The fixed offline policy leaves Prefect as the sole pull-queue owner: when no
+delivery reaches the Mac, no local claim/buffer/expiry/resubmission exists and
+the job ID is preserved. Tests use sanitized jobs, fake handles/cancellation,
+injected disk usage, temporary private roots, and child processes. P4.3 does
+not install or contact a worker/Prefect/GCP resource, select or execute a
+command/scraper/validator/Codex process, write cloud control state, publish or
+consume a P4.4 result/manifest, or perform the P4.O operational drills. The
+local completion marker is not a job result and cannot authorize a transition.
+
 | ID | Status | Depends on | Objective and completion boundary |
 |---|---|---|---|
 | P4.1 | Complete | Phase 3 gate | Immutable v2 job identity, fixed Prefect process-pool/typed-queue protocol, and injected fake-tested cloud submission boundary. No external resource or Mac change. |
 | P4.2 | Complete | P4.1 | Fake-only Mac receiving flow, bounded local health checks, isolated dependency, and credential-free `launchd` runbook/template. Nothing installed or executed. |
-| P4.3 | Ready | P4.2 | Venue/year locks, disk checks, timeout, cancellation, duplicate-delivery behavior, and offline queue semantics. |
-| P4.4 | Planned | P4.3 | Immutable GCS job-result/manifest publishing and cloud result consumer with generation preconditions and exactly-once logical consumption. |
+| P4.3 | Complete | P4.2 | Mac-local venue/year locks, disk gates, injected-handle timeout/cancellation, completed-delivery suppression, ambiguous-claim recovery closure, and fixed Prefect pull/offline semantics. No command or result path. |
+| P4.4 | Ready | P4.3 | Immutable GCS job-result/manifest publishing and cloud result consumer with generation preconditions and exactly-once logical consumption. |
 | P4.O | Planned | P4.4 | Explicit Mac/Prefect/GCS installation and reboot, SSH-disconnect, offline-worker, and recovery drills. External resources are changed only in this operator-authorized package. |
 
 Code implementation, Mac installation, cloud configuration, and operational

@@ -430,11 +430,28 @@ Accepted P4.2 Mac worker foundation:
   no scraper, validator, Codex, arbitrary command, cloud state, GCS result, or
   external resource is used.
 
-Phase 4 remains `Planned`: P4.1/P4.2 are unconnected local interfaces. No Mac
-worker was installed, logged in, loaded, started, or operationally checked.
-Reboot/offline behavior, logs in a real Prefect run, completed-scrape
-deduplication, immutable result/manifests, and cloud result consumption remain
-unmet acceptance criteria.
+Accepted P4.3 local execution-safety semantics:
+
+- a private versioned local journal writes an active claim before any injected
+  fake work and atomically promotes only confirmed success. Exact completed
+  replay does not call the starter, while an ambiguous claim blocks every job
+  for that venue/year until recovery;
+- a process-safe non-blocking venue/year lease serializes all typed jobs for
+  one conference year, and both absolute and fractional disk thresholds must
+  pass under that lease before a claim or start;
+- injected fake handles prove bounded timeout and cancellation. Confirmed
+  stopped failure/cancellation/timeout may retry under the same job ID;
+  unconfirmed stop or post-start supervision failure remains claimed and
+  requires recovery; and
+- the fixed pull/offline policy leaves undelivered work in Prefect and creates
+  no local buffer, expiry, resubmission, or replacement identity. Tests use
+  temporary roots, fake disk/handles, and child processes only.
+
+Phase 4 remains `Planned`: P4.1-P4.3 are unconnected local interfaces. No Mac
+worker was installed, logged in, loaded, started, or operationally checked, and
+P4.3 selects or runs no command. Reboot/SSH/offline behavior in a real Prefect
+run, immutable result/manifests, cloud result consumption, and stable result
+artifacts remain unmet acceptance criteria.
 
 ## Phase 5: execute existing scrapers
 

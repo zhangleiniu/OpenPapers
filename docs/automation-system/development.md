@@ -460,10 +460,32 @@ restrictive umask, placeholders, and no credential or shell.
 The runbook at `automation/mac_worker/README.md` describes future P4.O
 operator commands, but P4.2 must not install packages, log in, copy/load the
 plist, call `launchctl`, start a worker, create/read/change external Prefect or
-GCP resources, or run its health command as evidence of a live worker. P4.3
-owns locks, disk thresholds, timeouts, cancellation, duplicate/offline
-semantics; P4.4 owns immutable result publishing/consumption. P4.3 is the next
-package.
+GCP resources, or run its health command as evidence of a live worker.
+
+The P4.3 local safety and replay checks are:
+
+```bash
+python -m unittest automation.tests.test_mac_worker_safety -v
+python -m unittest automation.tests.test_mac_worker -v
+python -m unittest automation.tests.test_job_queue -v
+```
+
+`automation/mac_worker/safety.py` uses only a private Mac-local journal,
+`fcntl` venue/year locks, injected disk usage, and injected fake execution
+handles. It writes an exact claim before fake start, atomically promotes only
+confirmed success, suppresses exact completed replay, and never ages out an
+ambiguous claim; that claim blocks every job for its venue/year. Confirmed
+stopped failure/cancellation/timeout may retry with the same job ID;
+unconfirmed stop remains recovery-required. Tests use
+temporary private directories and child processes and retain no command,
+result, artifact, configured path, or raw exception.
+
+Offline semantics are a fixed Prefect pull policy: no delivered envelope means
+no local state, local queue, TTL, resubmission, or replacement job ID. This is
+not evidence of a live worker or visible real queue. P4.4 owns immutable
+result/manifest publication and cloud consumption; P4.O owns installation and
+reboot/SSH/offline/recovery drills; Phase 5 owns all command selection and
+execution. P4.4 is the next package.
 
 Scheduling tests use an injected timezone-aware clock. Keep venue catalogs free
 of year-specific month/date assumptions; discovery records candidates, a

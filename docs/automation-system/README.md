@@ -202,8 +202,9 @@ Phase 3 is `Shadow`: P3.S is manual and isolated, and no Phase 3 component is
 scheduled, deployed, connected to P3.4 output, or authorized to act on
 production state.
 
-P4.1's execution-queue foundation and P4.2's fake-only Mac package are
-implemented locally and are not wired into the deployed monitor:
+P4.1's execution-queue foundation, P4.2's fake-only Mac package, and P4.3's
+local safety supervisor are implemented locally and are not wired into the
+deployed monitor:
 
 - version 2 typed jobs derive a full SHA-256 job ID from their request,
   venue/year, type, requester, input artifacts, and closed payload while
@@ -219,10 +220,19 @@ implemented locally and are not wired into the deployed monitor:
 - `automation/mac_worker/` revalidates that envelope in a thin Prefect flow and
   returns only a non-persisted `simulated` fixture observation. Secret-safe
   local health checks, an isolated Prefect dependency, and an inert `launchd`
-  template/runbook are fixture-tested without installing or starting a worker.
+  template/runbook are fixture-tested without installing or starting a worker;
+  and
+- `automation/mac_worker/safety.py` adds a private Mac-owned claim/completion
+  journal, process-safe venue/year locks, a disk-space gate, and timeout and
+  cancellation supervision over an injected fake handle. A confirmed local
+  completion suppresses exact replay, while any ambiguous active claim blocks
+  another job for that venue/year. Its fixed offline policy leaves undelivered
+  work in the Prefect pull queue and creates no local queue copy.
 
-Phase 4 remains `Planned`. P4.1/P4.2 establish contracts and an uninstalled
-fake-job boundary, not an operational execution plane.
+Phase 4 remains `Planned`. P4.1-P4.3 establish contracts and fake-tested local
+safety behavior, not an operational execution plane. No command is selected or
+run, no immutable result is published, and no worker or Prefect resource is
+installed or connected.
 
 The following does **not** exist yet:
 

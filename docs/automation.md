@@ -54,7 +54,12 @@ P4.2 adds an isolated Mac package whose only flow revalidates and simulates
 fixture jobs, plus local secret-safe prerequisite checks and an uninstalled
 credential-free `launchd` template/runbook. Nothing was installed, logged in,
 loaded, started, or connected, and there is still no executable command
-mapping or immutable result path. A production-integrated
+mapping or immutable result path. P4.3 adds a private Mac-local safety journal,
+process-safe venue/year locks, a two-threshold disk gate, timeout/cancellation
+supervision over injected fake handles, completed-delivery suppression, and a
+fixed Prefect pull/offline policy. It is not called by the deployed monitor or
+P4.2 fixture flow, selects no command, publishes no job result, and has not been
+installed or exercised on a real Mac/Prefect queue. A production-integrated
 verifier/case/reminder flow and notification delivery, provisioned P4 Prefect
 resources, an installed Mac mini worker, Codex repair execution, and MustCite
 deployment are not implemented.

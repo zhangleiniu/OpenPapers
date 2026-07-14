@@ -1,4 +1,4 @@
-"""Optional, fake-only Mac worker foundation for automation P4.2."""
+"""Optional Mac worker foundation and local P4.3 safety semantics."""
 
 from automation.mac_worker.health import (
     HealthCheckCode,
@@ -14,16 +14,52 @@ from automation.mac_worker.runtime import (
     FixtureJobObservation,
     simulate_queue_envelope,
 )
+from automation.mac_worker.safety import (
+    CancellationSignal,
+    DiskSpacePolicy,
+    ExecutionHandle,
+    ExecutionStarter,
+    FixtureExecutionOutcome,
+    FixtureOutcomeStatus,
+    JournalCorruptionError,
+    JournalState,
+    LocalJobJournal,
+    OfflineQueuePolicy,
+    WorkerJobObservation,
+    WorkerJobReason,
+    WorkerJobStatus,
+    WorkerSafetyConfig,
+    WorkerSafetyError,
+    offline_queue_policy,
+    run_guarded_fixture_job,
+)
 
 __all__ = [
     "FixtureJobObservation",
+    "CancellationSignal",
+    "DiskSpacePolicy",
+    "ExecutionHandle",
+    "ExecutionStarter",
+    "FixtureExecutionOutcome",
+    "FixtureOutcomeStatus",
     "HealthCheckCode",
     "HealthCheckName",
     "HealthCheckStatus",
     "HealthSignal",
+    "JournalCorruptionError",
+    "JournalState",
+    "LocalJobJournal",
+    "OfflineQueuePolicy",
     "PrefectConfigurationProbe",
     "WorkerHealthConfig",
     "WorkerHealthReport",
+    "WorkerJobObservation",
+    "WorkerJobReason",
+    "WorkerJobStatus",
+    "WorkerSafetyConfig",
+    "WorkerSafetyError",
     "collect_worker_health",
+    "offline_queue_policy",
+    "run_guarded_fixture_job",
     "simulate_queue_envelope",
 ]
