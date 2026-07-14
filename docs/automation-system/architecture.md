@@ -4,7 +4,7 @@ This document defines the target boundaries and safety invariants. Most of the
 components described here are planned; consult [roadmap.md](./roadmap.md) and
 the executable code before assuming a component exists.
 
-## Implemented foundation and Phase 1/2.S/P3.S/P4.1 boundaries
+## Implemented foundation and Phase 1/2.S/P3.S/P4.2 boundaries
 
 Phase 0 is implemented as a side-effect-free foundation and is not yet wired
 into the deployed monitor:
@@ -279,7 +279,29 @@ P4.1 tests use a fake Prefect client and local sanitized fixtures. No code
 constructs a live client, creates a work pool/queue/deployment, installs a Mac
 worker, persists or consumes a job, runs a command, publishes a result, or
 connects the boundary to the deployed monitor or production control state.
-Those capabilities remain P4.2 and later.
+P4.2 adds the receiving package without broadening that authority:
+
+- `automation/mac_worker/runtime.py` revalidates the strict P4.1 envelope and
+  produces a deterministic `simulated` observation that is deliberately not a
+  job result or manifest;
+- `automation/mac_worker/prefect_support.py` is the only Mac-package Prefect
+  import. Its flow accepts exactly the submitted `queue_envelope`, disables
+  result persistence/retries, and has no executor, command registry, or
+  callable-dispatch parameter;
+- `automation/mac_worker/health.py` reports bounded local macOS/Python,
+  repository, data-root, Prefect-package/configuration, and
+  Codex-login-marker signals.
+  The Prefect signal is injectable and its concrete implementation reads only
+  local settings; the Codex signal checks file metadata without reading the
+  authentication file or starting Codex; and
+- the isolated dependency file and `launchd` template/runbook define a future
+  user-agent procedure with no public inbound endpoint and no credentials in
+  the plist. P4.2 itself installs, configures, loads, or starts nothing.
+
+Tests use fake jobs, fake Prefect settings signals, temporary paths, and local
+fixtures. P4.3 still owns locks, disk thresholds, timeouts, cancellation,
+completed-job deduplication, and offline semantics; P4.4 owns immutable result
+publishing/consumption; P4.O owns real installation and operational drills.
 
 ## Design principles
 
@@ -491,7 +513,8 @@ model of the job protocol: an identical result replay is accepted as already
 seen, while a different result for the same job ID is rejected. P2.5 now
 composes retained verification replay with optimistic state updates locally.
 P4.1 derives immutable version 2 job IDs without storing a job or result and
-uses the same ID for a fake-tested Prefect submission idempotency key. GCS
+uses the same ID for a fake-tested Prefect submission idempotency key. P4.2's
+fixture flow returns no versioned job result and stores no durable state. GCS
 generation preconditions, cloud restore/upload, deployed Phase 3 delivery,
 durable job storage, and job-result consumption remain future work. P3.S's
 isolated SQLite root is manual canary evidence, not a cloud state store or
@@ -577,6 +600,15 @@ identity, queue drift, an incorrect idempotency key, or an invalid Prefect
 response fails closed. P4.1 itself does not suppress a worker from repeating
 completed work; P4.3 duplicate-delivery behavior and P4.4 immutable results
 close that later acceptance path.
+
+P4.2 adds only the fake receiving boundary. The Mac-side flow revalidates the
+envelope and returns stable fields with `status=simulated` and
+`reason_code=fixture_only_no_execution`. It cannot select a command or handler
+and Prefect result persistence is disabled, so this observation cannot be
+mistaken for P4.4's immutable result protocol. Local health output contains no
+paths or settings values. The Codex marker signal proves only secure local file
+metadata, and the Prefect signal proves only local configuration; neither is a
+live authentication or operational canary.
 
 ## Reminder lifecycle
 

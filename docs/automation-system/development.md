@@ -43,6 +43,8 @@ automation/cases.py
 automation/reminders.py
 automation/notifications.py
 automation/notification_integration.py
+automation/job_queue.py
+automation/mac_worker/
 automation/config/venue_catalog.v1.json
 automation/config/policies.v1.json
 ```
@@ -437,9 +439,31 @@ deployments, or wrong keys.
 P4.1 has no command, live-client factory, pool/queue/deployment provisioning,
 worker, Mac/`launchd` setup, scheduler connection, control-state write,
 scraper/Codex execution, GCS result path, or production integration. Do not
-use its local blueprint as evidence that Prefect resources exist. P4.2 is the
-next package and may add only its separately stated fake-job worker/runbook
-boundary.
+use its local blueprint as evidence that Prefect resources exist.
+
+The P4.2 fake-only Mac package and health checks are:
+
+```bash
+python -m unittest automation.tests.test_mac_worker -v
+python -m unittest automation.tests.test_mac_worker_health -v
+python -m unittest automation.tests.test_job_queue -v
+```
+
+`automation/mac_worker/runtime.py` revalidates P4.1 envelopes and produces a
+non-result `simulated` observation. The isolated Prefect flow accepts only
+`queue_envelope` and disables retries/result persistence. Health tests use
+temporary repository/data/auth-marker paths and a fake Prefect configuration
+probe; no test reads auth contents, starts Codex, or contacts Prefect. The
+plist is parsed locally and must contain the fixed pool/type arguments, a
+restrictive umask, placeholders, and no credential or shell.
+
+The runbook at `automation/mac_worker/README.md` describes future P4.O
+operator commands, but P4.2 must not install packages, log in, copy/load the
+plist, call `launchctl`, start a worker, create/read/change external Prefect or
+GCP resources, or run its health command as evidence of a live worker. P4.3
+owns locks, disk thresholds, timeouts, cancellation, duplicate/offline
+semantics; P4.4 owns immutable result publishing/consumption. P4.3 is the next
+package.
 
 Scheduling tests use an injected timezone-aware clock. Keep venue catalogs free
 of year-specific month/date assumptions; discovery records candidates, a

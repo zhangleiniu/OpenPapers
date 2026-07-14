@@ -414,9 +414,27 @@ Accepted P4.1 queue/submission foundation:
   fake client prove exact replay and failure closure without changing Prefect,
   GCP, Mac, scheduler, scraper, or control state.
 
-Phase 4 remains `Planned`: P4.1 is an unconnected local interface. It does not
-meet worker reboot/offline, logs, completed-scrape deduplication, immutable
-result/manifest, or cloud result-consumption acceptance criteria.
+Accepted P4.2 Mac worker foundation:
+
+- an optional Mac package revalidates P4.1 envelopes in a pure simulator, and
+  its thin Prefect flow accepts only the envelope and returns a non-persisted,
+  non-result `simulated` fixture observation;
+- local health checks cover macOS, Python 3.12, repository/data paths, Prefect
+  3.7+ and injected local configuration, plus a Codex auth marker using file
+  metadata only. Reports retain no path, setting, credential, or exception
+  text;
+- an isolated Prefect dependency set and parseable credential-free `launchd`
+  template/runbook define future user-agent installation, inspection,
+  rollback, and recovery without a public inbound endpoint; and
+- fake typed jobs, temporary local fixtures, and static scope tests prove that
+  no scraper, validator, Codex, arbitrary command, cloud state, GCS result, or
+  external resource is used.
+
+Phase 4 remains `Planned`: P4.1/P4.2 are unconnected local interfaces. No Mac
+worker was installed, logged in, loaded, started, or operationally checked.
+Reboot/offline behavior, logs in a real Prefect run, completed-scrape
+deduplication, immutable result/manifests, and cloud result consumption remain
+unmet acceptance criteria.
 
 ## Phase 5: execute existing scrapers
 

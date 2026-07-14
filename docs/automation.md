@@ -49,11 +49,15 @@ recipient, schedule, Prefect/Cloud Run integration, or production-state
 change. P4.1 adds local version 2 immutable job identity, a strict typed queue
 envelope, an inert `openpapers-mac` process work-pool blueprint, and an
 injected fake-tested Prefect deployment submission adapter. It is not imported
-or called by the deployed monitor, creates no Prefect resource or flow run,
-and has no worker or executable command mapping. A production-integrated
+or called by the deployed monitor and creates no Prefect resource or flow run.
+P4.2 adds an isolated Mac package whose only flow revalidates and simulates
+fixture jobs, plus local secret-safe prerequisite checks and an uninstalled
+credential-free `launchd` template/runbook. Nothing was installed, logged in,
+loaded, started, or connected, and there is still no executable command
+mapping or immutable result path. A production-integrated
 verifier/case/reminder flow and notification delivery, provisioned P4 Prefect
-resources, the Mac mini worker, Codex repair execution, and MustCite deployment
-are not implemented.
+resources, an installed Mac mini worker, Codex repair execution, and MustCite
+deployment are not implemented.
 
 Start at the [automation system development guide](./automation-system/README.md) for
 the implemented foundation, target architecture, roadmap, and zero-context

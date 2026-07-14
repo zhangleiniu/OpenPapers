@@ -202,8 +202,8 @@ Phase 3 is `Shadow`: P3.S is manual and isolated, and no Phase 3 component is
 scheduled, deployed, connected to P3.4 output, or authorized to act on
 production state.
 
-P4.1's execution-queue foundation is implemented locally and is not wired into
-the deployed monitor:
+P4.1's execution-queue foundation and P4.2's fake-only Mac package are
+implemented locally and are not wired into the deployed monitor:
 
 - version 2 typed jobs derive a full SHA-256 job ID from their request,
   venue/year, type, requester, input artifacts, and closed payload while
@@ -215,10 +215,14 @@ the deployed monitor:
 - an explicitly supplied P2.5 existing-scraper action can build a scrape job,
   while an injected Prefect deployment-client adapter uses the job ID as the
   flow-run idempotency key. Tests use only a fake client; P4.1 creates no
-  Prefect resource or flow run and supplies no worker or command executor.
+  Prefect resource or flow run and supplies no worker or command executor; and
+- `automation/mac_worker/` revalidates that envelope in a thin Prefect flow and
+  returns only a non-persisted `simulated` fixture observation. Secret-safe
+  local health checks, an isolated Prefect dependency, and an inert `launchd`
+  template/runbook are fixture-tested without installing or starting a worker.
 
-Phase 4 remains `Planned`. P4.1 establishes contracts and an effect boundary,
-not an installed execution plane.
+Phase 4 remains `Planned`. P4.1/P4.2 establish contracts and an uninstalled
+fake-job boundary, not an operational execution plane.
 
 The following does **not** exist yet:
 
@@ -228,7 +232,7 @@ The following does **not** exist yet:
   delivery;
 - automated routing from discovery to a scrape job;
 - provisioned P4 work pools, queues, deployments, or submission wiring;
-- a Mac mini Prefect worker;
+- an installed or connected Mac mini Prefect worker;
 - a Codex execution adapter;
 - automatic promotion into the canonical dataset or MustCite deployment.
 

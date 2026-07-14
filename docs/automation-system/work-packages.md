@@ -79,9 +79,11 @@ completed the fake-only durable delivery boundary, and P3.4 has completed
 pending shadow-output integration. P3.S has completed one separately
 authorized synthetic delivery/fatigue canary, so Phase 3 is now `Shadow`.
 P4.1 has completed the immutable typed-job, fixed-queue, and fake-tested cloud
-submission boundary without creating external resources. Phase 4 remains
-`Planned`; P4.2 is the next ready package, and no worker installation or later
-execution behavior is authorized by P4.1.
+submission boundary without creating external resources. P4.2 has completed
+the fake-only Mac receiving package, secret-safe local health checks, and
+uninstalled `launchd` runbook. Phase 4 remains `Planned`; P4.3 is the next
+ready package, and no worker installation or executable job behavior is
+authorized by P4.2.
 
 ### P2.1R — harden verifier contract semantics
 
@@ -443,11 +445,43 @@ worker, execute a command/scraper/validator/Codex process, manage locks, disk,
 timeouts, cancellation, or offline delivery, publish/consume results, touch
 GCS, or begin P4.2 and later behavior.
 
+### P4.2 — fake-only Mac worker package and launchd runbook
+
+Status: `Complete`
+
+Depends on: P4.1
+
+Completed boundary: `automation/mac_worker/` provides a pure receiving
+function that revalidates a strict P4.1 envelope and returns only a stable
+`simulated` fixture observation. Its one thin Prefect flow accepts exactly the
+`queue_envelope` parameter, disables result persistence/retries, and has no
+executor or arbitrary callable/command input. Scrape, validation, and Codex
+typed fixture jobs exercise their fixed queues without running any process or
+claiming a job result.
+
+The package also provides bounded local health signals for macOS, Python 3.12,
+repository/data-root access, Prefect 3.7+ plus an injected
+local-configuration probe, and a Codex login marker checked only through
+owner/permission/file metadata. Reports retain no paths, setting values,
+credential contents, or raw exceptions. The concrete Prefect probe reads local
+profile settings without an API call. A Mac-only requirements file reuses the
+existing Prefect range, and a parseable credential-free plist plus runbook
+document future per-user `launchd` installation, inspection, rollback, and
+recovery.
+
+Tests use sanitized jobs, fake Prefect probes, temporary paths, and local plist
+parsing. P4.2 does not install dependencies, log in, copy/load a plist, call
+`launchctl`, start a worker, create/read/mutate external Prefect or GCP
+resources, connect scheduling, execute a scraper/validator/Codex process,
+persist jobs, manage P4.3 locks/disk/timeouts/cancellation/dedup/offline state,
+publish or consume P4.4 results, or perform P4.O operational drills. It changes
+no Phase 3 case/notification semantics.
+
 | ID | Status | Depends on | Objective and completion boundary |
 |---|---|---|---|
 | P4.1 | Complete | Phase 3 gate | Immutable v2 job identity, fixed Prefect process-pool/typed-queue protocol, and injected fake-tested cloud submission boundary. No external resource or Mac change. |
-| P4.2 | Ready | P4.1 | Mac worker package, health checks, and `launchd` runbook using fake jobs. No scraper or Codex execution. |
-| P4.3 | Planned | P4.2 | Venue/year locks, disk checks, timeout, cancellation, duplicate-delivery behavior, and offline queue semantics. |
+| P4.2 | Complete | P4.1 | Fake-only Mac receiving flow, bounded local health checks, isolated dependency, and credential-free `launchd` runbook/template. Nothing installed or executed. |
+| P4.3 | Ready | P4.2 | Venue/year locks, disk checks, timeout, cancellation, duplicate-delivery behavior, and offline queue semantics. |
 | P4.4 | Planned | P4.3 | Immutable GCS job-result/manifest publishing and cloud result consumer with generation preconditions and exactly-once logical consumption. |
 | P4.O | Planned | P4.4 | Explicit Mac/Prefect/GCS installation and reboot, SSH-disconnect, offline-worker, and recovery drills. External resources are changed only in this operator-authorized package. |
 
