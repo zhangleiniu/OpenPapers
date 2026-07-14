@@ -634,7 +634,8 @@ fake repository, fake executable, staging root, and canonical root. Do not
 invoke the concrete subprocess adapter, `main.py`, a scraper, or the validator.
 P5.2 has no CLI/runtime connection and produces no manifest/result or
 validation claim. P5.3 now owns independent staged validation and manifests;
-P5.4 owns composition with existing locks/disk gates and result routing.
+P5.4 now owns fixture-only composition with existing locks/disk gates and
+result routing.
 
 The P5.3 independent staged-validation and manifest checks are:
 
@@ -659,8 +660,34 @@ no-runtime/no-canonical scope boundary.
 P5.3 does not invoke P5.2's subprocess adapter or the validator CLI, publish a
 P4.4 job result, classify or route a failure, connect to P4.3/the scheduler/the
 LaunchDaemon, generate statistics, or write canonical data. P5.4 owns those
-composition/result/routing concerns, and P5.S owns any authorized actual
-scraper canary.
+fixture-only composition/result/routing concerns, and P5.S owns any authorized
+actual scraper canary.
+
+The P5.4 guarded execution-pipeline and readiness-routing checks are:
+
+```bash
+python -m unittest automation.tests.test_execution_pipeline -v
+python -m unittest automation.tests.test_mac_worker_safety -v
+python -m unittest automation.tests.test_staging_executor -v
+python -m unittest automation.tests.test_staging_validation -v
+python -m unittest automation.tests.test_job_results -v
+```
+
+`automation/execution_pipeline.py` accepts only a strict existing-scraper job
+and coherent private/disjoint configuration. It holds P4.3's process-safe
+venue/year lock, two-threshold disk gate, and exact claim across injected P5.2
+execution, P5.3 validation, and P4.4 publication. Its closed observation
+distinguishes ready/partial/failure/retry/cancellation/ambiguity/completed
+replay and assigns transient, operational, or structural classes without
+retaining exception text. Confirmed stopped process failure is same-root
+resumable; ambiguity retains the claim. Manifest-first publication failure is
+byte-identically replayable from retained checkpoint/report times.
+
+Focused tests must use fake launchers, disk state, publishers, clocks, and
+temporary private roots. P5.4 has no CLI, concrete cloud client, installed
+service caller, canonical writer, statistics generator, promotion path, or
+real scrape authorization. P5.S owns the first actual shadow/canary and host
+recovery proof.
 
 Scheduling tests use an injected timezone-aware clock. Keep venue catalogs free
 of year-specific month/date assumptions; discovery records candidates, a

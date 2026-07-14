@@ -44,7 +44,11 @@ configured: its concrete subprocess adapter has no CLI/caller, and fake-only
 tests execute no scraper or validator. P5.3's independent staged validator and
 manifest boundary is also not imported or configured: temporary-root tests
 alone create candidate inventories, strict reports, and manifests, and no P4.4
-result or canonical write is produced. These Phase 5 packages add no
+result or canonical write is produced. P5.4's fixture-only coordinator is also
+not imported or configured: fake launchers, disk state, publishers, and
+temporary roots alone exercise the existing lock/claim, staging, validation,
+immutable-result, readiness, and failure-routing boundaries. It supplies no
+concrete client or authorized real process. These Phase 5 packages add no
 local/cloud service change, credential, or operator action.
 P4.LC completed the authorized no-overlap cutover on 2026-07-14. The local
 LaunchDaemon is now authoritative and this Cloud Scheduler job is paused. The

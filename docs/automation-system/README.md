@@ -282,7 +282,13 @@ monitor:
   process-success checkpoint, safely inventories the staged tree, builds a
   strict candidate manifest, and independently produces a versioned validation
   report plus validation-job manifest for the applicable completeness/count/
-  metadata/duplicate/PDF checks.
+  metadata/duplicate/PDF checks; and
+- P5.4 adds `automation/execution_pipeline.py`, which holds the existing P4.3
+  lock, disk gate, and exact claim across injected P5.2 execution, P5.3
+  validation, and P4.4 publication. Closed readiness routes and explicit
+  transient/operational/structural classes preserve same-root retry,
+  ambiguity closure, partial-output isolation, and byte-identical recovery
+  from manifest-only publication failure.
 
 The sanitized host-shadow, backup, cutover, rollback, and final-runtime
 evidence is recorded in
@@ -293,8 +299,9 @@ execution-safety/result behavior plus one operational local scheduler and
 deterministic baseline monitor. P5.1 implements scraper/validator command
 selection, and P5.2 implements the isolated existing-scraper staging/process
 boundary. P5.3 implements independent fixture-only staged validation and
-manifest generation. P5.4 and later still own results, routing, runtime
-composition, and authorized shadow execution.
+manifest generation. P5.4 implements fixture-only guarded composition,
+immutable result construction, and readiness/failure routing. P5.S and later
+still own authorized shadow execution and runtime integration.
 P4.L2 composes only fixture effects and pending notification records; every
 recheck, review, and scrape action remains inert typed data. No command is
 selected by the installed runtime or run, no delivery attempt occurs, no live
@@ -305,6 +312,8 @@ launchers and temporary fixture roots; no scraper or validator has run. The
 production daemon preserves only the existing deterministic
 monitor/notification baseline plus local due-work selection; it cannot resolve
 or execute a typed job or scraper. No production caller invokes P5.3.
+P5.4 likewise has no installed caller; its tests use only fake launchers, disk
+state, publishers, and temporary roots.
 
 P4.O is `Paused`. Its operator feasibility gate found that the acceptable
 Prefect Cloud plan cannot create the required hybrid process pool; the failed
@@ -320,7 +329,8 @@ no-overlap cutover and timed rollback. The local LaunchDaemon is authoritative;
 the Cloud Scheduler job is paused and retained only for rollback. P5.1 is
 complete at the pure selection boundary, P5.2 is complete at the isolated
 fake-tested staging/process boundary, P5.3 is complete at the fixture-only
-validation/manifest boundary, and P5.4 is the next ready package.
+validation/manifest boundary, P5.4 is complete at the fixture-only guarded
+composition/result-routing boundary, and P5.S is the next ready package.
 
 The following does **not** exist yet:
 
@@ -332,7 +342,7 @@ The following does **not** exist yet:
 - live discovery/verification, Phase 3 case delivery, or typed job execution
   effects in the installed OpenPapers LaunchDaemon;
 - a connected scraper/validator execution adapter or any executed staged job;
-- result/readiness routing from P5.3 validation artifacts;
+- a connected or authorized live result/readiness route from staged output;
 - a Codex execution adapter;
 - automatic promotion into the canonical dataset or MustCite deployment.
 

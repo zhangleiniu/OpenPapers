@@ -572,7 +572,9 @@ capability-equivalent deterministic monitoring, no-overlap local ownership,
 health checks, and timed rollback. P5.1 completed the pure command-selection
 boundary, and P5.2 completed the isolated fake-tested staging/process boundary
 without runtime wiring or an actual scrape. P5.3 has completed the independent
-staged-validation/manifest boundary, and P5.4 is next.
+staged-validation/manifest boundary, and P5.4 has completed fixture-only
+guarded composition, immutable result construction, and readiness/failure
+routing. P5.S is next.
 
 ## Phase 5: execute existing scrapers
 
@@ -644,8 +646,26 @@ Accepted P5.3 independent validation and manifests:
   no process, result publication, canonical write, statistics update, runtime
   connection, network, or cloud effect exists.
 
-Phase 5 remains `Planned`: P5.4 and P5.S still own results, readiness and
-failure routing, runtime composition, and authorized shadow runs.
+Accepted P5.4 guarded composition and readiness routing:
+
+- `automation/execution_pipeline.py` holds the existing P4.3 venue/year lock,
+  two-threshold disk gate, and exact local claim across injected P5.2 staging,
+  P5.3 independent validation, and P4.4 immutable publication boundaries;
+- a candidate-bound validation job is derived deterministically, while closed
+  routes distinguish ready, partial, failed, retryable, cancelled, ambiguous,
+  and completed replay outcomes using transient, operational, and structural
+  classes rather than exception text;
+- confirmed stopped process failures clear the claim for same-root resume,
+  ambiguous process state retains it indefinitely, and invalid/partial output
+  remains staged. Only ready or terminal structural validation outcomes
+  produce strict immutable results; and
+- retained checkpoint/report timestamps make manifest-first publication
+  failure byte-identically resumable. Fake launchers, disk state, publishers,
+  and temporary roots prove this without a real scraper, network/cloud client,
+  canonical write, statistics update, service connection, or deployment.
+
+Phase 5 remains `Planned`: P5.S still owns authorized real shadow runs and the
+evidence required before any runtime connection or implementation claim.
 
 ## Phase 6: Codex diagnosis and repair
 

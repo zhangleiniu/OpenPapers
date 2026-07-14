@@ -101,8 +101,9 @@ backup, capability-equivalent local monitor, no-overlap writer transfer,
 health gates, and 96-second timed rollback. Phase 4 is implemented; P5.1 is
 complete at the pure registry boundary, P5.2 is complete at the isolated
 fake-tested staging/process boundary, and P5.3 is complete at the independent
-staged-validation/manifest boundary. P5.4 is now the only next `Ready`
-package. The local LaunchDaemon is authoritative and the retained Cloud
+staged-validation/manifest boundary. P5.4 is complete at the fixture-only
+guarded composition/result-routing boundary. P5.S is now the only next
+`Ready` package. The local LaunchDaemon is authoritative and the retained Cloud
 Scheduler job is paused.
 
 ### P2.1R — harden verifier contract semantics
@@ -903,13 +904,45 @@ service. Tests use only temporary fixture staging/artifact/canonical roots.
 P5.4 owns runtime composition, result construction, and failure/readiness
 routing; P5.S owns any authorized real shadow execution.
 
+### P5.4 — guarded execution composition and readiness routing
+
+Status: `Complete`
+
+Depends on: P5.3
+
+Completed boundary: `automation/execution_pipeline.py` accepts only a strict
+version-2 existing-scraper job and coherent, pairwise-disjoint P4.3/P5.2/P5.3
+configuration. It holds the existing process-safe venue/year lock across the
+existing two-threshold disk gate, Mac-local exact claim, injected P5.2 process
+boundary, P5.3 candidate capture/validation, injected P4.4 create-only
+publication, and completion promotion. It derives the validation job only
+from the immutable scrape job and captured candidate manifest.
+
+The closed route distinguishes ready, partial, failed, retry, cancelled,
+recovery-required, and completed replay outcomes, with transient,
+operational, or structural failure classes that never depend on exception
+text. Confirmed stopped process failures remain same-root resumable without a
+write-once result; ambiguity retains the blocking claim. Valid candidates and
+terminal structural validation outcomes publish strict results. A
+manifest-only publication failure clears the claim only after confirmed stop
+and replays byte-identical retained timestamps/artifacts on retry. Partial or
+invalid output remains staged and cannot touch canonical data.
+
+P5.4 has no CLI, scheduler/LaunchDaemon caller, concrete cloud client,
+credential, canonical writer, statistics generator, promotion path, or real
+process authorization. Tests use a fake launcher, fake disk state, temporary
+private roots, and a fake immutable publisher; no scraper, validator process,
+network request, cloud resource, service, or canonical data is used or
+changed. P5.S owns the first authorized real shadow/canary execution and its
+host recovery evidence.
+
 | ID | Status | Depends on | Objective and completion boundary |
 |---|---|---|---|
 | P5.1 | Complete | Phase 4 gate | Pure approved registry maps strict scrape/validation jobs to fixed repository entry points and literal arguments, rejecting Codex, shell, paths, caller flags, and environment expansion. No process or runtime connection. |
 | P5.2 | Complete | P5.1 | Existing-scraper staging executor with private canonical-disjoint roots, strict checkpoints, same-root resume, process-success replay suppression, timeout/cancellation, and ambiguous-stop closure. Fake/temporary only; no actual run or runtime connection. |
 | P5.3 | Complete | P5.2 | Strict candidate inventory/manifest plus bound independent validation report/manifest for count, metadata, duplicate IDs, PDF existence/size/signature, and completeness levels. Temporary fixture roots only; no runtime, result, or canonical write. |
-| P5.4 | Ready | P5.3 | Readiness routing and end-to-end job to staging to validation to immutable result, with transient/operational/structural failure classification. |
-| P5.S | Planned | P5.4 | Approved shadow/canary executions of already-supported scrapers. Invalid or partial output remains outside canonical data. |
+| P5.4 | Complete | P5.3 | Fixture-only guarded job-to-staging-to-validation-to-immutable-result composition with readiness routing, replay recovery, and transient/operational/structural classification. No runtime connection or real scrape. |
+| P5.S | Ready | P5.4 | Approved shadow/canary executions of already-supported scrapers. Invalid or partial output remains outside canonical data. |
 
 A structural failure in one venue opens a separate venue-specific bug thread.
 The rollout thread resumes after that fix has its own tests and commit.

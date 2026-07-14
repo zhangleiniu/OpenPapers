@@ -325,7 +325,8 @@ and cannot authorize control state. P4.4 owns and implements the immutable
 result boundary; the P4.L packages now own local scheduling, installation, and
 operational drills. P5.1 owns pure command selection, P5.2 owns the isolated
 existing-scraper staging/process boundary, P5.3 owns independent staged
-validation/manifests, and later packages own runtime composition and routing.
+validation/manifests, and P5.4 composes those boundaries under these same
+locks and disk gates without connecting the installed runtime.
 
 P4.4 adds a strict immutable result protocol without connecting it to that
 fake worker path:
@@ -506,8 +507,20 @@ explicit private root disjoint from staging and canonical data. A strict
 validation job binds completeness, expected count, and PDF policy to the
 candidate; the versioned report records independent count, metadata,
 duplicate, provisional, PDF existence/size/signature findings. P5.3 creates no
-P4.4 result and remains unconnected to the installed runtime. P5.4 owns
-composition, result construction, readiness, and failure routing.
+P4.4 result and remains unconnected to the installed runtime.
+
+P5.4 adds `automation.execution_pipeline` as the fixture-only composition
+boundary. It reuses the P4.3 non-blocking venue/year lock, disk predicate, and
+exact local claim around P5.2 execution, P5.3 capture/validation, and injected
+P4.4 publication. A closed observation routes ready, partial, failed,
+retryable, cancelled, ambiguous, and completed replay states with explicit
+transient, operational, or structural classes. Confirmed stopped attempts can
+resume; ambiguity retains the claim. Ready and terminal structural validation
+outcomes create strict results, while deterministic retained timestamps make
+manifest-only publication failure exactly replayable. Tests use only fake
+processes, disk observations and publishers plus temporary roots. The module
+has no CLI, concrete cloud client, canonical writer, promotion authority, or
+installed caller; P5.S owns any real shadow execution.
 
 ## Design principles
 
@@ -816,9 +829,12 @@ consume only the scrape specification through an explicitly called staging
 boundary, but it is not connected to this router, scheduler, worker, P4.3
 journal, or production state; no repository caller invokes its dormant
 subprocess adapter. P5.3 can consume only its confirmed fixture/local output
-and an explicitly supplied validation job to create local strict artifacts;
-it has no action or result router. Production action persistence/submission
-and end-to-end execution remain later packages. Job payload
+and an explicitly supplied validation job to create local strict artifacts.
+P5.4 can compose an explicitly supplied scrape job through fake/injected
+execution, validation, and result publication while returning inert readiness
+data, but it is not imported by the router, scheduler, worker, or installed
+service. Production action persistence/submission and authorized execution
+remain later packages. Job payload
 contracts continue to enumerate approved
 fields for existing scraper, validation, and Codex-diagnosis jobs and cannot
 contain arbitrary shell commands.

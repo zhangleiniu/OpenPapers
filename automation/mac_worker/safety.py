@@ -537,11 +537,12 @@ class LocalJobJournal:
             handle.close()
 
 
-def _disk_is_sufficient(
+def disk_is_sufficient(
     data_root: Path,
     policy: DiskSpacePolicy,
     disk_usage: Callable[[Path], Any],
 ) -> bool:
+    """Apply the reviewed P4.3 two-threshold disk gate."""
     try:
         usage = disk_usage(data_root)
         total = usage.total
@@ -640,7 +641,7 @@ def run_guarded_fixture_job(
                 WorkerJobReason.ACTIVE_CLAIM_EXISTS,
                 started=False,
             )
-        if not _disk_is_sufficient(
+        if not disk_is_sufficient(
             config.data_root,
             config.disk_policy,
             disk_usage,
