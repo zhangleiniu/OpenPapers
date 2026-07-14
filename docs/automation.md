@@ -74,16 +74,20 @@ plain-Python fake-clock runner over temporary SQLite. P4.L2 advances that
 isolated repository to schema version 6 with active plan state and composes
 injected fake discovery/verification, lifecycle reduction, case and pending
 shadow-output integration, due reminders, and inert actions under one local
-lease. P4.L3 adds a separate uninstalled `automation/local_service/` package
+lease. P4.L3 adds the `automation/local_service/` package
 with private internal state/record paths, a missing-volume gate, bounded
 secret-safe health/run artifacts, a credential-free system LaunchDaemon
-renderer, and exact rollback scope. Its command has no concrete effect.
+renderer, and exact rollback scope. Its ordinary command has no concrete
+effect. P4.LS adds an exact private marker and a scheduler-only shadow mode;
+one authorized Mac installation passed duplicate, missing-volume,
+ambiguous-recovery, scoped rollback/reinstall, SSH-disconnect, reboot, and
+co-resident health drills against isolated local-owned state.
 Legacy databases remain cloud-owned; none of these local modules is imported
-here, calls a live effect, delivers a notification, submits or executes a job,
-opens production state, or has been installed. Live local control effects and
-notification delivery, an installed Mac mini scheduler/executor, live result
-wiring and operational drills, Codex repair execution, and MustCite deployment
-are not implemented.
+here, calls a live domain effect, delivers a notification, submits or executes
+a job, or opens production state. Live discovery/verification and notification
+effects, a Mac mini command executor, live result wiring, Codex repair
+execution, and MustCite deployment are not implemented. The installed shadow
+does not change this Cloud Run deployment and has no production authority.
 
 Start at the [automation system development guide](./automation-system/README.md) for
 the implemented foundation, target architecture, roadmap, and zero-context

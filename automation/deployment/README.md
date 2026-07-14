@@ -25,12 +25,14 @@ tables, but constructs no client and has no configured bucket, prefix, IAM
 role, worker credential, flow, or migration here. P4.L1 advances the local
 repository schema to version 5 with an immutable owner and bounded scheduler
 journal. P4.L2 adds schema-version-6 active plan state and fixture-only
-discovery/verification/lifecycle/case/reminder composition. P4.L3 adds only an
-uninstalled credential-free local service renderer, private internal paths,
-bounded records, missing-volume closure, and exact rollback scope. These
-packages use fakes and temporary local state in tests and none is imported,
-installed, or scheduled here. P4.L2/P4.L3 make no live call, delivery attempt,
-job, command, or concrete local effect. Legacy version 1-4
+discovery/verification/lifecycle/case/reminder composition. P4.L3 adds the
+credential-free local service renderer, private internal paths, bounded
+records, missing-volume closure, and exact rollback scope. P4.LS adds a
+marker-gated scheduler-only mode installed on one authorized Mac against
+isolated local state; its reboot/SSH/missing-volume/recovery/rollback and
+co-resident health drills passed. None of these packages is imported or
+scheduled here, and the installed shadow makes no live domain call, delivery
+attempt, job, or command. Legacy version 1-4
 databases remain cloud-owned. Do not reuse the monitor tree or grant a shadow
 Mac process access to `control/state.sqlite3`.
 The accepted local-first design keeps this deployment authoritative until a

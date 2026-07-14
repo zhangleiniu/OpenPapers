@@ -553,7 +553,7 @@ overlapping writers and take a backup; rollback requires restoring that backup.
 P4.O remains paused after its Prefect feasibility gate failed before resource
 creation.
 
-The P4.L3 uninstalled headless-service checks are:
+The P4.L3/P4.LS headless-service and isolated-shadow checks are:
 
 ```bash
 python -m unittest automation.tests.test_local_service -v
@@ -574,10 +574,25 @@ no concrete effect and must return `effect_unconfigured`. Do not create or
 access a role account/volume, write the plist to a host path, call the service
 manager, or claim operational health in P4.L3 tests.
 
-P4.LS is the next package and owns authorized isolated installation and host
-drills; P4.LC owns the explicit
-no-overlap writer cutover. Phase 5 owns command selection, execution, real
-manifest generation, and result interpretation.
+P4.LS adds a private exact marker, a separate shadow renderer, and an explicit
+`--isolated-shadow` mode whose only effect calls
+`automation.local_scheduler.run_scheduler_wakeup`. Tests prove missing,
+conflicting, or unsafe markers fail before state; empty isolated state acquires
+the local owner and exact replay retains one completed wakeup; and the mounted
+directory probe accepts a private directory only when it is backed by a
+non-root mount. The ordinary command remains `effect_unconfigured`.
+
+The authorized 2026-07-14 host record additionally proves root-owned runtime
+isolation, duplicate wakeup, missing-volume closure, ambiguous-state
+preservation/recovery, exact rollback/reinstall, SSH disconnect, reboot, and
+co-resident health. Host-specific evidence stays in an ignored local operations
+record; automated tests do not require root, launchd, a real volume, or a live
+service. Repository documents are not proof that the external host remains
+healthy, so use read-only runtime checks when current status matters.
+
+P4.LC is the next package and owns the explicit no-overlap writer cutover.
+Phase 5 owns command selection, execution, real manifest generation, and result
+interpretation.
 
 Scheduling tests use an injected timezone-aware clock. Keep venue catalogs free
 of year-specific month/date assumptions; discovery records candidates, a

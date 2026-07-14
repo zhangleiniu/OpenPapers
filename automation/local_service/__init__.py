@@ -5,6 +5,7 @@ from automation.local_service.launchd import (
     LaunchDaemonRollbackScope,
     build_rollback_scope,
     render_launchdaemon,
+    render_isolated_shadow_launchdaemon,
 )
 from automation.local_service.service import (
     LOCAL_SERVICE_LABEL,
@@ -26,6 +27,14 @@ from automation.local_service.service import (
     run_local_service_once,
     scheduled_slot,
 )
+from automation.local_service.shadow import (
+    ISOLATED_SHADOW_MARKER,
+    IsolatedSchedulerShadowEffect,
+    IsolatedShadowError,
+    initialize_isolated_shadow_root,
+    isolated_shadow_marker_path,
+    validate_isolated_shadow_root,
+)
 
 __all__ = [
     "LAUNCHDAEMON_ROOT",
@@ -34,6 +43,9 @@ __all__ = [
     "HealthCheckName",
     "HealthCheckStatus",
     "HealthSignal",
+    "ISOLATED_SHADOW_MARKER",
+    "IsolatedSchedulerShadowEffect",
+    "IsolatedShadowError",
     "LaunchDaemonRollbackScope",
     "LocalEffectOutcome",
     "LocalEffectStatus",
@@ -47,7 +59,11 @@ __all__ = [
     "VolumeAvailabilityProbe",
     "build_rollback_scope",
     "collect_local_service_health",
+    "initialize_isolated_shadow_root",
+    "isolated_shadow_marker_path",
     "render_launchdaemon",
+    "render_isolated_shadow_launchdaemon",
     "run_local_service_once",
     "scheduled_slot",
+    "validate_isolated_shadow_root",
 ]

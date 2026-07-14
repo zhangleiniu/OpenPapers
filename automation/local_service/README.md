@@ -1,13 +1,14 @@
 # Local control service package
 
-This directory contains the completed P4.L3 packaging boundary for the
-accepted local-first control plane. It renders a credential-free system
-LaunchDaemon and provides bounded local health/run records, but nothing here
-is installed, loaded, started, or connected to a live effect.
+This directory contains the completed P4.L3 packaging boundary and P4.LS
+isolated host-shadow boundary for the accepted local-first control plane. It
+renders a credential-free system LaunchDaemon, provides bounded local
+health/run records, and exposes one marker-gated scheduler-only shadow mode.
 
 The existing Cloud Run monitor remains the sole production scheduler and
-writer. P4.LS owns any later isolated host installation and drills; P4.LC owns
-the no-overlap production cutover.
+writer. One authorized Mac installed and drilled the isolated shadow on
+2026-07-14; repository files alone are not proof of its current external
+health. P4.LC owns the no-overlap production cutover.
 
 ## Fixed storage and process boundary
 
@@ -24,9 +25,10 @@ paths rather than accepting arbitrary state or log files:
 The internal and external roots must be disjoint. The internal root and its
 `control` child must already exist as private, non-symlinked directories owned
 by the service process. OpenPapers does not create or mount the external
-volume: the default probe requires the configured root to be an available
-local mount point. Missing or unsafe storage fails before the injected wakeup
-boundary or control SQLite is opened.
+volume: the default probe requires the configured private execution directory
+to be accessible and backed by a non-root mounted filesystem. Missing or
+unsafe storage fails before the injected wakeup boundary or control SQLite is
+opened.
 
 The health snapshot is atomically replaced. Run history is an atomic JSON
 document containing at most the configured limit (hard maximum 256) of stable
@@ -45,12 +47,17 @@ keepalive loop, no socket or public listener, and no launchd-managed log file.
 Standard output and error go to `/dev/null`; bounded application records live
 only under the internal root.
 
-The rendered command currently has no concrete wakeup effect. Running
-`python -m automation.local_service` without a test-injected effect records
-and reports `effect_unconfigured`, returns nonzero, and does not open the
-control database. P4.L3 deliberately adds no provider, notification, job,
-command, scraper, cloud, or production adapter. Do not install this inert
-definition as evidence of a working scheduler.
+The ordinary rendered command has no concrete wakeup effect. Running
+`python -m automation.local_service` without a test-injected effect or the
+explicit shadow flag records and reports `effect_unconfigured`, returns
+nonzero, and does not open the control database.
+
+P4.LS adds `render_isolated_shadow_launchdaemon` and the fixed
+`--isolated-shadow` flag. Before that mode can open state, an exact private
+`.isolated-shadow.v1.json` marker must be initialized by the role account. Its
+only effect invokes `run_scheduler_wakeup` against that isolated local-owned
+SQLite database. It has no discovery, verification, notification, job,
+command, scraper, result, cloud, Codex, or production adapter.
 
 ## Focused verification
 
@@ -64,12 +71,15 @@ The tests use temporary private directories, fake clocks, fake volume probes,
 and fake effects. They do not inspect a real role account or volume and do not
 copy a plist or invoke the service manager.
 
-## Future installation and scoped rollback
+## Isolated installation evidence and scoped rollback
 
-P4.LS must separately authorize and record creation of the dedicated account
-and internal paths, plist installation, service-manager operations, isolated
-state, co-resident-service health gates, and reboot/SSH/missing-volume and
-recovery drills. It must not give this service production authority.
+The authorized P4.LS installation used a root-owned read-only runtime and
+minimal Python environment, a dedicated non-login role, private isolated
+state/records, and a private directory on the external filesystem. Duplicate
+wakeup, missing-volume, ambiguous-state recovery, exact rollback/reinstall,
+SSH disconnect, reboot, and co-resident-service gates passed. Host-specific
+commands, paths beyond the fixed plist, and fingerprints remain in an ignored
+local operations record rather than version control.
 
 `build_rollback_scope` fixes the only removable service artifact as:
 
@@ -78,9 +88,14 @@ label: system/org.openpapers.local-control
 plist: /Library/LaunchDaemons/org.openpapers.local-control.plist
 ```
 
-A future authorized rollback may boot out only that exact label and remove
-only that exact plist. It must preserve the internal root (including control
-state and bounded records), repository, external execution data, and every
-unrelated launchd label. Actual installation or rollback commands are P4.LS
-operator actions; this package exposes no function that executes them or
-deletes a path.
+An authorized rollback may boot out only that exact label and remove only that
+exact plist. It must preserve the internal root (including control state and
+bounded records), repository/runtime, external execution data, and every
+unrelated launchd label. P4.LS exercised that rollback and byte-identical
+reinstall without touching a co-resident label. This package still exposes no
+function that invokes the service manager or deletes a path.
+
+The shadow database must never be treated as migrated production state merely
+because it is local-owned. P4.LC requires separate authorization, backup,
+cloud-schedule disablement, no-overlap ownership activation, health checks, and
+timed rollback.

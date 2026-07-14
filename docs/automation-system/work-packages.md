@@ -94,9 +94,11 @@ accepted local-first redesign preserves reusable P4 contracts, and P4.L2 has
 completed fixture-only discovery/verification/lifecycle/case/reminder and inert
 action composition under the local lease. P4.L3 has completed the uninstalled
 credential-free headless service package with private internal paths, bounded
-records, a missing-volume gate, and scoped rollback. P4.LS is now the only next
-`Ready` package. Phase 4 remains `Planned`, and the existing Cloud Run monitor
-remains the production baseline.
+records, a missing-volume gate, and scoped rollback. P4.LS has completed the
+authorized marker-gated scheduler-only installation plus coexistence and host
+drills without production authority. P4.LC is now the only next `Ready`
+package. Phase 4 remains `Planned`, and the existing Cloud Run monitor remains
+the production baseline.
 
 ### P2.1R — harden verifier contract semantics
 
@@ -713,17 +715,41 @@ host path, copy/install/load/start/stop/remove a plist, call the service
 manager, run a reboot/SSH/coexistence/recovery drill, connect a live discovery,
 verification, notification, job, command, scraper, result, cloud, Codex,
 promotion, MustCite, or production-state effect, or perform ownership transfer
-or cutover. P4.LS owns isolated host installation and drills; P4.LC owns
-production transfer.
+or cutover. P4.LS separately completed isolated host installation and drills;
+P4.LC owns production transfer.
+
+### P4.LS — isolated host shadow and drills
+
+Status: `Complete`
+
+Depends on: P4.L3
+
+Completed boundary: an exact private marker gates the new
+`--isolated-shadow` service mode before SQLite opens. Its only concrete effect
+calls P4.L1's bounded scheduler against isolated local-owned state. It cannot
+call discovery, verification, notification delivery, jobs, commands, scrapers,
+results, Prefect, GCS, Codex, the deployed monitor database, or production
+state. The ordinary CLI remains `effect_unconfigured`.
+
+One authorized Mac installation uses a root-owned read-only source snapshot,
+an isolated minimal dependency environment, the existing dedicated non-login
+role, private bounded internal state/records, and a private execution directory
+backed by the shared external volume. The concrete mount probe checks the exact
+directory and its non-root mounted ancestor rather than granting role access to
+the whole volume.
+
+Operational evidence passed exact duplicate wakeup, real SSH disconnect,
+reboot resumption without manual kickstart, intentional missing-path closure
+without unmounting shared storage, ambiguous-wakeup preservation plus
+archive/new-root recovery, bounded run/health visibility, and exact
+OpenPapers-only rollback/reinstall. Pre/post gates passed the private
+co-resident health check and all five expected service labels. The installed
+database contains no conference state, the cloud baseline remained
+authoritative, and no production authority was transferred.
 
 ### Later local-first packages
 
-- **P4.LS — isolated host shadow and drills (`Ready`, depends P4.L3):** under
-  separate authorization, install the OpenPapers daemon against isolated state
-  and exercise duplicate wakeup, SSH disconnect, reboot, missing volume,
-  ambiguous claim, recovery, and co-resident-service health gates. The cloud
-  baseline remains authoritative.
-- **P4.LC — single-writer cutover (`Planned`, depends P4.LS):** under separate
+- **P4.LC — single-writer cutover (`Ready`, depends P4.LS):** under separate
   authorization, back up state, disable the cloud schedule, activate local
   ownership, verify health, and prove timed rollback. Never run both writers.
 
@@ -737,8 +763,8 @@ production transfer.
 | P4.L1 | Complete | P4.4 + local-first decision | Plain-Python immutable local ownership and clock-injected bounded due-work scheduler foundation using only fixtures and temporary SQLite. No external or production effect. |
 | P4.L2 | Complete | P4.L1 | Compose accepted discovery, verification, lifecycle, case, reminder, pending-shadow, and inert-action boundaries under one local lease with fake effects and temporary SQLite only. |
 | P4.L3 | Complete | P4.L2 | Credential-free headless LaunchDaemon renderer, fixed private internal paths, bounded health/run records, missing-volume closure, and exact rollback scope. Fake/temporary only; no installation or concrete effect. |
-| P4.LS | Ready | P4.L3 | Authorized isolated Mac installation, coexistence health gates, and operational shadow drills. No production authority. |
-| P4.LC | Planned | P4.LS | Authorized backup and no-overlap production writer cutover with timed rollback. |
+| P4.LS | Complete | P4.L3 | Marker-gated scheduler-only Mac shadow installed against isolated local state; duplicate/SSH/reboot/missing-volume/ambiguous-recovery/rollback/coexistence drills passed. No production authority. |
+| P4.LC | Ready | P4.LS | Authorized backup and no-overlap production writer cutover with timed rollback. |
 
 Code implementation, Mac installation, cloud configuration, and operational
 drills are distinct tasks even when performed by the same maintainer.

@@ -2,6 +2,7 @@ import ast
 import json
 import os
 import plistlib
+import sqlite3
 import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
@@ -11,15 +12,20 @@ from unittest.mock import patch
 from automation.local_service import (
     LOCAL_SERVICE_LABEL,
     HealthCheckCode,
+    ISOLATED_SHADOW_MARKER,
     LocalEffectOutcome,
     LocalEffectStatus,
+    LocalMountProbe,
     LocalServiceConfig,
     LocalServiceRunCode,
     LocalServiceRunStatus,
     build_rollback_scope,
     collect_local_service_health,
+    initialize_isolated_shadow_root,
     render_launchdaemon,
+    render_isolated_shadow_launchdaemon,
     run_local_service_once,
+    validate_isolated_shadow_root,
 )
 from automation.local_service.__main__ import main
 
@@ -149,6 +155,32 @@ class LocalServiceConfigurationTests(LocalServiceFixture):
 
 
 class LocalServiceHealthAndRunTests(LocalServiceFixture):
+    def test_concrete_probe_accepts_private_directory_on_non_root_mount(self):
+        probe = LocalMountProbe()
+        mount_root = self.external.parent
+        with patch(
+            "automation.local_service.service.os.path.ismount",
+            side_effect=lambda path: Path(path) == mount_root,
+        ):
+            self.assertTrue(probe.is_available(self.external))
+
+        with patch(
+            "automation.local_service.service.os.path.ismount",
+            side_effect=lambda path: Path(path) == Path("/"),
+        ):
+            self.assertFalse(probe.is_available(self.external))
+
+        target = self.internal.parent / "mounted-target"
+        nested = target / "private"
+        nested.mkdir(parents=True)
+        linked_parent = self.internal.parent / "linked-mount"
+        linked_parent.symlink_to(target, target_is_directory=True)
+        with patch(
+            "automation.local_service.service.os.path.ismount",
+            side_effect=lambda path: Path(path) == target,
+        ):
+            self.assertFalse(probe.is_available(linked_parent / "private"))
+
     def test_health_is_bounded_and_does_not_report_paths_or_probe_text(self):
         probe = FakeVolumeProbe(error=RuntimeError("token=do-not-retain"))
 
@@ -391,6 +423,17 @@ class LocalServiceLaunchdAndCommandTests(LocalServiceFixture):
         ):
             self.assertNotIn(forbidden, lowered)
 
+        shadow_document = plistlib.loads(
+            render_isolated_shadow_launchdaemon(self.config)
+        )
+        self.assertEqual(
+            shadow_document["ProgramArguments"][:-1],
+            document["ProgramArguments"],
+        )
+        self.assertEqual(
+            shadow_document["ProgramArguments"][-1], "--isolated-shadow"
+        )
+
     def test_rollback_scope_names_only_openpapers_and_preserves_data(self):
         scope = build_rollback_scope(self.config)
 
@@ -433,6 +476,70 @@ class LocalServiceLaunchdAndCommandTests(LocalServiceFixture):
         self.assertIn('"code": "effect_unconfigured"', output)
         self.assertNotIn(str(self.internal), output)
         self.assertFalse(self.config.state_path.exists())
+
+    def test_isolated_shadow_requires_marker_then_replays_empty_scheduler(self):
+        args = [
+            "--repository-root", str(self.repository),
+            "--python-executable", str(self.python),
+            "--internal-root", str(self.internal),
+            "--external-volume-root", str(self.external),
+            "--role-user", "openpapers-test",
+            "--schedule-minute", "17",
+            "--record-limit", "4",
+            "--isolated-shadow",
+        ]
+        with patch("builtins.print") as printed:
+            missing = main(
+                args,
+                volume_probe=FakeVolumeProbe(),
+                clock=MutableClock(),
+                platform_name="Darwin",
+            )
+        self.assertEqual(missing, 3)
+        self.assertIn('"code": "effect_failed"', printed.call_args.args[0])
+        self.assertFalse(self.config.state_path.exists())
+
+        marker = initialize_isolated_shadow_root(self.internal)
+        self.assertEqual(marker.name, ISOLATED_SHADOW_MARKER)
+        self.assertEqual(marker.stat().st_mode & 0o777, 0o600)
+        self.assertEqual(initialize_isolated_shadow_root(self.internal), marker)
+        validate_isolated_shadow_root(self.internal)
+
+        with patch("builtins.print") as printed:
+            first = main(
+                args,
+                volume_probe=FakeVolumeProbe(),
+                clock=MutableClock(),
+                platform_name="Darwin",
+            )
+            second = main(
+                args,
+                volume_probe=FakeVolumeProbe(),
+                clock=MutableClock(),
+                platform_name="Darwin",
+            )
+        self.assertEqual((first, second), (0, 0))
+        self.assertIn('"code": "no_due_work"', printed.call_args.args[0])
+        with sqlite3.connect(self.config.state_path) as connection:
+            owner = connection.execute(
+                "SELECT owner_kind FROM control_ownership WHERE ownership_id = 1"
+            ).fetchone()
+            wakeups = connection.execute(
+                "SELECT status, COUNT(*) FROM scheduler_wakeup GROUP BY status"
+            ).fetchall()
+        self.assertEqual(owner, ("local_control_plane",))
+        self.assertEqual(wakeups, [("completed", 1)])
+
+        marker.write_text('{"mode":"production"}\n', encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "marker is invalid"):
+            validate_isolated_shadow_root(self.internal)
+        with self.assertRaisesRegex(ValueError, "marker is invalid"):
+            initialize_isolated_shadow_root(self.internal)
+
+        marker.unlink()
+        self.internal.chmod(0o755)
+        with self.assertRaisesRegex(ValueError, "directory is unsafe"):
+            initialize_isolated_shadow_root(self.internal)
 
     def test_package_has_no_network_or_effect_adapter_dependency(self):
         imported = set()

@@ -4,7 +4,7 @@ This document defines the target boundaries and safety invariants. Most of the
 components described here are planned; consult [roadmap.md](./roadmap.md) and
 the executable code before assuming a component exists.
 
-## Implemented foundation and Phase 1/2.S/P3.S/P4.L3 boundaries
+## Implemented foundation and Phase 1/2.S/P3.S/P4.LS boundaries
 
 Phase 0 is implemented as a side-effect-free foundation and is not yet wired
 into the deployed monitor:
@@ -420,8 +420,29 @@ or live-effect authority:
 
 P4.L3 tests use fake clocks, fake effects, fake volume probes, and temporary
 private directories. The standalone command has no concrete effect and
-returns `effect_unconfigured` without opening control SQLite. P4.LS and P4.LC
-retain installation, host drills, live wiring, and cutover authority.
+returns `effect_unconfigured` without opening control SQLite.
+
+P4.LS adds and exercises only the isolated host-shadow authority:
+
+- a private exact marker is required before the new `--isolated-shadow` mode
+  can open SQLite, and a conflicting, unsafe, or absent marker fails closed;
+- the concrete effect invokes only `run_scheduler_wakeup` against the supplied
+  isolated local-owned state. It cannot call discovery, verification,
+  notification, jobs, commands, Prefect, GCS, Codex, or production state;
+- the mount probe permits a private execution directory backed by a non-root
+  mounted filesystem, avoiding write permission on the entire shared volume;
+- one authorized Mac installation uses a root-owned read-only runtime, a
+  dedicated non-login role, bounded private records, and the fixed system
+  LaunchDaemon; and
+- duplicate wakeup, SSH disconnect, reboot, intentional missing-path,
+  ambiguous-wakeup preservation/recovery, exact rollback/reinstall, and
+  co-resident-service health drills passed on 2026-07-14. The shared volume was
+  never unmounted and unrelated labels were never reloaded.
+
+The installed shadow contains no conference state and has no production
+authority. P4.LC retains backup, ownership transfer, cloud-schedule disablement,
+timed rollback, and all production cutover authority. Live domain wiring and
+command/result execution remain later packages.
 
 P4.O is paused after its external feasibility gate. The acceptable Prefect
 Cloud plan rejected the required hybrid process pool before resource creation;
@@ -677,10 +698,13 @@ immutable owner and due-work journal. P4.L2 advances it additively to version 6
 with active plan state and composes only fake discovery/verification plus
 accepted lifecycle/case/reminder and pending-output boundaries. P4.L3 packages
 an injected one-shot boundary around private internal paths, an external-volume
-gate, bounded records, and an uninstalled plist; it adds no schema and its CLI
-has no concrete effect. None is wired to P4.3, P4.4, or a production flow.
+gate, bounded records, and a credential-free plist; it adds no schema and its
+ordinary CLI has no concrete effect. P4.LS installs only the separately marked
+P4.L1 scheduler adapter against a new isolated local-owned schema-v6 database.
+It contains no conference state and is not wired to P4.L2, P4.3, P4.4, or a
+production flow.
 Deployed Phase 3 delivery, live
-local effects, job-result production/interpretation, optional backup/export,
+domain effects, job-result production/interpretation, optional backup/export,
 and production cutover remain future work.
 P3.S's isolated SQLite root is manual canary evidence, not a cloud state store
 or deployed migration.

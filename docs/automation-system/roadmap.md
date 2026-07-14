@@ -17,7 +17,7 @@ phase-level outcomes and status.
 | 1 | LLM search discovery in shadow mode | Shadow (15-venue live review, 2026-07-13) |
 | 2 | Evidence verification and lifecycle state | Shadow (P2.S 15-venue live review, 2026-07-13) |
 | 3 | Cases and fatigue-resistant notifications | Shadow (P3.S one-delivery canary, 2026-07-13) |
-| 4 | Local Mac scheduler, execution safety, and immutable results | Planned (local-first redesign, 2026-07-14) |
+| 4 | Local Mac scheduler, execution safety, and immutable results | Planned (isolated host shadow passed, 2026-07-14) |
 | 5 | Automatic execution of existing scrapers | Planned |
 | 6 | Budgeted Codex diagnosis and repair proposals | Planned |
 | 7 | Dataset promotion and MustCite deployment | Planned |
@@ -518,10 +518,25 @@ Accepted P4.L3 headless local service package:
   No install, removal, service-manager call, account access, or host drill is
   performed.
 
+Accepted P4.LS isolated host shadow and drills:
+
+- an exact private marker gates the only concrete installed effect, which calls
+  the bounded local scheduler against isolated local-owned SQLite and has no
+  network, notification, job, command, result, or production-state capability;
+- a root-owned read-only runtime, minimal isolated Python environment,
+  dedicated non-login role, private internal records/state, and private
+  external execution directory back one authorized system LaunchDaemon;
+- exact duplicate wakeup, missing-volume closure without unmounting shared
+  storage, ambiguous-wakeup preservation and archive/new-root recovery, scoped
+  rollback/reinstall, real SSH disconnect, and reboot resumption all passed;
+  and
+- every mutation/reboot gate retained bounded application records and passed
+  the private co-resident health check with all five expected labels. The cloud
+  monitor remained authoritative throughout.
+
 Phase 4 remains `Planned`: P4.1-P4.4 and P4.L1-P4.L3 remain local/fake-only
-interfaces or uninstalled packaging. No Mac execution service has been
-installed, loaded, started, or operationally checked, and no package selects
-or runs a command. P4.O's Prefect
+interfaces or packaging, while P4.LS is an installed scheduler-only shadow.
+No Mac execution service selects or runs a command. P4.O's Prefect
 feasibility gate failed before resource creation because the acceptable cloud
 plan does not support the required hybrid process pool. P4.O is therefore
 `Paused`; paying for or self-hosting orchestration is not justified for this
@@ -531,10 +546,11 @@ The accepted [local-first decision](./local-first-decision.md) preserves the
 typed identity, safety, and immutable-result semantics while replacing the
 Prefect pull transport with a bounded local scheduler. P4.L1 implements its
 isolated ownership/selection core and P4.L2 composes accepted domains with fake
-effects only. P4.L3 packages their future one-shot host boundary but leaves its
-CLI effect unconfigured. P4.LS is next; reboot/SSH/missing-volume host drills,
-local log visibility under launchd, stable live results, shadow comparison,
-and a no-overlap production writer cutover remain later acceptance criteria.
+effects only. P4.L3 packages the one-shot host boundary and leaves its ordinary
+CLI effect unconfigured. P4.LS has now installed and drilled the separately
+marked scheduler-only mode. P4.LC is next and retains backup, shadow comparison,
+cloud-schedule disablement, no-overlap production ownership, health checks, and
+timed rollback.
 
 ## Phase 5: execute existing scrapers
 

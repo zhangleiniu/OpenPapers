@@ -226,15 +226,21 @@ class LocalWakeupEffect(Protocol):
 
 
 class LocalMountProbe:
-    """Local-only mount check; it performs no mount or external operation."""
+    """Check an execution directory on a non-root mounted filesystem."""
 
     def is_available(self, root: Path) -> bool:
-        return (
-            root.is_dir()
-            and not root.is_symlink()
-            and os.path.ismount(root)
-            and os.access(root, os.R_OK | os.W_OK | os.X_OK)
-        )
+        if (
+            not root.is_dir()
+            or root.is_symlink()
+            or not os.access(root, os.R_OK | os.W_OK | os.X_OK)
+        ):
+            return False
+        candidate = root
+        while candidate != candidate.parent and not os.path.ismount(candidate):
+            candidate = candidate.parent
+            if candidate.is_symlink():
+                return False
+        return candidate != Path("/") and os.path.ismount(candidate)
 
 
 def _utc(value: datetime, *, field: str) -> datetime:

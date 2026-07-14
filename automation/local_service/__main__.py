@@ -16,6 +16,7 @@ from automation.local_service.service import (
     VolumeAvailabilityProbe,
     run_local_service_once,
 )
+from automation.local_service.shadow import IsolatedSchedulerShadowEffect
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -29,6 +30,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--role-user", required=True)
     parser.add_argument("--schedule-minute", type=int, default=17)
     parser.add_argument("--record-limit", type=int, default=128)
+    parser.add_argument(
+        "--isolated-shadow",
+        action="store_true",
+        help="run only the marker-gated local due-work scheduler",
+    )
     return parser
 
 
@@ -50,9 +56,14 @@ def main(
         schedule_minute=args.schedule_minute,
         record_limit=args.record_limit,
     )
+    if args.isolated_shadow and effect is not None:
+        raise ValueError("an injected effect cannot replace isolated shadow mode")
+    resolved_effect = (
+        IsolatedSchedulerShadowEffect() if args.isolated_shadow else effect
+    )
     report = run_local_service_once(
         config,
-        effect=effect,
+        effect=resolved_effect,
         volume_probe=volume_probe or LocalMountProbe(),
         clock=clock,
         platform_name=platform_name,

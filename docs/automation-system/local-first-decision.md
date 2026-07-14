@@ -102,10 +102,14 @@ selected wakeup remains active until every selected schedule advances or
 clears, and partial failure remains durable ambiguity. Neither package makes a
 network request, delivers a notification, submits or executes a job, installs a
 daemon, changes a production database, runs a scraper, or modifies the current
-cloud deployment. P4.L3 now adds only an uninstalled credential-free system
+cloud deployment. P4.L3 adds the credential-free system
 LaunchDaemon renderer, private internal state/record paths, a missing-volume
 gate before an injected effect, bounded secret-safe health/run artifacts, and
-an exact OpenPapers-only rollback scope. Its standalone command has no concrete
-effect and fails closed. P4.LS is the next ready package; it and later packages
-still own account/path provisioning, installation, host drills, live wiring,
-and cutover.
+an exact OpenPapers-only rollback scope. Its ordinary standalone command has no
+concrete effect and fails closed. P4.LS adds a separately marked scheduler-only
+mode and has installed it against isolated local state on the authorized Mac.
+Duplicate, SSH-disconnect, reboot, missing-volume, ambiguous-recovery,
+bounded-record, exact rollback/reinstall, and co-resident health drills passed
+without a live domain effect or production authority. P4.LC is next and retains
+backup, cloud-schedule disablement, ownership transfer, live production wiring,
+health verification, and timed rollback.
