@@ -30,6 +30,7 @@ class ContractName(str, Enum):
     JOB_QUEUE_ENVELOPE = "job_queue_envelope"
     JOB_MANIFEST = "job_manifest"
     JOB_RESULT = "job_result"
+    VALIDATION_REPORT = "validation_report"
     CODEX_RESULT = "codex_result"
     VENUE_CATALOG = "venue_catalog"
     POLICY_CONFIG = "policy_config"
@@ -46,6 +47,7 @@ _SCHEMA_FILES = {
     ContractName.JOB_QUEUE_ENVELOPE: "job-queue-envelope.json",
     ContractName.JOB_MANIFEST: "job-manifest.json",
     ContractName.JOB_RESULT: "job-result.json",
+    ContractName.VALIDATION_REPORT: "validation-report.json",
     ContractName.CODEX_RESULT: "codex-result.json",
     ContractName.VENUE_CATALOG: "venue-catalog.json",
     ContractName.POLICY_CONFIG: "policy-config.json",

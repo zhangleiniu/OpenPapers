@@ -123,4 +123,6 @@ recovered remote state, and completed in 96 seconds. The Mac is authoritative,
 the retained cloud schedule is paused, P5.1 has completed pure fixed command
 selection and P5.2 has completed the isolated fake-tested existing-scraper
 staging/process boundary. Neither has a runtime connection or has executed a
-scraper/validator; P5.3 is next.
+scraper/validator. P5.3 subsequently completed a separate fixture-only
+staged-validation and manifest boundary without runtime wiring, actual
+execution, result routing, or canonical writes. P5.4 is next.

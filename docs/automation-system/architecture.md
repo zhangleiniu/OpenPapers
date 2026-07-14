@@ -324,8 +324,8 @@ and child processes. The local marker is neither a job result nor a manifest
 and cannot authorize control state. P4.4 owns and implements the immutable
 result boundary; the P4.L packages now own local scheduling, installation, and
 operational drills. P5.1 owns pure command selection, P5.2 owns the isolated
-existing-scraper staging/process boundary, and later packages own validation
-and runtime composition.
+existing-scraper staging/process boundary, P5.3 owns independent staged
+validation/manifests, and later packages own runtime composition and routing.
 
 P4.4 adds a strict immutable result protocol without connecting it to that
 fake worker path:
@@ -498,7 +498,16 @@ expires automatically. A standard-library no-shell process adapter exists,
 but no CLI, scheduler, P4.3, LaunchDaemon, or production caller can reach it.
 Tests use only a fake repository/executable, fake launchers/handles/clocks, and
 temporary staging/canonical roots, so no scraper or validator was run. P5.3
-owns independent validation and manifests.
+adds `automation.staging_validation` as a separate, still-unwired read/retain
+boundary. It requires the exact P5.2 process-success checkpoint, inventories
+the staged tree without accepting symlinks, special/unsafe files, path escape,
+or drift, and writes only create-once candidate/validation artifacts below an
+explicit private root disjoint from staging and canonical data. A strict
+validation job binds completeness, expected count, and PDF policy to the
+candidate; the versioned report records independent count, metadata,
+duplicate, provisional, PDF existence/size/signature findings. P5.3 creates no
+P4.4 result and remains unconnected to the installed runtime. P5.4 owns
+composition, result construction, readiness, and failure routing.
 
 ## Design principles
 
@@ -531,6 +540,7 @@ owns independent validation and manifests.
 | Dashboard export | Active single writer | Emit a derived, public-safe status snapshot as a side effect of an already-authorized commit | Serve queries, hold state, authenticate a consumer, or push updates |
 | Approved command registry | Pure local code | Map typed Phase 5 jobs to fixed repository entry points and literal arguments | Accept shell, paths, caller flags, environment, or Codex jobs |
 | Staging executor | Mac mini (unwired) | Bind an approved existing scraper to a private canonical-disjoint root and supervise resumable process state | Validate/promote output, inherit ambient environment, or auto-restart ambiguous work |
+| Staging validator | Mac mini (unwired) | Safely inventory confirmed staged output and retain strict independent validation/manifests | Run a process, publish a result, route readiness, or read/write canonical data |
 | Local execution supervisor | Mac mini | Run approved typed jobs with locks and resource gates | Expose a public command endpoint |
 | Scrape executor | Mac mini | Run existing repository commands | Modify scraper code |
 | Validator | Mac mini | Enforce metadata/PDF contracts | Promote invalid data |
@@ -805,8 +815,10 @@ validation job to an inert fixed repository-command specification. P5.2 can
 consume only the scrape specification through an explicitly called staging
 boundary, but it is not connected to this router, scheduler, worker, P4.3
 journal, or production state; no repository caller invokes its dormant
-subprocess adapter. Production action persistence/submission, independent
-validation, and end-to-end execution remain later packages. Job payload
+subprocess adapter. P5.3 can consume only its confirmed fixture/local output
+and an explicitly supplied validation job to create local strict artifacts;
+it has no action or result router. Production action persistence/submission
+and end-to-end execution remain later packages. Job payload
 contracts continue to enumerate approved
 fields for existing scraper, validation, and Codex-diagnosis jobs and cannot
 contain arbitrary shell commands.

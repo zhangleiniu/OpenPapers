@@ -277,7 +277,12 @@ monitor:
   existing-scraper job to a trusted repository/interpreter and a private,
   canonical-disjoint per-job data root. Strict atomic checkpoints support
   same-root resume, exact process-success suppression, timeout/cancellation,
-  and ambiguous-stop closure over an injected process boundary.
+  and ambiguous-stop closure over an injected process boundary; and
+- P5.3 adds `automation/staging_validation.py`, which requires that exact
+  process-success checkpoint, safely inventories the staged tree, builds a
+  strict candidate manifest, and independently produces a versioned validation
+  report plus validation-job manifest for the applicable completeness/count/
+  metadata/duplicate/PDF checks.
 
 The sanitized host-shadow, backup, cutover, rollback, and final-runtime
 evidence is recorded in
@@ -287,8 +292,9 @@ Phase 4 is `Implemented`. These packages establish contracts and fake-tested
 execution-safety/result behavior plus one operational local scheduler and
 deterministic baseline monitor. P5.1 implements scraper/validator command
 selection, and P5.2 implements the isolated existing-scraper staging/process
-boundary. P5.3 and later still own independent validation, manifests/results,
-routing, and authorized shadow execution.
+boundary. P5.3 implements independent fixture-only staged validation and
+manifest generation. P5.4 and later still own results, routing, runtime
+composition, and authorized shadow execution.
 P4.L2 composes only fixture effects and pending notification records; every
 recheck, review, and scrape action remains inert typed data. No command is
 selected by the installed runtime or run, no delivery attempt occurs, no live
@@ -298,7 +304,7 @@ subprocess adapter has no CLI or caller and was exercised only through fake
 launchers and temporary fixture roots; no scraper or validator has run. The
 production daemon preserves only the existing deterministic
 monitor/notification baseline plus local due-work selection; it cannot resolve
-or execute a typed job or scraper.
+or execute a typed job or scraper. No production caller invokes P5.3.
 
 P4.O is `Paused`. Its operator feasibility gate found that the acceptable
 Prefect Cloud plan cannot create the required hybrid process pool; the failed
@@ -313,7 +319,8 @@ co-resident health drills. P4.LC then completed the separately authorized
 no-overlap cutover and timed rollback. The local LaunchDaemon is authoritative;
 the Cloud Scheduler job is paused and retained only for rollback. P5.1 is
 complete at the pure selection boundary, P5.2 is complete at the isolated
-fake-tested staging/process boundary, and P5.3 is the next ready package.
+fake-tested staging/process boundary, P5.3 is complete at the fixture-only
+validation/manifest boundary, and P5.4 is the next ready package.
 
 The following does **not** exist yet:
 
@@ -325,6 +332,7 @@ The following does **not** exist yet:
 - live discovery/verification, Phase 3 case delivery, or typed job execution
   effects in the installed OpenPapers LaunchDaemon;
 - a connected scraper/validator execution adapter or any executed staged job;
+- result/readiness routing from P5.3 validation artifacts;
 - a Codex execution adapter;
 - automatic promotion into the canonical dataset or MustCite deployment.
 

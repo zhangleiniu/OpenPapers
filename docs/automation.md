@@ -95,14 +95,19 @@ staging executor with trusted runtime binding, private canonical-disjoint
 per-job roots, strict atomic checkpoints, same-root resume, timeout,
 cancellation, and ambiguous-stop closure. Its subprocess adapter has no CLI or
 caller; tests use fake launchers and temporary roots and execute neither a
-scraper nor validator.
+scraper nor validator. P5.3 adds a separately invoked, fixture-only staged
+validation boundary: it requires that process-success checkpoint, retains a
+safe bounded inventory and candidate manifest below a separate private root,
+then uses a bound validation job to produce a strict versioned independent
+report and validation manifest for completeness, count, metadata, duplicate,
+and PDF checks. It has no runtime caller and publishes no result.
 
 The local LaunchDaemon is now authoritative and the retained Cloud Scheduler
 job is paused. Live discovery/verification and Phase 3 case-delivery effects,
-connected scraper/validator execution, independent validation/manifests, live
-result wiring, Codex repair execution, and MustCite deployment are not
-implemented. P5.1/P5.2 remain unconnected code boundaries and do not change
-the installed runtime.
+connected scraper/validator execution, validation-result/readiness routing,
+live result wiring, Codex repair execution, and MustCite deployment are not
+implemented. P5.1/P5.2/P5.3 remain unconnected code boundaries and do not
+change the installed runtime.
 
 Start at the [automation system development guide](./automation-system/README.md) for
 the implemented foundation, target architecture, roadmap, and zero-context

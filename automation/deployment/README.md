@@ -41,8 +41,11 @@ P5.1's approved command registry is also not imported by either the retained
 cloud job or the local production service. It selects inert fixed entry-point
 data only. P5.2's isolated staging executor is likewise not imported or
 configured: its concrete subprocess adapter has no CLI/caller, and fake-only
-tests execute no scraper or validator. Neither package adds a credential or
-deployment step.
+tests execute no scraper or validator. P5.3's independent staged validator and
+manifest boundary is also not imported or configured: temporary-root tests
+alone create candidate inventories, strict reports, and manifests, and no P4.4
+result or canonical write is produced. These Phase 5 packages add no
+local/cloud service change, credential, or operator action.
 P4.LC completed the authorized no-overlap cutover on 2026-07-14. The local
 LaunchDaemon is now authoritative and this Cloud Scheduler job is paused. The
 Cloud Run job, secrets, and GCS monitor tree are retained as the tested

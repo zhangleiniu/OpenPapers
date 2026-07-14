@@ -571,7 +571,8 @@ scheduler-only mode. P4.LC completed generation-bound state transfer,
 capability-equivalent deterministic monitoring, no-overlap local ownership,
 health checks, and timed rollback. P5.1 completed the pure command-selection
 boundary, and P5.2 completed the isolated fake-tested staging/process boundary
-without runtime wiring or an actual scrape. P5.3 is next.
+without runtime wiring or an actual scrape. P5.3 has completed the independent
+staged-validation/manifest boundary, and P5.4 is next.
 
 ## Phase 5: execute existing scrapers
 
@@ -626,9 +627,25 @@ Accepted P5.2 isolated staging executor:
   cover all behavior without running a scraper, validator, network call, or
   canonical-data operation.
 
-Phase 5 remains `Planned`: P5.3-P5.S still own independent validation,
-manifests/results, readiness and failure routing, runtime composition, and
-authorized shadow runs.
+Accepted P5.3 independent validation and manifests:
+
+- a confirmed P5.2 scrape job can produce a deterministic bounded inventory
+  and strict candidate manifest only after its exact process-success
+  checkpoint; staging, retained-artifact, and canonical roots are explicit,
+  private where written, and pairwise disjoint;
+- symlinks, special or unsafe files, path traversal, identity/policy
+  downgrades, candidate drift, corrupt replay, and unbounded trees fail closed;
+- a strict validation job binds the candidate, venue/year, completeness,
+  expected count, and effective PDF policy. Independent checks cover count,
+  required metadata, duplicate IDs, archival provisional records, PDF
+  existence, minimum size, and `%PDF-` signature; and
+- versioned strict validation reports and P4.4-compatible manifests are
+  create-once and exact-replayable. Tests use temporary fixture roots only;
+  no process, result publication, canonical write, statistics update, runtime
+  connection, network, or cloud effect exists.
+
+Phase 5 remains `Planned`: P5.4 and P5.S still own results, readiness and
+failure routing, runtime composition, and authorized shadow runs.
 
 ## Phase 6: Codex diagnosis and repair
 

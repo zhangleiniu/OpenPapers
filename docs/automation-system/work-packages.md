@@ -98,9 +98,10 @@ records, a missing-volume gate, and scoped rollback. P4.LS has completed the
 authorized marker-gated scheduler-only installation plus coexistence and host
 drills without production authority. P4.LC has completed the generation-bound
 backup, capability-equivalent local monitor, no-overlap writer transfer,
-health gates, and 96-second timed rollback. Phase 4 is implemented; P5.1 is now
-complete at the pure registry boundary and P5.2 is complete at the isolated
-fake-tested staging/process boundary. P5.3 is now the only next `Ready`
+health gates, and 96-second timed rollback. Phase 4 is implemented; P5.1 is
+complete at the pure registry boundary, P5.2 is complete at the isolated
+fake-tested staging/process boundary, and P5.3 is complete at the independent
+staged-validation/manifest boundary. P5.4 is now the only next `Ready`
 package. The local LaunchDaemon is authoritative and the retained Cloud
 Scheduler job is paused.
 
@@ -867,15 +868,47 @@ production state. Tests use only a temporary fake repository/executable,
 separate temporary staging/canonical roots, fake clocks, and fake process
 launchers/handles. No scraper, validator, network request, canonical-data
 operation, manifest/result, service, or cloud resource is used or changed.
-P5.3 owns independent validation and manifest generation; P5.4 owns runtime
-composition and failure classification.
+P5.3 now implements independent validation and manifest generation; P5.4 owns
+runtime composition and failure classification.
+
+### P5.3 — independent staged validation and manifests
+
+Status: `Complete`
+
+Depends on: P5.2
+
+Completed boundary: `automation/staging_validation.py` accepts only a strict
+version-2 existing-scraper job with its exact P5.2 `process_succeeded`
+checkpoint. It inventories the private data tree without following symlinks
+or accepting special, foreign-owned, group/world-writable, unbounded, or
+changing files, and retains a deterministic candidate inventory plus strict
+P4.4-compatible scrape-job manifest below a separate private artifact root.
+Staging, artifact, and declared canonical roots must be normalized and
+pairwise disjoint.
+
+A separately supplied strict validation job must bind the candidate manifest,
+venue/year, completeness level, expected count, and effective PDF policy. The
+existing independent core validator checks count, required metadata,
+duplicate IDs, and provisional archival records; P5.3 performs containment-
+safe, inventory-bound PDF existence, minimum-size, and `%PDF-` checks. The
+strict `validation-report` v1 contract records only closed policy, counts,
+issues, identities, and fingerprints. The report and its validation-job
+manifest are create-once and exact-replayable; unsafe paths, candidate drift,
+corruption, or identity/policy downgrade fail before an authoritative report.
+
+P5.3 has no CLI or runtime caller and does not start a scraper/validator
+process, publish a P4.4 result, route readiness/failures, write canonical data,
+generate statistics, make a network/cloud request, or change the installed
+service. Tests use only temporary fixture staging/artifact/canonical roots.
+P5.4 owns runtime composition, result construction, and failure/readiness
+routing; P5.S owns any authorized real shadow execution.
 
 | ID | Status | Depends on | Objective and completion boundary |
 |---|---|---|---|
 | P5.1 | Complete | Phase 4 gate | Pure approved registry maps strict scrape/validation jobs to fixed repository entry points and literal arguments, rejecting Codex, shell, paths, caller flags, and environment expansion. No process or runtime connection. |
 | P5.2 | Complete | P5.1 | Existing-scraper staging executor with private canonical-disjoint roots, strict checkpoints, same-root resume, process-success replay suppression, timeout/cancellation, and ambiguous-stop closure. Fake/temporary only; no actual run or runtime connection. |
-| P5.3 | Ready | P5.2 | Independent validation and manifest generation for counts, metadata, duplicate IDs, PDF existence/size/signature, and applicable completeness levels. |
-| P5.4 | Planned | P5.3 | Readiness routing and end-to-end job to staging to validation to immutable result, with transient/operational/structural failure classification. |
+| P5.3 | Complete | P5.2 | Strict candidate inventory/manifest plus bound independent validation report/manifest for count, metadata, duplicate IDs, PDF existence/size/signature, and completeness levels. Temporary fixture roots only; no runtime, result, or canonical write. |
+| P5.4 | Ready | P5.3 | Readiness routing and end-to-end job to staging to validation to immutable result, with transient/operational/structural failure classification. |
 | P5.S | Planned | P5.4 | Approved shadow/canary executions of already-supported scrapers. Invalid or partial output remains outside canonical data. |
 
 A structural failure in one venue opens a separate venue-specific bug thread.

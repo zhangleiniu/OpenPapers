@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "report_id": "validation:5b8c5afe915b2bc984f72c6ded282d2d3ea0906a2bf9e6d9b9f7b4a71d4befb4",
+  "report_fingerprint": "5b8c5afe915b2bc984f72c6ded282d2d3ea0906a2bf9e6d9b9f7b4a71d4befb4",
+  "validation_job_id": "job:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "validation_job_fingerprint": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "scrape_job_id": "job:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "candidate_manifest_id": "manifest:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+  "candidate_inventory_fingerprint": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+  "venue_id": "icml",
+  "year": 2026,
+  "validated_at": "2026-07-14T19:00:00Z",
+  "completeness_level": "archival",
+  "require_pdfs": true,
+  "expected_count": 1,
+  "status": "valid",
+  "metrics": {
+    "paper_count": 1,
+    "valid_pdf_count": 1
+  },
+  "issues": {}
+}

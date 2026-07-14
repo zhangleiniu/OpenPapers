@@ -23,6 +23,7 @@ from automation.contracts import (
 FIXTURES = Path(__file__).with_name("fixtures") / "phase0"
 PHASE2_FIXTURES = Path(__file__).with_name("fixtures") / "phase2"
 PHASE4_FIXTURES = Path(__file__).with_name("fixtures") / "phase4"
+PHASE5_FIXTURES = Path(__file__).with_name("fixtures") / "phase5"
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -32,6 +33,8 @@ def load_fixture(name: str) -> dict:
         path = PHASE2_FIXTURES / name
     if not path.exists():
         path = PHASE4_FIXTURES / name
+    if not path.exists():
+        path = PHASE5_FIXTURES / name
     return json.loads(path.read_text(encoding="utf-8"))
 
 
@@ -47,6 +50,7 @@ class ContractTests(unittest.TestCase):
         ContractName.JOB_QUEUE_ENVELOPE: "scrape-queue-envelope.v1.json",
         ContractName.JOB_MANIFEST: "job-manifest.v1.json",
         ContractName.JOB_RESULT: "job-result.v1.json",
+        ContractName.VALIDATION_REPORT: "validation-report.v1.json",
         ContractName.CODEX_RESULT: "codex-result.v1.json",
     }
 

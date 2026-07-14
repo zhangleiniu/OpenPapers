@@ -633,8 +633,34 @@ Focused tests must inject fake launchers/handles/clocks and use a temporary
 fake repository, fake executable, staging root, and canonical root. Do not
 invoke the concrete subprocess adapter, `main.py`, a scraper, or the validator.
 P5.2 has no CLI/runtime connection and produces no manifest/result or
-validation claim. P5.3 owns independent validator execution and manifests;
+validation claim. P5.3 now owns independent staged validation and manifests;
 P5.4 owns composition with existing locks/disk gates and result routing.
+
+The P5.3 independent staged-validation and manifest checks are:
+
+```bash
+python -m unittest automation.tests.test_staging_validation -v
+python -m unittest automation.tests.test_contracts -v
+python -m unittest automation.tests.test_staging_executor -v
+python -m unittest automation.tests.test_job_results -v
+python -m unittest automation.tests.test_job_queue -v
+```
+
+`automation/staging_validation.py` reads only a strict existing-scraper job
+whose P5.2 checkpoint is exactly `process_succeeded`. It hashes a bounded safe
+regular-file staging tree into a candidate inventory/manifest below a separate
+private artifact root, then requires a bound strict validation job before it
+retains a versioned report and validation manifest. Tests use temporary roots
+and cover announced/metadata/archival requirements, count, duplicate and
+required-field issues, PDF existence/size/signature, exact replay, symlink and
+path escape, candidate drift, corruption, identity/policy downgrade, and the
+no-runtime/no-canonical scope boundary.
+
+P5.3 does not invoke P5.2's subprocess adapter or the validator CLI, publish a
+P4.4 job result, classify or route a failure, connect to P4.3/the scheduler/the
+LaunchDaemon, generate statistics, or write canonical data. P5.4 owns those
+composition/result/routing concerns, and P5.S owns any authorized actual
+scraper canary.
 
 Scheduling tests use an injected timezone-aware clock. Keep venue catalogs free
 of year-specific month/date assumptions; discovery records candidates, a
