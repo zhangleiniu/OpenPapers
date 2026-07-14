@@ -580,6 +580,17 @@ Every family requires reviewed discovery/evidence accuracy, approved crawl
 policy, accurate scraper capability, no executable false positive during
 shadow, and a documented rollback before automatic action is considered.
 
+## Phase 9 packages — external status export
+
+The consumer of this package is a separate, independently maintained
+application (for example a browser or tablet dashboard) that this repository
+does not build, host, or select technology for. This package only makes
+already-owned control-plane state readable by that consumer.
+
+| ID | Status | Depends on | Objective and completion boundary |
+|---|---|---|---|
+| P9.1 | Planned | Phase 2.4 + Phase 3 production wiring; job-result fields also depend on P4.4 | Versioned, schema-validated `dashboard-status` export admitting only public-safe lifecycle, case-urgency, and job-summary fields (no evidence/crawl URLs, raw discovery/verification payloads, case free-text, credentials, or internal paths). The existing control-plane writer emits/overwrites it to a dedicated, separately-permissioned GCS location as the last step of an already-authorized commit. No new writer role, lease, query API, authentication, or push mechanism. Does not build, host, or select technology for the consumer dashboard application. |
+
 ## Minimal prompt for a new thread
 
 After selecting a `Ready` package, the normal prompt is:

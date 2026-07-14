@@ -364,7 +364,10 @@ document:
 - distinguish permission to fetch a PDF from permission to redistribute it;
 - run Codex only on the Mac mini, with least privilege and an isolated git
   worktree;
-- do not automatically merge Codex changes or deploy them to production.
+- do not automatically merge Codex changes or deploy them to production;
+- keep any dashboard/monitoring UI as a separate, independently maintained
+  application outside this repository; this repository's Phase 9 only exports
+  a narrow, public-safe, pull-based status snapshot for that consumer to read.
 
 ## Sources of truth
 

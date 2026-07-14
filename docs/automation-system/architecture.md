@@ -351,6 +351,7 @@ Phase 5 owns command selection and execution.
 | State transition service | Cloud control plane | Apply valid idempotent transitions | Accept unverified LLM claims |
 | Action router | Cloud control plane | Select notify, recheck, queue, or review | Submit commands outside approved job types |
 | Notification service | Cloud control plane | Immediate transitions and periodic digests | Send duplicate stateless alerts |
+| Dashboard export | Cloud control plane | Emit a derived, public-safe status snapshot as a side effect of an already-authorized commit | Serve queries, hold state, authenticate a consumer, or push updates |
 | Prefect worker | Mac mini | Pull approved typed jobs | Expose a public command endpoint |
 | Scrape executor | Mac mini | Run existing repository commands | Modify scraper code |
 | Validator | Mac mini | Enforce metadata/PDF contracts | Promote invalid data |
@@ -504,6 +505,7 @@ snapshots/...               content-addressed immutable source evidence
 discoveries/...             immutable structured LLM responses
 job-results/<job-id>.json   Mac mini writes once; cloud consumes
 manifests/<job-id>.json     immutable scrape/validation manifest
+dashboard/status.json       derived public-safe export; latest-only, not a source of truth
 ```
 
 Requirements:
@@ -555,6 +557,23 @@ Evaluate Firestore or PostgreSQL only after a concrete trigger: multiple
 control-plane writers, unavoidable overlapping state updates, a real-time
 dashboard/API, multiple workers requiring transactional coordination, or
 observed state-loss/recovery problems.
+
+Phase 9 (not yet implemented) adds a narrow, deliberately non-real-time
+exception to that separation-of-concerns rule: the existing single
+control-plane writer, as the last step of a commit it is already authorized to
+make, also overwrites one denormalized `dashboard/status.json` object in a GCS
+location dedicated to this purpose and separate from `control/state.sqlite3`,
+snapshots, and discoveries. This is a materialized view for an independent,
+separately maintained consumer application (for example a browser or tablet
+dashboard); it is not additional source-of-truth state, does not create a new
+writer role or lease, and does not require Firestore/PostgreSQL, a query API,
+or push delivery. Its schema must exclude evidence/crawl URLs, raw
+discovery/verification payloads, case free-text notes, credentials, and
+internal file paths, admitting only fields safe for broad or public read
+access (venue/year, lifecycle state, `next_check_at`, verified milestone
+dates, case counts/urgency by blocker, and recent job-result summaries). The
+consumer application itself — its frontend, hosting, and any display
+hardware — is out of scope for this repository.
 
 ## Action routing
 

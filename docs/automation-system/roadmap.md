@@ -22,6 +22,7 @@ phase-level outcomes and status.
 | 6 | Budgeted Codex diagnosis and repair proposals | Planned |
 | 7 | Dataset promotion and MustCite deployment | Planned |
 | 8 | Venue rollout and operational hardening | Planned |
+| 9 | Read-only status export for an external dashboard consumer | Planned |
 
 Valid phase statuses are `Planned`, `In progress`, `Shadow`, `Implemented`,
 and `Paused`, with a short reason/date when paused.
@@ -532,6 +533,51 @@ Acceptance for each family:
 - operational cost and notification volume remain within configured budgets;
 - failure and rollback drills have passed before enabling automatic action.
 
+## Phase 9: external status export
+
+The consumer of this phase — a browser or tablet dashboard showing upcoming
+venues and pending cases — is a separate, independently maintained
+application outside this repository. This repository's only responsibility is
+making already-owned control-plane state cheaply and safely readable by that
+consumer, without becoming its backend.
+
+Deliverables:
+
+- a versioned `dashboard-status` schema (`additionalProperties: false`)
+  admitting only fields safe for broad or public read access: venue, year,
+  lifecycle state, `next_check_at`, verified milestone dates, open-case count
+  and urgency grouped by blocker, and recent job-result summaries
+  (kind/venue/year/status/timestamp);
+- explicit schema exclusions: evidence/crawl URLs, raw discovery or
+  verification payloads, case free-text notes, credentials, and internal file
+  paths;
+- the existing single control-plane writer emits/overwrites one export object
+  as the last step of an already-authorized commit (conference-state
+  revision, case event, or job-result consumption). This is a derived,
+  latest-only materialized view, not additional source-of-truth state, and
+  creates no new writer role or second lease holder; and
+- the export is written to a GCS location dedicated to this purpose and
+  separate from `control_state`, snapshots, and discovery evidence, so its
+  read permission can be granted (including public/unauthenticated GET with
+  CORS enabled for direct browser fetch) without touching any bucket that
+  holds control-plane internals or credentials.
+
+Acceptance:
+
+- schema validation rejects an unknown field or an excluded evidence-shaped,
+  free-text, or credential-shaped value;
+- fixture tests prove the export write is a side effect of an
+  already-authorized commit, using no new lease, writer role, or live
+  network/GCP call;
+- a local command can produce a sample export from fixture control-state
+  without a live GCP project, matching the `run_discovery`/
+  `run_verification_shadow` manual-command convention; and
+- IAM for the export location is reviewed separately from the control-plane
+  bucket before any public/broad read grant.
+
+Out of scope for this repository: the dashboard/kiosk frontend, any query API
+beyond the static export object, authentication, and real-time/push delivery.
+
 ## Deferred decisions
 
 Do not implement these merely because they appear attractive:
@@ -541,4 +587,6 @@ Do not implement these merely because they appear attractive:
 - a public endpoint that accepts arbitrary Mac mini commands;
 - automatic Codex merge or production deployment;
 - public rehosting of PDFs based only on a downloadable URL;
-- a real-time dashboard before cases and operations show it is necessary.
+- a real-time or push-based dashboard, or a query API, inside this
+  repository — Phase 9 defines only a narrow periodic pull-based export for
+  an external consumer, not a dashboard service.
