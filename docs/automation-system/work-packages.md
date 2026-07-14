@@ -99,8 +99,9 @@ authorized marker-gated scheduler-only installation plus coexistence and host
 drills without production authority. P4.LC has completed the generation-bound
 backup, capability-equivalent local monitor, no-overlap writer transfer,
 health gates, and 96-second timed rollback. Phase 4 is implemented; P5.1 is now
-the only next `Ready` package. The local LaunchDaemon is authoritative and the
-retained Cloud Scheduler job is paused.
+complete at the pure registry boundary, and P5.2 is now the only next `Ready`
+package. The local LaunchDaemon is authoritative and the retained Cloud
+Scheduler job is paused.
 
 ### P2.1R — harden verifier contract semantics
 
@@ -803,10 +804,40 @@ drills are distinct tasks even when performed by the same maintainer.
 
 ## Phase 5 packages — execute existing scrapers
 
+### P5.1 — approved repository command registry
+
+Status: `Complete`
+
+Depends on: Phase 4 gate
+
+Completed boundary: `automation/command_registry.py` revalidates one complete
+version-2 immutable job and resolves only `scrape_existing` and
+`validate_candidate` to the fixed `main.py` and
+`postprocessing/validate_year.py` repository entry points. It returns an
+immutable job-bound data specification with literal arguments derived only
+from closed venue/year/enum/boolean/integer fields and an explicit
+`isolated_staging_required` policy.
+
+The registry accepts no command string, interpreter, repository/data/metadata
+path, generic argv, caller flag, or environment mapping. Contract-valid Codex
+jobs are explicitly outside Phase 5; their `allowed_paths` never become
+execution authority. Recomputed-identity regression tests reject unknown
+shell/command/path/flags/environment/argv fields, path-like or
+expansion-shaped venue/level values, legacy jobs, and forged identities.
+Static scope tests prove the module has no subprocess, shell, filesystem,
+environment, scraper, validator, orchestration, or cloud dependency.
+
+P5.1 does not import or invoke either repository entry point, bind a Python
+executable or staging root, create a process/claim/checkpoint/manifest/result,
+read or write canonical data, or connect to the local scheduler/LaunchDaemon.
+It changes no service, cloud resource, credential, schema, persisted state, or
+deployment. P5.2 owns isolated staging execution and supervision; P5.3 owns
+independent validation and manifest generation.
+
 | ID | Status | Depends on | Objective and completion boundary |
 |---|---|---|---|
-| P5.1 | Ready | Phase 4 gate | Approved command registry mapping typed jobs to fixed repository entry points. Reject arbitrary shell, paths, flags, and environment expansion. |
-| P5.2 | Planned | P5.1 | Staging executor for existing scrapers with isolated data roots, checkpoints, resume, timeout, and cancellation. No canonical promotion. |
+| P5.1 | Complete | Phase 4 gate | Pure approved registry maps strict scrape/validation jobs to fixed repository entry points and literal arguments, rejecting Codex, shell, paths, caller flags, and environment expansion. No process or runtime connection. |
+| P5.2 | Ready | P5.1 | Staging executor for existing scrapers with isolated data roots, checkpoints, resume, timeout, and cancellation. No canonical promotion. |
 | P5.3 | Planned | P5.2 | Independent validation and manifest generation for counts, metadata, duplicate IDs, PDF existence/size/signature, and applicable completeness levels. |
 | P5.4 | Planned | P5.3 | Readiness routing and end-to-end job to staging to validation to immutable result, with transient/operational/structural failure classification. |
 | P5.S | Planned | P5.4 | Approved shadow/canary executions of already-supported scrapers. Invalid or partial output remains outside canonical data. |

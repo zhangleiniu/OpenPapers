@@ -37,6 +37,9 @@ without treating it as schema-v6 control state. None of the P4.L modules is
 imported by the retained cloud job. The local production service makes only
 the existing deterministic monitor/TLS SMTP calls plus local due selection; it
 makes no discovery, verifier, case-delivery, job, or command call.
+P5.1's approved command registry is also not imported by either the retained
+cloud job or the local production service. It selects inert fixed entry-point
+data only and adds no executor, environment, credential, or deployment step.
 P4.LC completed the authorized no-overlap cutover on 2026-07-14. The local
 LaunchDaemon is now authoritative and this Cloud Scheduler job is paused. The
 Cloud Run job, secrets, and GCS monitor tree are retained as the tested

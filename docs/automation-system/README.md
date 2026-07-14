@@ -267,7 +267,12 @@ monitor:
   durable daily claim around the existing six-source deterministic monitor and
   TLS SMTP notifications, and the same hourly local scheduler against separate
   schema-v6 control state. Two generation-stable backups, zero-active cloud
-  gates, initial/final local health, and a 96-second timed rollback passed.
+  gates, initial/final local health, and a 96-second timed rollback passed; and
+- P5.1 adds `automation/command_registry.py`, a pure approved-command registry
+  that maps strict version-2 scrape and validation jobs to the fixed `main.py`
+  and `postprocessing/validate_year.py` repository entry points. It returns an
+  inert job-bound specification requiring isolated staging and rejects Codex,
+  arbitrary shell, paths, flags, and environment expansion.
 
 The sanitized host-shadow, backup, cutover, rollback, and final-runtime
 evidence is recorded in
@@ -275,15 +280,16 @@ evidence is recorded in
 
 Phase 4 is `Implemented`. These packages establish contracts and fake-tested
 execution-safety/result behavior plus one operational local scheduler and
-deterministic baseline monitor. Phase 5 still owns scraper/validator command
-selection and execution.
+deterministic baseline monitor. P5.1 now implements scraper/validator command
+selection only; P5.2 and later still own isolated execution and validation.
 P4.L2 composes only fixture effects and pending notification records; every
 recheck, review, and scrape action remains inert typed data. No command is
-selected or run, no delivery attempt occurs, no live immutable result is
-published or consumed, and no new GCS result resource, worker, or Prefect queue
-resource is installed or connected. The production daemon preserves only the
-existing deterministic monitor/notification baseline plus local due-work
-selection; it cannot execute a typed job or scraper.
+selected by the installed runtime or run, no delivery attempt occurs, no live
+immutable result is published or consumed, and no new GCS result resource,
+worker, or Prefect queue resource is installed or connected. The production
+daemon preserves only the existing deterministic monitor/notification baseline
+plus local due-work selection; it cannot resolve or execute a typed job or
+scraper.
 
 P4.O is `Paused`. Its operator feasibility gate found that the acceptable
 Prefect Cloud plan cannot create the required hybrid process pool; the failed
@@ -296,8 +302,8 @@ scheduler-only shadow and completed duplicate, SSH-disconnect, reboot,
 missing-volume, ambiguous-recovery, bounded-record, scoped-rollback, and
 co-resident health drills. P4.LC then completed the separately authorized
 no-overlap cutover and timed rollback. The local LaunchDaemon is authoritative;
-the Cloud Scheduler job is paused and retained only for rollback. P5.1 is the
-next ready package.
+the Cloud Scheduler job is paused and retained only for rollback. P5.1 is
+complete at the pure selection boundary; P5.2 is the next ready package.
 
 The following does **not** exist yet:
 

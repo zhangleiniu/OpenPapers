@@ -594,8 +594,23 @@ P4.LC completed the explicit no-overlap writer cutover. The local production
 boundary validates a generation-bound legacy monitor backup, performs the
 existing six-source daily monitor/notification work, and runs schema-v6 local
 due scheduling separately. The cloud schedule is paused and may be resumed
-only after the local label stops. Phase 5 owns command selection, execution,
-real manifest generation, and result interpretation; P5.1 is next.
+only after the local label stops.
+
+The P5.1 approved-command registry checks are:
+
+```bash
+python -m unittest automation.tests.test_command_registry -v
+python -m unittest automation.tests.test_job_queue -v
+```
+
+`automation/command_registry.py` revalidates strict v2 jobs and returns only a
+job-bound structured specification for the fixed scraper or validator
+repository entry point. Tests cover exact typed flag derivation, stable replay,
+Codex rejection, forged/legacy input, and arbitrary shell/path/flag/argv/env or
+expansion-shaped input. The module must not resolve an interpreter, repository
+root, staging/data path, or environment and must not import/invoke the scraper,
+validator, subprocess, local service, or a network/cloud dependency. P5.2 owns
+isolated staging execution; P5.3 owns validator execution and manifests.
 
 Scheduling tests use an injected timezone-aware clock. Keep venue catalogs free
 of year-specific month/date assumptions; discovery records candidates, a

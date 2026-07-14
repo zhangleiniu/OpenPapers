@@ -120,4 +120,5 @@ strict local production boundary, kept legacy monitor and schema-v6 control
 state separate, and paused/drained cloud before local activation. Initial and
 final local health passed; a real rollback stopped local before cloud resume,
 recovered remote state, and completed in 96 seconds. The Mac is authoritative,
-the retained cloud schedule is paused, and P5.1 is next.
+the retained cloud schedule is paused, P5.1 has completed pure fixed command
+selection without a runtime connection, and P5.2 is next.

@@ -323,7 +323,8 @@ P4.3 tests use fake handles, fake disk usage, temporary private directories,
 and child processes. The local marker is neither a job result nor a manifest
 and cannot authorize control state. P4.4 owns and implements the immutable
 result boundary; the P4.L packages now own local scheduling, installation, and
-operational drills. Phase 5 owns command selection and execution.
+operational drills. P5.1 now owns pure command selection; P5.2 and later own
+execution.
 
 P4.4 adds a strict immutable result protocol without connecting it to that
 fake worker path:
@@ -473,6 +474,17 @@ cloud resume. Final activation paused/drained cloud again and refreshed the
 recovered generation. The Mac is now the only production writer; the retained
 cloud schedule is paused. Both writers must never be active concurrently.
 
+P5.1 adds command selection without adding execution. The pure
+`automation.command_registry` revalidates a complete version-2 job and maps
+only `scrape_existing` and `validate_candidate` to fixed repository entry
+points. It derives literal arguments from closed typed fields, carries an
+explicit isolated-staging requirement, and accepts no interpreter, repository
+or data path, caller argv/flags, shell text, or environment. Codex jobs remain
+outside Phase 5 and fail closed. The registry is not imported by the installed
+LaunchDaemon, starts no process, opens no staging or canonical data, and
+publishes no result. P5.2 owns trusted staging-root binding and supervised
+scraper execution; P5.3 owns independent validation and manifests.
+
 ## Design principles
 
 1. **Discovery is not proof.** An LLM can find candidate facts and URLs, but a
@@ -502,6 +514,7 @@ cloud schedule is paused. Both writers must never be active concurrently.
 | Action router | Local control plane | Select notify, recheck, typed execution, or review | Submit commands outside approved job types |
 | Notification service | Local control plane | Immediate transitions and periodic digests | Send duplicate stateless alerts |
 | Dashboard export | Active single writer | Emit a derived, public-safe status snapshot as a side effect of an already-authorized commit | Serve queries, hold state, authenticate a consumer, or push updates |
+| Approved command registry | Pure local code | Map typed Phase 5 jobs to fixed repository entry points and literal arguments | Accept shell, paths, caller flags, environment, or Codex jobs |
 | Local execution supervisor | Mac mini | Run approved typed jobs with locks and resource gates | Expose a public command endpoint |
 | Scrape executor | Mac mini | Run existing repository commands | Modify scraper code |
 | Validator | Mac mini | Enforce metadata/PDF contracts | Promote invalid data |
@@ -771,10 +784,13 @@ digest after excluding claimed slots. P3.S can deliver only its fixed
 synthetic digest and cannot select repository output. P4.1 can convert an
 explicitly supplied existing-scraper action to an immutable job and submit it
 only through an injected boundary; it is not connected to this router or any
-production state. Production action persistence/submission and command
-selection remain later packages. Job payload contracts continue to enumerate
-approved fields for existing scraper, validation, and Codex-diagnosis jobs and
-cannot contain arbitrary shell commands.
+production state. P5.1 can resolve an explicitly supplied strict v2 scrape or
+validation job to an inert fixed repository-command specification, but it is
+not connected to this router, scheduler, worker, or production state and cannot
+run the specification. Production action persistence/submission and execution
+remain later packages. Job payload contracts continue to enumerate approved
+fields for existing scraper, validation, and Codex-diagnosis jobs and cannot
+contain arbitrary shell commands.
 
 Examples:
 

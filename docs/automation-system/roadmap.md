@@ -569,7 +569,8 @@ effects only. P4.L3 packages the one-shot host boundary and leaves its ordinary
 CLI effect unconfigured. P4.LS installed and drilled the separately marked
 scheduler-only mode. P4.LC completed generation-bound state transfer,
 capability-equivalent deterministic monitoring, no-overlap local ownership,
-health checks, and timed rollback. P5.1 is next.
+health checks, and timed rollback. P5.1 has now completed the pure command
+selection boundary; P5.2 is next.
 
 ## Phase 5: execute existing scrapers
 
@@ -591,6 +592,24 @@ Acceptance:
 - statistics and generated README coverage are updated only in a promotion
   candidate change;
 - success, partial success, and failure are distinguishable and resumable.
+
+Accepted P5.1 approved-command registry:
+
+- `automation/command_registry.py` revalidates strict version-2 jobs and maps
+  only existing-scraper and validation types to the fixed `main.py` and
+  `postprocessing/validate_year.py` repository entry points;
+- arguments are derived only from closed venue/year/enum/boolean/integer job
+  fields, while arbitrary shell, program/data paths, argv/flags, environment
+  mappings, and expansion-shaped values fail closed;
+- Codex jobs remain outside Phase 5, and candidate manifest identity remains
+  data rather than being interpreted as a filesystem path; and
+- fixed-job tests return only an inert specification marked as requiring an
+  isolated staging root. No interpreter or root is resolved, no subprocess is
+  started, and the registry is not connected to the production LaunchDaemon.
+
+Phase 5 remains `Planned`: P5.2-P5.S still own staging execution,
+checkpoints/resume, supervision, independent validation, manifests/results,
+failure classification, and authorized shadow runs.
 
 ## Phase 6: Codex diagnosis and repair
 

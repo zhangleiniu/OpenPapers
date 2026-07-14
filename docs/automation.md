@@ -87,11 +87,16 @@ monitor database separately from schema-v6 local control, preserves the
 existing daily six-source monitor and TLS SMTP notifications, and durably
 suppresses ambiguous or duplicate daily effects. Its authorized no-overlap
 cutover, local/co-resident health gates, and 96-second timed rollback passed.
+P5.1 adds a pure local registry that maps strict scrape/validation jobs to two
+fixed repository entry points and literal typed arguments. It rejects Codex,
+shell, paths, caller flags, and environment expansion, and is not imported by
+or connected to this deployment.
 
 The local LaunchDaemon is now authoritative and the retained Cloud Scheduler
 job is paused. Live discovery/verification and Phase 3 case-delivery effects,
-a Mac mini scraper/validator command executor, live result wiring, Codex repair
-execution, and MustCite deployment are not implemented.
+a Mac mini scraper/validator staging executor, live result wiring, Codex repair
+execution, and MustCite deployment are not implemented. P5.1 command selection
+is inert data only and does not change that runtime boundary.
 
 Start at the [automation system development guide](./automation-system/README.md) for
 the implemented foundation, target architecture, roadmap, and zero-context
