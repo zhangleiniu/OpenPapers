@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openpapers.local/schemas/v1/job-manifest.json",
+  "title": "OpenPapers immutable job manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "manifest_id",
+    "manifest_fingerprint",
+    "job_id",
+    "job_fingerprint",
+    "job_type",
+    "venue_id",
+    "year",
+    "created_at",
+    "artifacts"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "manifest_id": {"type": "string", "pattern": "^manifest:[a-f0-9]{64}$"},
+    "manifest_fingerprint": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "job_id": {"type": "string", "pattern": "^job:[a-f0-9]{64}$"},
+    "job_fingerprint": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "job_type": {"enum": ["scrape_existing", "validate_candidate", "codex_diagnosis"]},
+    "venue_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{1,31}$"},
+    "year": {"type": "integer", "minimum": 2000, "maximum": 2100},
+    "created_at": {"type": "string", "format": "date-time"},
+    "artifacts": {
+      "type": "array",
+      "maxItems": 64,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "artifact_id",
+          "artifact_kind",
+          "object_name",
+          "content_fingerprint",
+          "size_bytes"
+        ],
+        "properties": {
+          "artifact_id": {"$ref": "#/$defs/id"},
+          "artifact_kind": {
+            "enum": [
+              "staging_dataset",
+              "validation_report",
+              "codex_report",
+              "patch",
+              "test_report"
+            ]
+          },
+          "object_name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512,
+            "pattern": "^(?!.*(?:^|/)\\.\\.(?:/|$))[A-Za-z0-9][A-Za-z0-9._/-]{0,511}$"
+          },
+          "content_fingerprint": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+          "size_bytes": {"type": "integer", "minimum": 0, "maximum": 9223372036854775807}
+        }
+      }
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._:-]{2,127}$"
+    }
+  }
+}

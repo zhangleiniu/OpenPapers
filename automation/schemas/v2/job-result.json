@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openpapers.local/schemas/v2/job-result.json",
+  "title": "OpenPapers immutable job result v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "job_id",
+    "job_fingerprint",
+    "job_type",
+    "venue_id",
+    "year",
+    "worker_id",
+    "completed_at",
+    "status",
+    "manifest_id",
+    "result_fingerprint",
+    "error_code",
+    "error_summary",
+    "metrics"
+  ],
+  "properties": {
+    "schema_version": {"const": 2},
+    "job_id": {"type": "string", "pattern": "^job:[a-f0-9]{64}$"},
+    "job_fingerprint": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "job_type": {"enum": ["scrape_existing", "validate_candidate", "codex_diagnosis"]},
+    "venue_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{1,31}$"},
+    "year": {"type": "integer", "minimum": 2000, "maximum": 2100},
+    "worker_id": {"$ref": "#/$defs/id"},
+    "completed_at": {"type": "string", "format": "date-time"},
+    "status": {"enum": ["succeeded", "failed", "cancelled"]},
+    "manifest_id": {"type": "string", "pattern": "^manifest:[a-f0-9]{64}$"},
+    "result_fingerprint": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "error_code": {"type": ["string", "null"], "pattern": "^[a-z][a-z0-9_]{2,63}$"},
+    "error_summary": {"type": ["string", "null"], "maxLength": 5000},
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["duration_seconds", "paper_count", "valid_pdf_count"],
+      "properties": {
+        "duration_seconds": {"type": "number", "minimum": 0},
+        "paper_count": {"type": ["integer", "null"], "minimum": 0},
+        "valid_pdf_count": {"type": ["integer", "null"], "minimum": 0}
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "succeeded"}}},
+      "then": {
+        "properties": {
+          "error_code": {"const": null},
+          "error_summary": {"const": null}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"status": {"const": "failed"}}},
+      "then": {
+        "properties": {
+          "error_code": {"type": "string"},
+          "error_summary": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"status": {"const": "cancelled"}}},
+      "then": {
+        "properties": {
+          "error_code": {"const": null},
+          "error_summary": {"const": null}
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._:-]{2,127}$"
+    }
+  }
+}

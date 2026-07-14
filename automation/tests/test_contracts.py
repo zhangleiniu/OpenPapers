@@ -45,6 +45,7 @@ class ContractTests(unittest.TestCase):
         ContractName.NOTIFICATION_INTENT: "notification-intent.v1.json",
         ContractName.JOB: "scrape-job.v2.json",
         ContractName.JOB_QUEUE_ENVELOPE: "scrape-queue-envelope.v1.json",
+        ContractName.JOB_MANIFEST: "job-manifest.v1.json",
         ContractName.JOB_RESULT: "job-result.v1.json",
         ContractName.CODEX_RESULT: "codex-result.v1.json",
     }
@@ -61,6 +62,7 @@ class ContractTests(unittest.TestCase):
             (ContractName.VERIFICATION_REQUEST, "verification-request.v1.json"),
             (ContractName.VERIFICATION_RESULT, "verification-result.v1.json"),
             (ContractName.JOB, "scrape-job.v1.json"),
+            (ContractName.JOB_RESULT, "job-result.v2.json"),
         ):
             with self.subTest(contract=contract.value, version=1):
                 self.assertEqual(load_schema(contract, 2)["$schema"],

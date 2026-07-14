@@ -83,9 +83,12 @@ submission boundary without creating external resources. P4.2 has completed
 the fake-only Mac receiving package, secret-safe local health checks, and
 uninstalled `launchd` runbook. P4.3 has completed local locks, disk gates,
 supervision, duplicate suppression, and offline policy over injected fakes.
-Phase 4 remains `Planned`; P4.4 is the next ready package, and no worker
-installation, command execution, or result publication is authorized by
-P4.3.
+P4.4 has completed strict immutable manifests/results, create-only
+GCS-compatible publication, exact-generation reads, and lease-protected
+exactly-once logical cloud consumption using injected fakes and temporary
+state. Phase 4 remains `Planned`; P4.O is the next ready package, and no worker
+installation, command execution, external resource change, or live result
+publication is authorized by P4.4.
 
 ### P2.1R — harden verifier contract semantics
 
@@ -512,13 +515,50 @@ command/scraper/validator/Codex process, write cloud control state, publish or
 consume a P4.4 result/manifest, or perform the P4.O operational drills. The
 local completion marker is not a job result and cannot authorize a transition.
 
+### P4.4 — immutable result publication and cloud consumption
+
+Status: `Complete`
+
+Depends on: P4.3
+
+Completed boundary: strict version-1 job manifests and version-2 job results
+derive their identities from all semantic fields and bind back to one P4.1
+version-2 job. The manifest admits only closed typed artifact summaries and
+safe relative object names. The result records terminal status, bounded
+metrics, and the exact manifest ID; cross-artifact validation rejects job,
+fingerprint, time, status, secret-shaped field, and manifest drift. Version-1
+job results remain compatibility artifacts but cannot cross this boundary.
+
+`automation/job_results.py` fixes `manifests/<job-id>.json` and
+`job-results/<job-id>.json`, publishes the manifest before the result commit
+marker, and supplies `if_generation_match=0` on both injected GCS uploads.
+Failed preconditions are accepted only after an exact-generation read proves
+byte-identical canonical content; conflicts are never overwritten. A
+manifest-only partial write is safe to retry. Reads bind each download to the
+generation just observed, so object replacement cannot produce a torn pair.
+
+Control-state schema version 4 adds an append-only job-result consumption
+ledger under the existing cloud singleton lease. It retains the strict job,
+manifest, result, fixed object names, and positive generations, revalidates
+them on every read, returns a no-op for exact replay after restart, and rejects
+changed content or generation for an already-consumed job. The thin
+`automation/job_result_consumer.py` coordinator composes only the injected
+reader and repository; it applies no lifecycle transition or action.
+
+Tests use sanitized fixtures, a fake GCS bucket, and temporary SQLite files.
+P4.4 does not construct a GCS client, read credentials, create a bucket or IAM
+binding, install or connect the Mac worker, add a command/handler, interpret a
+result into conference state, change the deployed monitor, or perform P4.O
+drills. P4.3's fake completion remains separate and no live result has been
+published or consumed.
+
 | ID | Status | Depends on | Objective and completion boundary |
 |---|---|---|---|
 | P4.1 | Complete | Phase 3 gate | Immutable v2 job identity, fixed Prefect process-pool/typed-queue protocol, and injected fake-tested cloud submission boundary. No external resource or Mac change. |
 | P4.2 | Complete | P4.1 | Fake-only Mac receiving flow, bounded local health checks, isolated dependency, and credential-free `launchd` runbook/template. Nothing installed or executed. |
 | P4.3 | Complete | P4.2 | Mac-local venue/year locks, disk gates, injected-handle timeout/cancellation, completed-delivery suppression, ambiguous-claim recovery closure, and fixed Prefect pull/offline semantics. No command or result path. |
-| P4.4 | Ready | P4.3 | Immutable GCS job-result/manifest publishing and cloud result consumer with generation preconditions and exactly-once logical consumption. |
-| P4.O | Planned | P4.4 | Explicit Mac/Prefect/GCS installation and reboot, SSH-disconnect, offline-worker, and recovery drills. External resources are changed only in this operator-authorized package. |
+| P4.4 | Complete | P4.3 | Strict immutable manifest/result contracts, create-only GCS-compatible publishing, exact-generation reads, and lease-protected exactly-once logical consumption. Fake/local only; no external resource or execution. |
+| P4.O | Ready | P4.4 | Explicit Mac/Prefect/GCS installation and reboot, SSH-disconnect, offline-worker, and recovery drills. External resources are changed only in this operator-authorized package. |
 
 Code implementation, Mac installation, cloud configuration, and operational
 drills are distinct tasks even when performed by the same maintainer.

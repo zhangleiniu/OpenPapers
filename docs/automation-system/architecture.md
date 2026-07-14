@@ -4,7 +4,7 @@ This document defines the target boundaries and safety invariants. Most of the
 components described here are planned; consult [roadmap.md](./roadmap.md) and
 the executable code before assuming a component exists.
 
-## Implemented foundation and Phase 1/2.S/P3.S/P4.3 boundaries
+## Implemented foundation and Phase 1/2.S/P3.S/P4.4 boundaries
 
 Phase 0 is implemented as a side-effect-free foundation and is not yet wired
 into the deployed monitor:
@@ -321,9 +321,35 @@ command:
 
 P4.3 tests use fake handles, fake disk usage, temporary private directories,
 and child processes. The local marker is neither a job result nor a manifest
-and cannot authorize cloud state. P4.4 still owns immutable result
-publishing/consumption; P4.O owns real installation and operational drills;
-Phase 5 owns command selection and execution.
+and cannot authorize cloud state. P4.4 owns and now implements the local
+immutable result publishing/consumption boundary; P4.O owns real installation
+and operational drills; Phase 5 owns command selection and execution.
+
+P4.4 adds a strict immutable result protocol without connecting it to that
+fake worker path:
+
+- job-manifest v1 and job-result v2 derive their fingerprints from every
+  semantic field and are cross-validated against the full immutable P4.1 v2
+  job. The manifest contains only closed typed artifact summaries and safe
+  relative object names; a successful result requires at least one artifact;
+- `automation/job_results.py` uses fixed `manifests/<job-id>.json` and
+  `job-results/<job-id>.json` names over an injected GCS bucket. It creates the
+  manifest first and result second with `if_generation_match=0`, accepts a
+  failed precondition only for byte-identical canonical content, and pins
+  downloads to each observed positive generation;
+- control-state schema version 4 retains one immutable job/manifest/result
+  bundle plus exact object names and generations under the existing cloud
+  singleton lease. Exact replay survives restart as a no-op; content,
+  generation, identity, or stored-fingerprint drift fails closed; and
+- `automation/job_result_consumer.py` is a thin read-and-record coordinator.
+  Consumption is transport acknowledgement only: it does not apply a lifecycle
+  transition, emit an action, or grant promotion authority.
+
+P4.4 tests use a fake bucket and temporary SQLite databases. No code constructs
+a GCS client or reads credentials, no live object is written or read, no worker
+is installed or connected, and P4.3's fixture completion is still not a P4.4
+result. Client creation, IAM, installation, and operational drills remain P4.O;
+real manifest generation and result interpretation remain Phase 5.
 
 ## Design principles
 
@@ -512,9 +538,11 @@ Requirements:
 
 - prevent overlapping control-plane runs with a lease;
 - use GCS object-generation preconditions for mutable state upload;
-- use stable job IDs and reject an existing result object;
+- use stable job IDs and create-only generation preconditions for immutable
+  manifest/result objects;
 - never synchronize the control SQLite tree from the Mac mini;
-- have the cloud state reducer consume job results exactly once;
+- have the cloud record each strict job result exactly once before a later
+  reducer interprets it;
 - retain enough immutable input to reproduce a transition or diagnosis.
 
 Phase 0 expresses the ownership and write-once rules in
@@ -541,17 +569,22 @@ uses the same ID for a fake-tested Prefect submission idempotency key. P4.2's
 fixture flow returns no versioned job result. P4.3 stores only a private
 Mac-local active/completed safety marker keyed by that identity; it is not
 uploaded, consumed by cloud state, or validated as the job-result contract.
-GCS generation preconditions, cloud restore/upload, deployed Phase 3 delivery,
-immutable job-result storage, and job-result consumption remain future work.
+P4.4 supplies strict manifests/results, create-only GCS-compatible publishing,
+exact-generation reads, and schema-version-4 exactly-once logical consumption.
+Its bucket is injected, its tests are fake/local, and it is not wired to the
+P4.3 worker or a production flow. Mutable control-state GCS restore/upload with
+generation preconditions, deployed Phase 3 delivery, and live job-result
+publication/consumption remain future work.
 P3.S's isolated SQLite root is manual canary evidence, not a cloud state store
 or deployed migration.
 
-Schema version 3 has no deployed migration or current operator action. Valid
-local version-1 and version-2 control databases migrate on open, preserving
-verification, conference, and case data. Before any future durable operator
-database is opened by version-3 code, stop overlapping writers and take a
-backup; rollback after migration requires restoring that backup because older
-code must reject, not downgrade or delete, a newer schema.
+Schema version 4 has no deployed migration or current operator action. Valid
+local version-1, version-2, and version-3 control databases migrate on open,
+preserving verification, conference, case, and notification data. Before any
+future durable operator database is opened by version-4 code, stop overlapping
+writers and take a backup; rollback after migration requires restoring that
+backup because older code must reject, not downgrade or delete, a newer
+schema.
 
 Evaluate Firestore or PostgreSQL only after a concrete trigger: multiple
 control-plane writers, unavoidable overlapping state updates, a real-time
@@ -663,6 +696,16 @@ failure, cancellation, and timeout permit retry with the same ID; ambiguous
 claims block every job for their venue/year, and unconfirmed stops return
 `recovery_required` and are never reclaimed by age. These observations and
 markers are not P4.4 results.
+
+P4.4 accepts only the full immutable v2 job plus its strict derived manifest
+and v2 result; it is not callable from the fixture flow or P4.3 supervisor.
+The Mac-owned publisher creates the manifest before the result commit marker
+at fixed names with generation-match-zero. The cloud reader binds downloads to
+the generations it observed, then the cloud-only repository records that exact
+pair under its lease. Deleting/recreating an object changes its generation and
+therefore conflicts with an earlier consumption even when bytes match. A
+result consumption is not a conference transition and cannot authorize data
+promotion.
 
 Prefect remains authoritative for queued work. Because its future worker pulls
 runs, an offline Mac receives no envelope and creates no local state; queued

@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "job_id": "job:0b62469fd5fec963e7d27f48d763cb3cd5347a48c604702d49896a3317f90072",
+  "job_fingerprint": "0b62469fd5fec963e7d27f48d763cb3cd5347a48c604702d49896a3317f90072",
+  "job_type": "scrape_existing",
+  "venue_id": "icml",
+  "year": 2026,
+  "created_at": "2026-07-13T14:00:00Z",
+  "artifacts": [
+    {
+      "artifact_id": "artifact:icml:2026:staging",
+      "artifact_kind": "staging_dataset",
+      "object_name": "artifacts/icml/2026/staging.tar.zst",
+      "content_fingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "size_bytes": 12345
+    }
+  ],
+  "manifest_id": "manifest:2bad2a3af0ef9c1565d5f1638646a32e64d170e8da0a887d1c1b3ba1a2ff239e",
+  "manifest_fingerprint": "2bad2a3af0ef9c1565d5f1638646a32e64d170e8da0a887d1c1b3ba1a2ff239e"
+}

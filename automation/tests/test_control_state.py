@@ -14,12 +14,14 @@ from automation.control_state import (
     LeaseHandle,
     LeaseConflictError,
     LeaseLostError,
+    JobResultConsumptionConflictError,
     SchemaMigrationError,
     StateRevisionConflictError,
     StoredDataError,
     VerificationReplayConflictError,
     _MIGRATION_1,
     _MIGRATION_2,
+    _MIGRATION_3,
 )
 from automation.cases import CaseObservation, case_event_payload, observe_case
 from automation.contracts import artifact_fingerprint
@@ -28,6 +30,7 @@ from automation.verification import VerificationError, build_verification_result
 
 
 FIXTURES = Path(__file__).with_name("fixtures")
+PHASE4_FIXTURES = FIXTURES / "phase4"
 MODULE = Path(__file__).resolve().parents[1] / "control_state.py"
 NOW = datetime(2026, 7, 13, 20, 30, tzinfo=timezone.utc)
 
@@ -58,6 +61,17 @@ def conference_state():
     return load_json(FIXTURES / "phase0" / "conference-state.v1.json")
 
 
+def job_result_bundle():
+    return tuple(
+        load_json(PHASE4_FIXTURES / name)
+        for name in (
+            "scrape-job.v2.json",
+            "job-manifest.v1.json",
+            "job-result.v2.json",
+        )
+    )
+
+
 def canonical_json(payload):
     return json.dumps(
         payload,
@@ -77,7 +91,7 @@ class SchemaAndBoundaryTests(unittest.TestCase):
                 versions = repository._connection.execute(
                     "SELECT version FROM schema_migrations"
                 ).fetchall()
-                self.assertEqual([row[0] for row in versions], [1, 2, 3])
+                self.assertEqual([row[0] for row in versions], [1, 2, 3, 4])
 
             with ControlStateRepository(path) as reopened:
                 self.assertEqual(reopened.schema_version, CONTROL_SCHEMA_VERSION)
@@ -116,7 +130,7 @@ class SchemaAndBoundaryTests(unittest.TestCase):
             connection.close()
 
             with ControlStateRepository(path, clock=MutableClock()) as repository:
-                self.assertEqual(repository.schema_version, 3)
+                self.assertEqual(repository.schema_version, 4)
                 self.assertEqual(
                     repository.get_conference_state("icml", 2026).state, state
                 )
@@ -124,7 +138,7 @@ class SchemaAndBoundaryTests(unittest.TestCase):
                 versions = repository._connection.execute(
                     "SELECT version FROM schema_migrations ORDER BY version"
                 ).fetchall()
-                self.assertEqual([row[0] for row in versions], [1, 2, 3])
+                self.assertEqual([row[0] for row in versions], [1, 2, 3, 4])
 
     def test_valid_version_two_database_migrates_without_losing_cases(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -192,13 +206,39 @@ class SchemaAndBoundaryTests(unittest.TestCase):
             connection.close()
 
             with ControlStateRepository(path, clock=MutableClock()) as repository:
-                self.assertEqual(repository.schema_version, 3)
+                self.assertEqual(repository.schema_version, 4)
                 self.assertEqual(repository.get_case(state["case_id"]).state, state)
                 self.assertEqual(repository.get_notification("missing"), None)
                 versions = repository._connection.execute(
                     "SELECT version FROM schema_migrations ORDER BY version"
                 ).fetchall()
-                self.assertEqual([row[0] for row in versions], [1, 2, 3])
+                self.assertEqual([row[0] for row in versions], [1, 2, 3, 4])
+
+    def test_valid_version_three_database_migrates_additive_result_ledger(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "state.sqlite3"
+            connection = sqlite3.connect(path)
+            for statement in (*_MIGRATION_1, *_MIGRATION_2, *_MIGRATION_3):
+                connection.execute(statement)
+            connection.executemany(
+                "INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)",
+                (
+                    (1, "2026-07-13T20:30:00Z"),
+                    (2, "2026-07-13T21:30:00Z"),
+                    (3, "2026-07-13T22:30:00Z"),
+                ),
+            )
+            connection.execute("PRAGMA user_version = 3")
+            connection.commit()
+            connection.close()
+
+            with ControlStateRepository(path, clock=MutableClock()) as repository:
+                self.assertEqual(repository.schema_version, 4)
+                self.assertEqual(repository.replay_job_result_consumptions(), ())
+                versions = repository._connection.execute(
+                    "SELECT version FROM schema_migrations ORDER BY version"
+                ).fetchall()
+                self.assertEqual([row[0] for row in versions], [1, 2, 3, 4])
 
     def test_unrecognized_and_future_databases_fail_without_mutation(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -467,6 +507,100 @@ class VerificationHistoryTests(unittest.TestCase):
                 )
                 with self.assertRaisesRegex(StoredDataError, "fingerprint"):
                     store.replay_verifications()
+
+
+class JobResultConsumptionTests(unittest.TestCase):
+    def consume(self, store, lease, *, generations=(7, 11), consumed_at=NOW):
+        job, manifest, result = job_result_bundle()
+        return store.consume_job_result(
+            job,
+            manifest,
+            result,
+            manifest_name=f"manifests/{job['job_id']}.json",
+            manifest_generation=generations[0],
+            result_name=f"job-results/{job['job_id']}.json",
+            result_generation=generations[1],
+            lease=lease,
+            consumed_at=consumed_at,
+        )
+
+    def test_exact_replay_is_one_logical_consumption_and_survives_reopen(self):
+        job, _, _ = job_result_bundle()
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "state.sqlite3"
+            with ControlStateRepository(path, clock=MutableClock()) as store:
+                lease = store.acquire_lease("result-consumer")
+                first = self.consume(store, lease)
+                replay = self.consume(
+                    store, lease, consumed_at=NOW + timedelta(seconds=30)
+                )
+                self.assertTrue(first.applied)
+                self.assertFalse(replay.applied)
+                self.assertEqual(first.record, replay.record)
+                self.assertEqual(first.record.consumed_at, "2026-07-13T20:30:00Z")
+
+            with ControlStateRepository(path) as reopened:
+                records = reopened.replay_job_result_consumptions()
+                self.assertEqual(len(records), 1)
+                self.assertEqual(records[0].job_id, job["job_id"])
+                self.assertEqual(
+                    reopened.get_job_result_consumption(job["job_id"]), records[0]
+                )
+                records[0].manifest["artifacts"].clear()
+                self.assertEqual(
+                    len(reopened.get_job_result_consumption(
+                        job["job_id"]
+                    ).manifest["artifacts"]),
+                    1,
+                )
+
+    def test_lease_generation_name_and_conflicting_replay_fail_closed(self):
+        job, manifest, result = job_result_bundle()
+        with tempfile.TemporaryDirectory() as directory:
+            clock = MutableClock()
+            with ControlStateRepository(
+                Path(directory) / "state.sqlite3", clock=clock
+            ) as store:
+                lease = store.acquire_lease("result-consumer", ttl_seconds=10)
+                with self.assertRaisesRegex(ControlStateError, "manifest object"):
+                    store.consume_job_result(
+                        job,
+                        manifest,
+                        result,
+                        manifest_name="manifests/wrong.json",
+                        manifest_generation=1,
+                        result_name=f"job-results/{job['job_id']}.json",
+                        result_generation=1,
+                        lease=lease,
+                        consumed_at=NOW,
+                    )
+                with self.assertRaisesRegex(ControlStateError, "positive"):
+                    self.consume(store, lease, generations=(0, 1))
+                self.assertTrue(self.consume(store, lease).applied)
+                with self.assertRaises(JobResultConsumptionConflictError):
+                    self.consume(store, lease, generations=(7, 12))
+                clock.advance(seconds=10)
+                with self.assertRaises(LeaseLostError):
+                    self.consume(store, lease)
+                self.assertEqual(len(store.replay_job_result_consumptions()), 1)
+
+    def test_stored_corruption_is_rejected_on_get_and_replay(self):
+        job, _, _ = job_result_bundle()
+        with tempfile.TemporaryDirectory() as directory:
+            with ControlStateRepository(
+                Path(directory) / "state.sqlite3", clock=MutableClock()
+            ) as store:
+                lease = store.acquire_lease("result-consumer")
+                self.consume(store, lease)
+                store._connection.execute(
+                    "UPDATE job_result_consumption "
+                    "SET result_payload_fingerprint = ? WHERE job_id = ?",
+                    ("f" * 64, job["job_id"]),
+                )
+                with self.assertRaisesRegex(StoredDataError, "fingerprint"):
+                    store.get_job_result_consumption(job["job_id"])
+                with self.assertRaisesRegex(StoredDataError, "fingerprint"):
+                    store.replay_job_result_consumptions()
 
 
 class ConferenceStateTests(unittest.TestCase):

@@ -32,6 +32,11 @@ from automation.domain import (
     assert_secret_free,
     assert_writer_allowed,
 )
+from automation.job_results import (
+    manifest_object_name,
+    result_object_name,
+    validate_result_bundle,
+)
 from automation.notifications import (
     FailureCategory,
     NotificationIntent,
@@ -44,7 +49,7 @@ from automation.notifications import (
 from automation.verification import validate_verification_result
 
 
-CONTROL_SCHEMA_VERSION = 3
+CONTROL_SCHEMA_VERSION = 4
 DEFAULT_LEASE_TTL_SECONDS = 300
 MAX_LEASE_TTL_SECONDS = 86_400
 _CONTROL_LEASE_NAME = "control-state"
@@ -84,6 +89,10 @@ class NotificationIntentConflictError(ControlStateError):
 
 class NotificationDeliveryStateError(ControlStateError):
     """Raised when a notification attempt violates its state machine."""
+
+
+class JobResultConsumptionConflictError(ControlStateError):
+    """Raised when one job ID is reused with different result semantics."""
 
 
 class StoredDataError(ControlStateError):
@@ -208,6 +217,34 @@ class NotificationAttemptRecord:
     outcome: str
     failure_category: str | None
     receipt_id: str | None
+
+
+@dataclass(frozen=True)
+class JobResultConsumptionRecord:
+    """One immutable, fully revalidated cloud consumption record."""
+
+    sequence: int
+    job_id: str
+    job_fingerprint: str
+    job_type: str
+    venue_id: str
+    year: int
+    consumed_at: str
+    manifest_object_name: str
+    manifest_generation: int
+    result_object_name: str
+    result_generation: int
+    job: dict[str, Any]
+    manifest: dict[str, Any]
+    result: dict[str, Any]
+
+
+@dataclass(frozen=True)
+class JobResultConsumptionOutcome:
+    """Outcome of accepting a result pair under the cloud writer lease."""
+
+    record: JobResultConsumptionRecord
+    applied: bool
 
 
 _MIGRATION_1 = (
@@ -388,10 +425,41 @@ _MIGRATION_3 = (
     """,
 )
 
+_MIGRATION_4 = (
+    """
+    CREATE TABLE job_result_consumption (
+        sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+        job_id TEXT NOT NULL UNIQUE,
+        job_fingerprint TEXT NOT NULL,
+        job_type TEXT NOT NULL,
+        venue_id TEXT NOT NULL,
+        year INTEGER NOT NULL,
+        consumed_at TEXT NOT NULL,
+        manifest_object_name TEXT NOT NULL,
+        manifest_generation INTEGER NOT NULL,
+        result_object_name TEXT NOT NULL,
+        result_generation INTEGER NOT NULL,
+        job_payload_fingerprint TEXT NOT NULL,
+        manifest_payload_fingerprint TEXT NOT NULL,
+        result_payload_fingerprint TEXT NOT NULL,
+        job_json TEXT NOT NULL,
+        manifest_json TEXT NOT NULL,
+        result_json TEXT NOT NULL,
+        CHECK (manifest_generation >= 1),
+        CHECK (result_generation >= 1)
+    )
+    """,
+    """
+    CREATE INDEX job_result_consumption_venue_year_sequence
+    ON job_result_consumption (venue_id, year, sequence)
+    """,
+)
+
 _MIGRATIONS = {
     1: _MIGRATION_1,
     2: _MIGRATION_2,
     3: _MIGRATION_3,
+    4: _MIGRATION_4,
 }
 
 _REQUIRED_COLUMNS_V1 = {
@@ -444,10 +512,22 @@ _REQUIRED_COLUMNS_V3 = {
     },
 }
 
+_REQUIRED_COLUMNS_V4 = {
+    "job_result_consumption": {
+        "sequence", "job_id", "job_fingerprint", "job_type", "venue_id",
+        "year", "consumed_at", "manifest_object_name",
+        "manifest_generation", "result_object_name", "result_generation",
+        "job_payload_fingerprint", "manifest_payload_fingerprint",
+        "result_payload_fingerprint", "job_json", "manifest_json",
+        "result_json",
+    },
+}
+
 _REQUIRED_COLUMNS_BY_VERSION = {
     1: _REQUIRED_COLUMNS_V1,
     2: _REQUIRED_COLUMNS_V2,
     3: _REQUIRED_COLUMNS_V3,
+    4: _REQUIRED_COLUMNS_V4,
 }
 
 
@@ -481,6 +561,12 @@ def _parse_timestamp(value: datetime | str, *, field: str) -> datetime:
 
 def _timestamp(value: datetime | str, *, field: str) -> str:
     return _parse_timestamp(value, field=field).isoformat().replace("+00:00", "Z")
+
+
+def _positive_generation(value: Any, *, field: str) -> int:
+    if not isinstance(value, int) or isinstance(value, bool) or value < 1:
+        raise ControlStateError(f"{field} must be a positive integer")
+    return value
 
 
 def _validate_ttl(ttl_seconds: int) -> None:
@@ -893,6 +979,199 @@ class ControlStateRepository:
             received_at=received_at,
             discovery=deepcopy(discovery),
             request=deepcopy(request),
+            result=deepcopy(result),
+        )
+
+    def consume_job_result(
+        self,
+        job: Mapping[str, Any],
+        manifest: Mapping[str, Any],
+        result: Mapping[str, Any],
+        *,
+        manifest_name: str,
+        manifest_generation: int,
+        result_name: str,
+        result_generation: int,
+        lease: LeaseHandle,
+        consumed_at: datetime | str,
+    ) -> JobResultConsumptionOutcome:
+        """Record one validated immutable pair; exact replay is a no-op."""
+        assert_secret_free(job)
+        assert_secret_free(manifest)
+        assert_secret_free(result)
+        validate_result_bundle(job, manifest, result)
+        if manifest_name != manifest_object_name(job["job_id"]):
+            raise ControlStateError("manifest object name does not match the job ID")
+        if result_name != result_object_name(job["job_id"]):
+            raise ControlStateError("result object name does not match the job ID")
+        manifest_generation = _positive_generation(
+            manifest_generation, field="manifest generation"
+        )
+        result_generation = _positive_generation(
+            result_generation, field="result generation"
+        )
+        consumed_text = _timestamp(consumed_at, field="result consumed_at")
+        job_json = _canonical_json(job)
+        manifest_json = _canonical_json(manifest)
+        result_json = _canonical_json(result)
+        payload_fingerprints = (
+            artifact_fingerprint(job),
+            artifact_fingerprint(manifest),
+            artifact_fingerprint(result),
+        )
+        with self._write_transaction() as connection:
+            self._require_lease(connection, lease, self._now())
+            existing = connection.execute(
+                "SELECT * FROM job_result_consumption WHERE job_id = ?",
+                (job["job_id"],),
+            ).fetchone()
+            if existing is not None:
+                record = self._job_result_consumption_from_row(existing)
+                replay_identity = (
+                    record.manifest_object_name,
+                    record.manifest_generation,
+                    record.result_object_name,
+                    record.result_generation,
+                    record.job,
+                    record.manifest,
+                    record.result,
+                )
+                supplied_identity = (
+                    manifest_name,
+                    manifest_generation,
+                    result_name,
+                    result_generation,
+                    dict(job),
+                    dict(manifest),
+                    dict(result),
+                )
+                if replay_identity != supplied_identity:
+                    raise JobResultConsumptionConflictError(
+                        "job result was already consumed with different content "
+                        "or object generation"
+                    )
+                return JobResultConsumptionOutcome(record=record, applied=False)
+            connection.execute(
+                """
+                INSERT INTO job_result_consumption (
+                    job_id, job_fingerprint, job_type, venue_id, year,
+                    consumed_at, manifest_object_name, manifest_generation,
+                    result_object_name, result_generation,
+                    job_payload_fingerprint, manifest_payload_fingerprint,
+                    result_payload_fingerprint, job_json, manifest_json,
+                    result_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    job["job_id"], job["job_fingerprint"], job["job_type"],
+                    job["venue_id"], job["year"], consumed_text,
+                    manifest_name, manifest_generation, result_name,
+                    result_generation, *payload_fingerprints, job_json,
+                    manifest_json, result_json,
+                ),
+            )
+            row = connection.execute(
+                "SELECT * FROM job_result_consumption WHERE job_id = ?",
+                (job["job_id"],),
+            ).fetchone()
+            if row is None:
+                raise StoredDataError("stored job-result consumption is missing")
+            record = self._job_result_consumption_from_row(row)
+        return JobResultConsumptionOutcome(record=record, applied=True)
+
+    def get_job_result_consumption(
+        self,
+        job_id: str,
+    ) -> JobResultConsumptionRecord | None:
+        """Return one fully revalidated immutable consumption record."""
+        row = self._connection.execute(
+            "SELECT * FROM job_result_consumption WHERE job_id = ?", (job_id,)
+        ).fetchone()
+        return self._job_result_consumption_from_row(row) if row is not None else None
+
+    def replay_job_result_consumptions(
+        self,
+        *,
+        venue_id: str | None = None,
+        year: int | None = None,
+    ) -> tuple[JobResultConsumptionRecord, ...]:
+        """Return validated consumption history in stable insertion order."""
+        if (venue_id is None) != (year is None):
+            raise ControlStateError("result replay filters need venue and year")
+        if venue_id is None:
+            rows = self._connection.execute(
+                "SELECT * FROM job_result_consumption ORDER BY sequence"
+            ).fetchall()
+        else:
+            rows = self._connection.execute(
+                "SELECT * FROM job_result_consumption "
+                "WHERE venue_id = ? AND year = ? ORDER BY sequence",
+                (venue_id, year),
+            ).fetchall()
+        return tuple(self._job_result_consumption_from_row(row) for row in rows)
+
+    def _job_result_consumption_from_row(
+        self,
+        row: sqlite3.Row,
+    ) -> JobResultConsumptionRecord:
+        consumed_at = _timestamp(
+            str(row["consumed_at"]), field="stored result consumed_at"
+        )
+        sequence = int(row["sequence"])
+        manifest_generation = int(row["manifest_generation"])
+        result_generation = int(row["result_generation"])
+        if consumed_at != row["consumed_at"] or sequence < 1:
+            raise StoredDataError("stored result sequence or timestamp is invalid")
+        if manifest_generation < 1 or result_generation < 1:
+            raise StoredDataError("stored result object generation is invalid")
+        job = _decode_json(row["job_json"], label="consumed job")
+        manifest = _decode_json(row["manifest_json"], label="consumed manifest")
+        result = _decode_json(row["result_json"], label="consumed result")
+        for payload, column, label in (
+            (job, "job_payload_fingerprint", "consumed job"),
+            (manifest, "manifest_payload_fingerprint", "consumed manifest"),
+            (result, "result_payload_fingerprint", "consumed result"),
+        ):
+            if artifact_fingerprint(payload) != row[column]:
+                raise StoredDataError(f"stored {label} fingerprint does not match")
+        try:
+            expected_names = (
+                manifest_object_name(job.get("job_id")),
+                result_object_name(job.get("job_id")),
+            )
+        except Exception as exc:
+            raise StoredDataError("stored job ID cannot derive object names") from exc
+        stored_identity = (
+            row["job_id"], row["job_fingerprint"], row["job_type"],
+            row["venue_id"], row["year"], row["manifest_object_name"],
+            row["result_object_name"],
+        )
+        payload_identity = (
+            job.get("job_id"), job.get("job_fingerprint"), job.get("job_type"),
+            job.get("venue_id"), job.get("year"), *expected_names,
+        )
+        if stored_identity != payload_identity:
+            raise StoredDataError("stored job-result identity columns do not match")
+        try:
+            validate_result_bundle(job, manifest, result)
+        except Exception as exc:
+            raise StoredDataError(
+                f"stored job-result bundle is not replayable: {exc}"
+            ) from exc
+        return JobResultConsumptionRecord(
+            sequence=sequence,
+            job_id=str(row["job_id"]),
+            job_fingerprint=str(row["job_fingerprint"]),
+            job_type=str(row["job_type"]),
+            venue_id=str(row["venue_id"]),
+            year=int(row["year"]),
+            consumed_at=consumed_at,
+            manifest_object_name=str(row["manifest_object_name"]),
+            manifest_generation=manifest_generation,
+            result_object_name=str(row["result_object_name"]),
+            result_generation=result_generation,
+            job=deepcopy(job),
+            manifest=deepcopy(manifest),
             result=deepcopy(result),
         )
 

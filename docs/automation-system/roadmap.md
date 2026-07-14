@@ -448,11 +448,30 @@ Accepted P4.3 local execution-safety semantics:
   no local buffer, expiry, resubmission, or replacement identity. Tests use
   temporary roots, fake disk/handles, and child processes only.
 
-Phase 4 remains `Planned`: P4.1-P4.3 are unconnected local interfaces. No Mac
+Accepted P4.4 immutable result protocol:
+
+- strict job-manifest v1 and job-result v2 contracts derive their own
+  fingerprints and bind job type, venue/year, and artifact/result semantics to
+  one immutable P4.1 v2 job. Retained job-result v1 artifacts remain schema
+  compatible but cannot cross the P4.4 boundary;
+- an injected GCS bucket adapter writes the manifest before the result commit
+  marker and uses create-only generation-match-zero preconditions for both.
+  Exact canonical replay is accepted, conflicting bytes are never overwritten,
+  and reads pin downloads to the observed object generation;
+- control-state schema version 4 adds a cloud-only, lease-protected immutable
+  consumption ledger. Exact job/manifest/result/name/generation replay is a
+  durable no-op, while drift or stored corruption fails closed; and
+- a thin local consumer composes exact-generation reads with that ledger but
+  applies no lifecycle transition or action. Sanitized fixtures, a fake bucket,
+  and temporary databases cover partial publication, restart replay, lease
+  loss, migration, generation conflict, and corruption without live GCS.
+
+Phase 4 remains `Planned`: P4.1-P4.4 are unconnected local interfaces. No Mac
 worker was installed, logged in, loaded, started, or operationally checked, and
 P4.3 selects or runs no command. Reboot/SSH/offline behavior in a real Prefect
-run, immutable result/manifests, cloud result consumption, and stable result
-artifacts remain unmet acceptance criteria.
+run, Prefect log visibility, and stable live result artifacts remain unmet
+acceptance criteria. P4.4 constructed no GCS client or resource and published
+or consumed no live result; those installation and drill steps belong to P4.O.
 
 ## Phase 5: execute existing scrapers
 

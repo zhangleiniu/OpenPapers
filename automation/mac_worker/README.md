@@ -1,12 +1,14 @@
 # Mac worker package and launchd runbook
 
 This directory contains the P4.2 Mac-side foundation and P4.3 local safety
-semantics. It is not an installed worker and is not connected to Prefect Cloud,
+semantics. P4.4's immutable publisher is implemented separately in
+`automation/job_results.py` and is not connected to this fixture flow or
+supervisor. Nothing here is an installed worker or connected to Prefect Cloud,
 GCP, the deployed monitor, production scheduling, or an executable
-scraper/Codex path. Its Prefect flow only validates typed queue envelopes and
-returns a `simulated` fixture observation. The P4.3 supervisor is exercised
-only with injected fake handles; actual Mac installation and operational
-drills belong to P4.O and require separate operator authorization.
+scraper/Codex path. The flow only validates typed queue envelopes and returns a
+`simulated` fixture observation. The P4.3 supervisor is exercised only with
+injected fake handles; actual Mac installation, GCS client/credential wiring,
+and operational drills belong to P4.O and require separate authorization.
 
 ## Package boundary
 
@@ -70,7 +72,7 @@ real reboot, SSH-disconnect, offline visibility, and recovery behavior.
 
 ## Future P4.O installation procedure
 
-Do not perform this section as part of P4.2 or P4.3. P4.O must separately
+Do not perform this section as part of P4.2, P4.3, or P4.4. P4.O must separately
 authorize the Mac/Prefect/GCS changes and record the resulting reboot,
 SSH-disconnect, offline-worker, and recovery drills.
 
@@ -82,6 +84,12 @@ SSH-disconnect, offline-worker, and recovery drills.
    ```bash
    .venv/bin/python -m pip install -r automation/mac_worker/requirements.txt
    ```
+
+   P4.4 deliberately did not add a Mac GCS client dependency. Before live
+   result publication, P4.O must review and add the minimum approved client to
+   this isolated dependency set, configure least-privilege create/get access to
+   only the dedicated manifest/result prefixes, and record the rollback. Do not
+   grant access to the cloud-owned control SQLite object or tree.
 
 2. Select the intended Prefect profile and perform its interactive login as
    the worker account. Keep the API key in the Prefect profile or approved
@@ -146,9 +154,13 @@ plist, re-run `plutil -lint`, and bootstrap it only after determining that the
 old version is still compatible with the configured Prefect resources. If the
 worker is offline, leave queued work in Prefect; do not recreate jobs with new
 IDs or manually mark them complete. P4.3 leaves ambiguous claims closed for
-review, and P4.4 will define immutable result recovery. Never repair an offline
-worker by editing the cloud-owned SQLite database from the Mac.
+review. P4.4 permits retrying a manifest-only partial publication under the
+same fixed names and accepts only byte-identical result replay; a conflicting
+object or previously consumed different generation requires operator review
+and must never be overwritten. Never repair an offline worker by editing the
+cloud-owned SQLite database from the Mac.
 
-P4.2/P4.3 require no current rollback or runtime action: no plist was loaded,
+P4.2-P4.4 require no current rollback or runtime action: no plist was loaded,
 no profile was changed, no worker was started, no P4.3 journal was created by
-an operator, and no external resource exists because of these packages.
+an operator, no live manifest/result was written or consumed, and no external
+resource exists because of these packages.

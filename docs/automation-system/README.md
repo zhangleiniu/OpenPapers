@@ -202,9 +202,9 @@ Phase 3 is `Shadow`: P3.S is manual and isolated, and no Phase 3 component is
 scheduled, deployed, connected to P3.4 output, or authorized to act on
 production state.
 
-P4.1's execution-queue foundation, P4.2's fake-only Mac package, and P4.3's
-local safety supervisor are implemented locally and are not wired into the
-deployed monitor:
+P4.1's execution-queue foundation, P4.2's fake-only Mac package, P4.3's local
+safety supervisor, and P4.4's immutable result protocol are implemented
+locally and are not wired into the deployed monitor:
 
 - version 2 typed jobs derive a full SHA-256 job ID from their request,
   venue/year, type, requester, input artifacts, and closed payload while
@@ -228,11 +228,18 @@ deployed monitor:
   completion suppresses exact replay, while any ambiguous active claim blocks
   another job for that venue/year. Its fixed offline policy leaves undelivered
   work in the Prefect pull queue and creates no local queue copy.
+- `automation/job_results.py` adds strict job-manifest v1 and job-result v2
+  semantics, fixed create-only GCS-compatible object names/writes, and
+  exact-generation reads over an injected bucket. Control-state schema version
+  4 records one lease-protected logical consumption, and
+  `automation/job_result_consumer.py` is the thin composition boundary. Tests
+  use a fake bucket and temporary database only.
 
-Phase 4 remains `Planned`. P4.1-P4.3 establish contracts and fake-tested local
-safety behavior, not an operational execution plane. No command is selected or
-run, no immutable result is published, and no worker or Prefect resource is
-installed or connected.
+Phase 4 remains `Planned`. P4.1-P4.4 establish contracts and fake-tested local
+safety/result behavior, not an operational execution plane. No command is
+selected or run, no live immutable result is published or consumed, and no GCS
+client/resource, worker, or Prefect resource is installed or connected. P4.O
+is the next ready package and requires explicit operator authorization.
 
 The following does **not** exist yet:
 

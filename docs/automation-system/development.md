@@ -482,10 +482,34 @@ result, artifact, configured path, or raw exception.
 
 Offline semantics are a fixed Prefect pull policy: no delivered envelope means
 no local state, local queue, TTL, resubmission, or replacement job ID. This is
-not evidence of a live worker or visible real queue. P4.4 owns immutable
-result/manifest publication and cloud consumption; P4.O owns installation and
-reboot/SSH/offline/recovery drills; Phase 5 owns all command selection and
-execution. P4.4 is the next package.
+not evidence of a live worker or visible real queue.
+
+The P4.4 immutable result and cloud-consumption checks are:
+
+```bash
+python -m unittest automation.tests.test_job_results -v
+python -m unittest automation.tests.test_control_state -v
+python -m unittest automation.tests.test_contracts -v
+python -m unittest automation.tests.test_job_queue -v
+```
+
+`automation/job_results.py` cross-validates strict manifest/result identities
+against the full P4.1 v2 job. Its injected bucket adapter writes the manifest
+before the result with `if_generation_match=0`, accepts only byte-identical
+replay after a failed precondition, and pins reads to observed generations.
+Control-state schema version 4 stores one exact pair under the cloud lease;
+`automation/job_result_consumer.py` only composes the read and record steps.
+Tests use a fake bucket and temporary SQLite database and cover partial-write
+recovery, conflict, generation drift, migration, restart replay, lease loss,
+and corruption.
+
+P4.4 constructs no GCS client, reads no credential, changes no external
+resource, connects no worker, and applies no result to lifecycle state. Before
+opening any future durable control database with schema-v4 code, stop
+overlapping writers and take a backup; rollback requires restoring that backup.
+P4.O owns client/credential/IAM installation plus reboot, SSH, offline, and
+recovery drills. Phase 5 owns command selection, execution, real manifest
+generation, and result interpretation. P4.O is the next package.
 
 Scheduling tests use an injected timezone-aware clock. Keep venue catalogs free
 of year-specific month/date assumptions; discovery records candidates, a

@@ -1,0 +1,20 @@
+{
+  "schema_version": 2,
+  "job_id": "job:0b62469fd5fec963e7d27f48d763cb3cd5347a48c604702d49896a3317f90072",
+  "job_fingerprint": "0b62469fd5fec963e7d27f48d763cb3cd5347a48c604702d49896a3317f90072",
+  "job_type": "scrape_existing",
+  "venue_id": "icml",
+  "year": 2026,
+  "worker_id": "worker:mac-mini:fixture",
+  "completed_at": "2026-07-13T14:02:00Z",
+  "status": "succeeded",
+  "manifest_id": "manifest:2bad2a3af0ef9c1565d5f1638646a32e64d170e8da0a887d1c1b3ba1a2ff239e",
+  "error_code": null,
+  "error_summary": null,
+  "metrics": {
+    "duration_seconds": 120.0,
+    "paper_count": 100,
+    "valid_pdf_count": 100
+  },
+  "result_fingerprint": "91cc528994a9f972dcb16d767011b0c497de0379210f63e74082586ee11562d3"
+}
