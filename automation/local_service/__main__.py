@@ -1,4 +1,4 @@
-"""Uninstalled P4.L3 service command; no concrete effect is configured."""
+"""One-shot local service command with explicit shadow/production modes."""
 
 from __future__ import annotations
 
@@ -17,6 +17,7 @@ from automation.local_service.service import (
     run_local_service_once,
 )
 from automation.local_service.shadow import IsolatedSchedulerShadowEffect
+from automation.local_service.production import ProductionMonitorEffect
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -34,6 +35,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--isolated-shadow",
         action="store_true",
         help="run only the marker-gated local due-work scheduler",
+    )
+    parser.add_argument(
+        "--production-control",
+        action="store_true",
+        help="run the marker-gated production monitor and local scheduler",
     )
     return parser
 
@@ -56,11 +62,18 @@ def main(
         schedule_minute=args.schedule_minute,
         record_limit=args.record_limit,
     )
-    if args.isolated_shadow and effect is not None:
-        raise ValueError("an injected effect cannot replace isolated shadow mode")
-    resolved_effect = (
-        IsolatedSchedulerShadowEffect() if args.isolated_shadow else effect
-    )
+    if args.isolated_shadow and args.production_control:
+        raise ValueError("local service modes are mutually exclusive")
+    if (args.isolated_shadow or args.production_control) and effect is not None:
+        raise ValueError("an injected effect cannot replace a concrete service mode")
+    if args.isolated_shadow:
+        resolved_effect = IsolatedSchedulerShadowEffect()
+    elif args.production_control:
+        resolved_effect = ProductionMonitorEffect(
+            repository_root=args.repository_root
+        )
+    else:
+        resolved_effect = effect
     report = run_local_service_once(
         config,
         effect=resolved_effect,

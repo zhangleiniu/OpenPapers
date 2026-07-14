@@ -1,4 +1,4 @@
-"""Uninstalled P4.L3 credential-free local service package."""
+"""Headless local control service, including the P4.LC production boundary."""
 
 from automation.local_service.launchd import (
     LAUNCHDAEMON_ROOT,
@@ -6,6 +6,19 @@ from automation.local_service.launchd import (
     build_rollback_scope,
     render_launchdaemon,
     render_isolated_shadow_launchdaemon,
+    render_production_launchdaemon,
+)
+from automation.local_service.production import (
+    PRODUCTION_CONFIG,
+    PRODUCTION_MARKER,
+    PRODUCTION_SECRETS,
+    ProductionConfiguration,
+    ProductionControlError,
+    ProductionMonitorEffect,
+    ProductionSecrets,
+    SmtpSourceNotifier,
+    initialize_production_root,
+    validate_production_root,
 )
 from automation.local_service.service import (
     LOCAL_SERVICE_LABEL,
@@ -56,6 +69,14 @@ __all__ = [
     "LocalServiceRunReport",
     "LocalServiceRunStatus",
     "LocalWakeupEffect",
+    "PRODUCTION_CONFIG",
+    "PRODUCTION_MARKER",
+    "PRODUCTION_SECRETS",
+    "ProductionConfiguration",
+    "ProductionControlError",
+    "ProductionMonitorEffect",
+    "ProductionSecrets",
+    "SmtpSourceNotifier",
     "VolumeAvailabilityProbe",
     "build_rollback_scope",
     "collect_local_service_health",
@@ -63,7 +84,10 @@ __all__ = [
     "isolated_shadow_marker_path",
     "render_launchdaemon",
     "render_isolated_shadow_launchdaemon",
+    "render_production_launchdaemon",
     "run_local_service_once",
     "scheduled_slot",
     "validate_isolated_shadow_root",
+    "initialize_production_root",
+    "validate_production_root",
 ]

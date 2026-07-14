@@ -12,12 +12,12 @@ phase-level outcomes and status.
 
 | Phase | Scope | Status |
 |---|---|---|
-| Existing baseline | Deterministic monitor, Cloud Run/Prefect/GCS, email | Implemented |
+| Existing baseline | Deterministic monitor, local LaunchDaemon/SQLite, email; paused Cloud Run rollback | Implemented |
 | 0 | Contracts, policies, ownership, and safety boundaries | Implemented |
 | 1 | LLM search discovery in shadow mode | Shadow (15-venue live review, 2026-07-13) |
 | 2 | Evidence verification and lifecycle state | Shadow (P2.S 15-venue live review, 2026-07-13) |
 | 3 | Cases and fatigue-resistant notifications | Shadow (P3.S one-delivery canary, 2026-07-13) |
-| 4 | Local Mac scheduler, execution safety, and immutable results | Planned (isolated host shadow passed, 2026-07-14) |
+| 4 | Local Mac scheduler, execution safety, and immutable results | Implemented (single-writer cutover and timed rollback, 2026-07-14) |
 | 5 | Automatic execution of existing scrapers | Planned |
 | 6 | Budgeted Codex diagnosis and repair proposals | Planned |
 | 7 | Dataset promotion and MustCite deployment | Planned |
@@ -534,9 +534,22 @@ Accepted P4.LS isolated host shadow and drills:
   the private co-resident health check with all five expected labels. The cloud
   monitor remained authoritative throughout.
 
-Phase 4 remains `Planned`: P4.1-P4.4 and P4.L1-P4.L3 remain local/fake-only
-interfaces or packaging, while P4.LS is an installed scheduler-only shadow.
-No Mac execution service selects or runs a command. P4.O's Prefect
+P4.LC completed the production boundary:
+
+- a strict private marker binds the local configuration to a
+  generation-stable monitor backup while secrets remain outside plist,
+  records, tests, documentation, and Git;
+- the local effect preserves the existing three-venue/six-source deterministic
+  monitor and TLS SMTP change/error notification, plus the separate schema-v6
+  local scheduler, without adding scraper or arbitrary-command authority;
+- two backups, zero-active-run gates, initial/final 6/6 zero-error checks, and
+  local/co-resident health passed without cloud/local writer overlap; and
+- real rollback stopped local before cloud resume, recovered Cloud Run state,
+  and completed in 96 seconds. Final activation paused/drained cloud again and
+  refreshed the recovered generation before starting local.
+
+Phase 4 is `Implemented`. No Mac execution service yet selects or runs a
+scraper/validator command; that is Phase 5. P4.O's Prefect
 feasibility gate failed before resource creation because the acceptable cloud
 plan does not support the required hybrid process pool. P4.O is therefore
 `Paused`; paying for or self-hosting orchestration is not justified for this
@@ -547,10 +560,10 @@ typed identity, safety, and immutable-result semantics while replacing the
 Prefect pull transport with a bounded local scheduler. P4.L1 implements its
 isolated ownership/selection core and P4.L2 composes accepted domains with fake
 effects only. P4.L3 packages the one-shot host boundary and leaves its ordinary
-CLI effect unconfigured. P4.LS has now installed and drilled the separately
-marked scheduler-only mode. P4.LC is next and retains backup, shadow comparison,
-cloud-schedule disablement, no-overlap production ownership, health checks, and
-timed rollback.
+CLI effect unconfigured. P4.LS installed and drilled the separately marked
+scheduler-only mode. P4.LC completed generation-bound state transfer,
+capability-equivalent deterministic monitoring, no-overlap local ownership,
+health checks, and timed rollback. P5.1 is next.
 
 ## Phase 5: execute existing scrapers
 

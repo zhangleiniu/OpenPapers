@@ -5,6 +5,8 @@ import plistlib
 import sqlite3
 import tempfile
 import unittest
+from hashlib import sha256
+from types import SimpleNamespace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
@@ -19,13 +21,18 @@ from automation.local_service import (
     LocalServiceConfig,
     LocalServiceRunCode,
     LocalServiceRunStatus,
+    PRODUCTION_MARKER,
+    ProductionMonitorEffect,
     build_rollback_scope,
     collect_local_service_health,
     initialize_isolated_shadow_root,
     render_launchdaemon,
     render_isolated_shadow_launchdaemon,
+    render_production_launchdaemon,
     run_local_service_once,
     validate_isolated_shadow_root,
+    initialize_production_root,
+    validate_production_root,
 )
 from automation.local_service.__main__ import main
 
@@ -64,6 +71,17 @@ class FakeEffect:
         if self.error is not None:
             raise self.error
         return self.outcome
+
+
+class FakeNotifier:
+    def __init__(self, error=None):
+        self.error = error
+        self.calls = []
+
+    def send(self, event, *, configuration, password):
+        self.calls.append((event, configuration, password))
+        if self.error is not None:
+            raise self.error
 
 
 class MutableClock:
@@ -433,6 +451,16 @@ class LocalServiceLaunchdAndCommandTests(LocalServiceFixture):
         self.assertEqual(
             shadow_document["ProgramArguments"][-1], "--isolated-shadow"
         )
+        production_document = plistlib.loads(
+            render_production_launchdaemon(self.config)
+        )
+        self.assertEqual(
+            production_document["ProgramArguments"][:-1],
+            document["ProgramArguments"],
+        )
+        self.assertEqual(
+            production_document["ProgramArguments"][-1], "--production-control"
+        )
 
     def test_rollback_scope_names_only_openpapers_and_preserves_data(self):
         scope = build_rollback_scope(self.config)
@@ -544,7 +572,8 @@ class LocalServiceLaunchdAndCommandTests(LocalServiceFixture):
     def test_package_has_no_network_or_effect_adapter_dependency(self):
         imported = set()
         source = ""
-        for module in PACKAGE.glob("*.py"):
+        for name in ("service.py", "records.py", "shadow.py", "launchd.py"):
+            module = PACKAGE / name
             text = module.read_text(encoding="utf-8")
             source += text
             tree = ast.parse(text)
@@ -573,6 +602,240 @@ class LocalServiceLaunchdAndCommandTests(LocalServiceFixture):
             self.assertNotIn(forbidden, source)
         self.assertNotIn("getenv", source)
         self.assertNotIn("launchctl", source)
+
+
+class ProductionControlTests(LocalServiceFixture):
+    def setUp(self):
+        super().setUp()
+        (self.internal / "monitor").mkdir(mode=0o700)
+        self.registry = ROOT / "automation" / "conferences.json"
+        self.configuration = {
+            "schema_version": 1,
+            "registry_sha256": sha256(self.registry.read_bytes()).hexdigest(),
+            "backup_sha256": "a" * 64,
+            "remote_state_generation": "123456789",
+            "expected_source_count": 6,
+            "smtp_host": "smtp.example.test",
+            "smtp_port": 465,
+            "smtp_username": "openpapers",
+            "email_from": "from@example.test",
+            "email_to": "to@example.test",
+        }
+        self.secrets = {
+            "schema_version": 1,
+            "openreview_username": "review-user",
+            "openreview_password": "review-password",
+            "smtp_password": "smtp-password",
+        }
+        initialize_production_root(
+            self.internal, self.configuration, self.secrets
+        )
+        self.monitor_state = self.internal / "monitor" / "state.sqlite3"
+        with sqlite3.connect(self.monitor_state) as connection:
+            connection.execute(
+                "CREATE TABLE source_state (venue TEXT, year INTEGER, "
+                "source_key TEXT, checked_at TEXT, status TEXT, "
+                "content_hash TEXT, item_count INTEGER, detail TEXT, "
+                "snapshot_path TEXT)"
+            )
+            connection.executemany(
+                "INSERT INTO source_state VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                [
+                    (
+                        "icml", 2026, f"source:{index}",
+                        "2026-07-14T12:00:00Z", "available", "hash", index,
+                        "", "snapshot",
+                    )
+                    for index in range(6)
+                ],
+            )
+        self.monitor_state.chmod(0o600)
+
+    def _events(self, *, changed=True, error=False):
+        events = []
+        for index in range(6):
+            events.append(
+                {
+                    "venue": "icml",
+                    "year": 2026,
+                    "source_key": f"source:{index}",
+                    "status": "error" if error and index == 0 else "available",
+                    "item_count": index,
+                    "detail": "bounded",
+                    "snapshot_path": str(self.internal / "monitor" / "private.html"),
+                    "changed": changed and index == 0,
+                }
+            )
+        return events
+
+    def test_private_configuration_is_exact_and_shadow_conflicts(self):
+        configuration, secrets = validate_production_root(self.internal)
+        self.assertEqual(configuration.expected_source_count, 6)
+        self.assertEqual(secrets.smtp_password, "smtp-password")
+        marker = self.internal / PRODUCTION_MARKER
+        self.assertEqual(marker.stat().st_mode & 0o777, 0o600)
+        initialize_production_root(
+            self.internal, self.configuration, self.secrets
+        )
+
+        marker.write_text('{"mode":"wrong"}\n', encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "marker is invalid"):
+            validate_production_root(self.internal)
+
+        marker.unlink()
+        (self.internal / ISOLATED_SHADOW_MARKER).write_text("{}\n", encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "cannot coexist"):
+            initialize_production_root(
+                self.internal, self.configuration, self.secrets
+            )
+
+    def test_monitor_notification_scheduler_and_exact_replay(self):
+        monitor_calls = []
+        notifier = FakeNotifier()
+        scheduler_calls = []
+
+        def monitor(registry_path, state_path):
+            monitor_calls.append((registry_path, state_path))
+            self.assertEqual(os.environ["OPENREVIEW_USERNAME"], "review-user")
+            return self._events()
+
+        def scheduler(state_path, *, scheduled_for, clock):
+            scheduler_calls.append((state_path, scheduled_for, clock()))
+            return SimpleNamespace(selections=())
+
+        effect = ProductionMonitorEffect(
+            repository_root=ROOT,
+            monitor=monitor,
+            notifier=notifier,
+            scheduler=scheduler,
+        )
+        previous_username = os.environ.get("OPENREVIEW_USERNAME")
+        first = effect.run(
+            state_path=self.config.state_path,
+            execution_root=self.external,
+            scheduled_for=NOW.replace(minute=17),
+            observed_at=NOW,
+        )
+        replay = effect.run(
+            state_path=self.config.state_path,
+            execution_root=self.external,
+            scheduled_for=NOW.replace(minute=17),
+            observed_at=NOW,
+        )
+
+        self.assertEqual(first.status, LocalEffectStatus.NO_DUE_WORK)
+        self.assertEqual(replay.status, LocalEffectStatus.NO_DUE_WORK)
+        self.assertEqual(len(monitor_calls), 1)
+        self.assertEqual(monitor_calls[0][1], self.monitor_state)
+        self.assertEqual(len(notifier.calls), 1)
+        self.assertEqual(notifier.calls[0][2], "smtp-password")
+        self.assertEqual(len(scheduler_calls), 2)
+        self.assertEqual(os.environ.get("OPENREVIEW_USERNAME"), previous_username)
+        journal = self.internal / "monitor" / "production-wakeups.sqlite3"
+        self.assertEqual(journal.stat().st_mode & 0o777, 0o600)
+
+    def test_monitor_waits_for_daily_chicago_slot_while_scheduler_runs(self):
+        monitor_calls = []
+        scheduler_calls = []
+        effect = ProductionMonitorEffect(
+            repository_root=ROOT,
+            monitor=lambda *args: monitor_calls.append(args) or self._events(),
+            notifier=FakeNotifier(),
+            scheduler=lambda *args, **kwargs: (
+                scheduler_calls.append((args, kwargs))
+                or SimpleNamespace(selections=())
+            ),
+        )
+        before_daily_slot = datetime(2026, 7, 14, 12, 30, tzinfo=timezone.utc)
+        result = effect.run(
+            state_path=self.config.state_path,
+            execution_root=self.external,
+            scheduled_for=before_daily_slot.replace(minute=17),
+            observed_at=before_daily_slot,
+        )
+        self.assertEqual(result.status, LocalEffectStatus.NO_DUE_WORK)
+        self.assertEqual(monitor_calls, [])
+        self.assertEqual(len(scheduler_calls), 1)
+
+    def test_failure_retains_ambiguity_and_blocks_effect_replay(self):
+        calls = []
+
+        def monitor(registry_path, state_path):
+            calls.append((registry_path, state_path))
+            return self._events(error=True)
+
+        effect = ProductionMonitorEffect(
+            repository_root=ROOT,
+            monitor=monitor,
+            notifier=FakeNotifier(),
+            scheduler=lambda *args, **kwargs: SimpleNamespace(selections=()),
+        )
+        with self.assertRaisesRegex(ValueError, "source errors"):
+            effect.run(
+                state_path=self.config.state_path,
+                execution_root=self.external,
+                scheduled_for=NOW.replace(minute=17),
+                observed_at=NOW,
+            )
+        with self.assertRaisesRegex(ValueError, "ambiguous"):
+            effect.run(
+                state_path=self.config.state_path,
+                execution_root=self.external,
+                scheduled_for=NOW.replace(minute=17),
+                observed_at=NOW,
+            )
+        self.assertEqual(len(calls), 1)
+
+    def test_incomplete_restored_state_fails_before_effect_or_journal(self):
+        with sqlite3.connect(self.monitor_state) as connection:
+            connection.execute("DELETE FROM source_state WHERE source_key = ?", ("source:5",))
+        calls = []
+        effect = ProductionMonitorEffect(
+            repository_root=ROOT,
+            monitor=lambda *args: calls.append(args) or self._events(),
+            notifier=FakeNotifier(),
+            scheduler=lambda *args, **kwargs: SimpleNamespace(selections=()),
+        )
+        with self.assertRaisesRegex(ValueError, "state is incomplete"):
+            effect.run(
+                state_path=self.config.state_path,
+                execution_root=self.external,
+                scheduled_for=NOW.replace(minute=17),
+                observed_at=NOW,
+            )
+        self.assertEqual(calls, [])
+        self.assertFalse(
+            (self.internal / "monitor" / "production-wakeups.sqlite3").exists()
+        )
+
+    def test_production_cli_fails_before_network_without_marker(self):
+        (self.internal / PRODUCTION_MARKER).unlink()
+        args = [
+            "--repository-root", str(self.repository),
+            "--python-executable", str(self.python),
+            "--internal-root", str(self.internal),
+            "--external-volume-root", str(self.external),
+            "--role-user", "openpapers-test",
+            "--production-control",
+        ]
+        with patch("builtins.print") as printed:
+            code = main(
+                args,
+                volume_probe=FakeVolumeProbe(),
+                clock=MutableClock(),
+                platform_name="Darwin",
+            )
+        self.assertEqual(code, 3)
+        self.assertIn('"code": "effect_failed"', printed.call_args.args[0])
+
+        args.append("--isolated-shadow")
+        with self.assertRaisesRegex(ValueError, "mutually exclusive"):
+            main(
+                args,
+                volume_probe=FakeVolumeProbe(),
+                clock=MutableClock(),
+                platform_name="Darwin",
+            )
 
 
 if __name__ == "__main__":

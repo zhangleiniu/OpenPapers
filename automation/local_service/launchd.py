@@ -78,6 +78,13 @@ def render_isolated_shadow_launchdaemon(config: LocalServiceConfig) -> bytes:
     return plistlib.dumps(document, fmt=plistlib.FMT_XML, sort_keys=True)
 
 
+def render_production_launchdaemon(config: LocalServiceConfig) -> bytes:
+    """Render the fixed P4.LC service without embedding configuration/secrets."""
+    document = plistlib.loads(render_launchdaemon(config))
+    document["ProgramArguments"].append("--production-control")
+    return plistlib.dumps(document, fmt=plistlib.FMT_XML, sort_keys=True)
+
+
 def build_rollback_scope(config: LocalServiceConfig) -> LaunchDaemonRollbackScope:
     """Describe the only service/file targets a future rollback may remove."""
     if not isinstance(config, LocalServiceConfig):

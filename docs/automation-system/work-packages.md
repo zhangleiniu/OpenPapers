@@ -96,9 +96,11 @@ action composition under the local lease. P4.L3 has completed the uninstalled
 credential-free headless service package with private internal paths, bounded
 records, a missing-volume gate, and scoped rollback. P4.LS has completed the
 authorized marker-gated scheduler-only installation plus coexistence and host
-drills without production authority. P4.LC is now the only next `Ready`
-package. Phase 4 remains `Planned`, and the existing Cloud Run monitor remains
-the production baseline.
+drills without production authority. P4.LC has completed the generation-bound
+backup, capability-equivalent local monitor, no-overlap writer transfer,
+health gates, and 96-second timed rollback. Phase 4 is implemented; P5.1 is now
+the only next `Ready` package. The local LaunchDaemon is authoritative and the
+retained Cloud Scheduler job is paused.
 
 ### P2.1R — harden verifier contract semantics
 
@@ -716,7 +718,7 @@ manager, run a reboot/SSH/coexistence/recovery drill, connect a live discovery,
 verification, notification, job, command, scraper, result, cloud, Codex,
 promotion, MustCite, or production-state effect, or perform ownership transfer
 or cutover. P4.LS separately completed isolated host installation and drills;
-P4.LC owns production transfer.
+P4.LC subsequently completed production transfer.
 
 ### P4.LS — isolated host shadow and drills
 
@@ -747,11 +749,36 @@ co-resident health check and all five expected service labels. The installed
 database contains no conference state, the cloud baseline remained
 authoritative, and no production authority was transferred.
 
-### Later local-first packages
+### P4.LC — single-writer cutover
 
-- **P4.LC — single-writer cutover (`Ready`, depends P4.LS):** under separate
-  authorization, back up state, disable the cloud schedule, activate local
-  ownership, verify health, and prove timed rollback. Never run both writers.
+Status: `Complete`
+
+Depends on: P4.LS
+
+Completed boundary: a strict production marker binds private allowlisted
+configuration to an immutable monitor backup fingerprint and exact remote
+state generation. Private secret storage supplies only the existing
+OpenReview and TLS SMTP values; the plist and bounded records remain
+credential-free. The production effect validates and preserves the legacy
+three-venue/six-source monitor state separately from schema-v6 local control,
+durably suppresses duplicate daily monitoring/notification, fails closed on
+ambiguous work, and runs the local due scheduler on hourly wakeups.
+
+The authorized cutover created two generation-stable private backups, paused
+the exact Cloud Scheduler job with zero active Cloud Run executions before
+every local activation, and retained the cloud job/state plus shadow
+runtime/venv for rollback. Initial and final local runs each checked six
+sources with zero errors, reported five ready local checks, local immutable
+ownership and zero active wakeups, and passed all five co-resident service
+checks.
+
+The timed rollback stopped local before resuming cloud, waited for a successful
+Cloud Run recovery that advanced remote state, and completed in 96 seconds.
+Final cutover paused/drained cloud again, refreshed local from that recovered
+generation, and activated only the Mac writer. No writer overlap occurred.
+P4.LC adds no live discovery/verifier, case-delivery, scraper, validator, job,
+result, Codex, promotion, or MustCite deployment effect; those remain later
+packages.
 
 | ID | Status | Depends on | Objective and completion boundary |
 |---|---|---|---|
@@ -764,7 +791,7 @@ authoritative, and no production authority was transferred.
 | P4.L2 | Complete | P4.L1 | Compose accepted discovery, verification, lifecycle, case, reminder, pending-shadow, and inert-action boundaries under one local lease with fake effects and temporary SQLite only. |
 | P4.L3 | Complete | P4.L2 | Credential-free headless LaunchDaemon renderer, fixed private internal paths, bounded health/run records, missing-volume closure, and exact rollback scope. Fake/temporary only; no installation or concrete effect. |
 | P4.LS | Complete | P4.L3 | Marker-gated scheduler-only Mac shadow installed against isolated local state; duplicate/SSH/reboot/missing-volume/ambiguous-recovery/rollback/coexistence drills passed. No production authority. |
-| P4.LC | Ready | P4.LS | Authorized backup and no-overlap production writer cutover with timed rollback. |
+| P4.LC | Complete | P4.LS | Generation-bound backups, capability-equivalent local monitor, authorized no-overlap writer cutover, health gates, and 96-second timed rollback. Cloud rollback retained paused. |
 
 Code implementation, Mac installation, cloud configuration, and operational
 drills are distinct tasks even when performed by the same maintainer.
@@ -773,7 +800,7 @@ drills are distinct tasks even when performed by the same maintainer.
 
 | ID | Status | Depends on | Objective and completion boundary |
 |---|---|---|---|
-| P5.1 | Planned | Phase 4 gate | Approved command registry mapping typed jobs to fixed repository entry points. Reject arbitrary shell, paths, flags, and environment expansion. |
+| P5.1 | Ready | Phase 4 gate | Approved command registry mapping typed jobs to fixed repository entry points. Reject arbitrary shell, paths, flags, and environment expansion. |
 | P5.2 | Planned | P5.1 | Staging executor for existing scrapers with isolated data roots, checkpoints, resume, timeout, and cancellation. No canonical promotion. |
 | P5.3 | Planned | P5.2 | Independent validation and manifest generation for counts, metadata, duplicate IDs, PDF existence/size/signature, and applicable completeness levels. |
 | P5.4 | Planned | P5.3 | Readiness routing and end-to-end job to staging to validation to immutable result, with transient/operational/structural failure classification. |

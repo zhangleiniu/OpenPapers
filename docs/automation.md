@@ -81,13 +81,17 @@ renderer, and exact rollback scope. Its ordinary command has no concrete
 effect. P4.LS adds an exact private marker and a scheduler-only shadow mode;
 one authorized Mac installation passed duplicate, missing-volume,
 ambiguous-recovery, scoped rollback/reinstall, SSH-disconnect, reboot, and
-co-resident health drills against isolated local-owned state.
-Legacy databases remain cloud-owned; none of these local modules is imported
-here, calls a live domain effect, delivers a notification, submits or executes
-a job, or opens production state. Live discovery/verification and notification
-effects, a Mac mini command executor, live result wiring, Codex repair
-execution, and MustCite deployment are not implemented. The installed shadow
-does not change this Cloud Run deployment and has no production authority.
+co-resident health drills against isolated local-owned state. P4.LC adds the
+strict production marker/configuration/secret boundary, restores the legacy
+monitor database separately from schema-v6 local control, preserves the
+existing daily six-source monitor and TLS SMTP notifications, and durably
+suppresses ambiguous or duplicate daily effects. Its authorized no-overlap
+cutover, local/co-resident health gates, and 96-second timed rollback passed.
+
+The local LaunchDaemon is now authoritative and the retained Cloud Scheduler
+job is paused. Live discovery/verification and Phase 3 case-delivery effects,
+a Mac mini scraper/validator command executor, live result wiring, Codex repair
+execution, and MustCite deployment are not implemented.
 
 Start at the [automation system development guide](./automation-system/README.md) for
 the implemented foundation, target architecture, roadmap, and zero-context
@@ -117,12 +121,12 @@ Supported detectors are:
 
 ## Orchestration boundary
 
-The monitor and scraper remain plain Python commands. The current Cloud Run
-entry point uses Prefect only for flow/task observability; Cloud Scheduler owns
-its production wakeup. The accepted future control plane will call the same
-plain Python domain logic from a bounded local scheduler rather than require a
-paid or self-hosted Prefect worker. The existing cloud schedule remains active
-until a separately authorized single-writer cutover.
+The monitor and scraper remain plain Python commands. P4.LC now runs the
+existing deterministic monitor plus the bounded local scheduler from the
+headless Mac LaunchDaemon. The retained Cloud Run entry point still uses
+Prefect for rollback observability, but its Cloud Scheduler job is paused.
+Rollback must stop the local label before resuming cloud; final activation must
+pause and drain cloud before starting local.
 
 An agent repair workflow should consume only a change or validation-failure
 event plus a saved source snapshot. Generated parser changes must include a
@@ -154,9 +158,10 @@ python -m unittest discover -s automation/tests -v
 Vertex AI may use `global`, while Cloud Run and Artifact Registry require a
 regional location. It defaults to `us-central1`.
 
-The production monitor uses Cloud Scheduler to start a Cloud Run Job directly.
-The container runs `automation.run_monitor_flow`, so Prefect Cloud still records
-the flow and task runs and receives OpenPapers events. This avoids giving
+The retained rollback monitor uses Cloud Scheduler to start a Cloud Run Job
+directly, but that schedule is paused after P4.LC. When explicitly resumed for
+rollback, the container runs `automation.run_monitor_flow`, so Prefect Cloud
+records the flow/task runs and receives OpenPapers events. This avoids giving
 Prefect Cloud a long-lived GCP service-account key. Container and GCP deployment
 assets are self-contained under `automation/deployment`; see its
 [deployment guide](../automation/deployment/README.md).

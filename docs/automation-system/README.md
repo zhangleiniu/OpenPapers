@@ -263,16 +263,23 @@ monitor:
   renderer for that fixed mode. One authorized Mac installation uses a
   root-owned read-only runtime, a dedicated non-login role, isolated local-owned
   SQLite, and a private directory on the external volume.
+- P4.LC adds a separate production marker/configuration/secret boundary, a
+  durable daily claim around the existing six-source deterministic monitor and
+  TLS SMTP notifications, and the same hourly local scheduler against separate
+  schema-v6 control state. Two generation-stable backups, zero-active cloud
+  gates, initial/final local health, and a 96-second timed rollback passed.
 
-Phase 4 remains `Planned`. These packages establish contracts and fake-tested
-local safety/scheduling/result behavior plus one operational scheduler-only
-shadow, not an execution plane.
+Phase 4 is `Implemented`. These packages establish contracts and fake-tested
+execution-safety/result behavior plus one operational local scheduler and
+deterministic baseline monitor. Phase 5 still owns scraper/validator command
+selection and execution.
 P4.L2 composes only fixture effects and pending notification records; every
 recheck, review, and scrape action remains inert typed data. No command is
 selected or run, no delivery attempt occurs, no live immutable result is
-published or consumed, and no GCS client/resource, worker, or Prefect resource
-is installed or connected. The installed local daemon performs only isolated
-due-work selection and has no production authority.
+published or consumed, and no new GCS result resource, worker, or Prefect queue
+resource is installed or connected. The production daemon preserves only the
+existing deterministic monitor/notification baseline plus local due-work
+selection; it cannot execute a typed job or scraper.
 
 P4.O is `Paused`. Its operator feasibility gate found that the acceptable
 Prefect Cloud plan cannot create the required hybrid process pool; the failed
@@ -283,10 +290,10 @@ the isolated scheduler and fixture-only domain composition, while P4.L3
 implements the credential-free service package. P4.LS installed its
 scheduler-only shadow and completed duplicate, SSH-disconnect, reboot,
 missing-volume, ambiguous-recovery, bounded-record, scoped-rollback, and
-co-resident health drills. P4.LC is the next ready package. The existing Cloud
-Run monitor remains the sole
-production scheduler and writer until a separately authorized, no-overlap
-cutover.
+co-resident health drills. P4.LC then completed the separately authorized
+no-overlap cutover and timed rollback. The local LaunchDaemon is authoritative;
+the Cloud Scheduler job is paused and retained only for rollback. P5.1 is the
+next ready package.
 
 The following does **not** exist yet:
 
@@ -295,9 +302,9 @@ The following does **not** exist yet:
 - scheduled or deployed case/action/reminder integration or notification
   delivery;
 - automated routing from discovery to a scrape job;
-- live discovery/verification, notification, or execution effects in the
-  installed OpenPapers LaunchDaemon;
-- an installed or connected Mac mini execution service;
+- live discovery/verification, Phase 3 case delivery, or typed job execution
+  effects in the installed OpenPapers LaunchDaemon;
+- a connected scraper/validator execution adapter;
 - a Codex execution adapter;
 - automatic promotion into the canonical dataset or MustCite deployment.
 
@@ -333,11 +340,10 @@ notifications  typed local action
              patch/report for review
 ```
 
-The current Cloud Run monitor remains the sole production writer during local
-development and shadow comparison. After an explicit cutover, the Mac becomes
-the sole mutable writer of conference and case state. The two schedulers must
-never write the same state concurrently. Immutable results remain separate
-from mutable control state.
+The Mac is the sole production writer after P4.LC. The retained Cloud Scheduler
+job is paused; rollback may resume it only after the local label is stopped.
+Conversely, local activation requires cloud to be paused with zero active
+executions. Immutable results remain separate from mutable control state.
 
 ## Required reading
 

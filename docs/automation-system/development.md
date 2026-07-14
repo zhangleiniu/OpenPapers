@@ -590,9 +590,12 @@ record; automated tests do not require root, launchd, a real volume, or a live
 service. Repository documents are not proof that the external host remains
 healthy, so use read-only runtime checks when current status matters.
 
-P4.LC is the next package and owns the explicit no-overlap writer cutover.
-Phase 5 owns command selection, execution, real manifest generation, and result
-interpretation.
+P4.LC completed the explicit no-overlap writer cutover. The local production
+boundary validates a generation-bound legacy monitor backup, performs the
+existing six-source daily monitor/notification work, and runs schema-v6 local
+due scheduling separately. The cloud schedule is paused and may be resumed
+only after the local label stops. Phase 5 owns command selection, execution,
+real manifest generation, and result interpretation; P5.1 is next.
 
 Scheduling tests use an injected timezone-aware clock. Keep venue catalogs free
 of year-specific month/date assumptions; discovery records candidates, a

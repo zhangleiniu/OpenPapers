@@ -4,7 +4,7 @@ This document defines the target boundaries and safety invariants. Most of the
 components described here are planned; consult [roadmap.md](./roadmap.md) and
 the executable code before assuming a component exists.
 
-## Implemented foundation and Phase 1/2.S/P3.S/P4.LS boundaries
+## Implemented foundation and Phase 1/2.S/P3.S/P4.LC boundaries
 
 Phase 0 is implemented as a side-effect-free foundation and is not yet wired
 into the deployed monitor:
@@ -439,10 +439,13 @@ P4.LS adds and exercises only the isolated host-shadow authority:
   co-resident-service health drills passed on 2026-07-14. The shared volume was
   never unmounted and unrelated labels were never reloaded.
 
-The installed shadow contains no conference state and has no production
-authority. P4.LC retains backup, ownership transfer, cloud-schedule disablement,
-timed rollback, and all production cutover authority. Live domain wiring and
-command/result execution remain later packages.
+The P4.LS shadow contains no conference state and has no production authority.
+P4.LC has now transferred production authority without overlap: a distinct
+private marker/configuration/secret boundary restores and validates the legacy
+monitor state separately from schema-v6 control, durably claims one daily
+monitor/notification run, and then executes the hourly local scheduler. Live
+discovery/verifier/case wiring and command/result execution remain later
+packages.
 
 P4.O is paused after its external feasibility gate. The acceptable Prefect
 Cloud plan rejected the required hybrid process pool before resource creation;
@@ -463,11 +466,12 @@ not the safety model:
 - optional GCS backup/export is a side effect, never queue ownership or a
   correctness dependency.
 
-During development and shadow use, the existing Cloud Run monitor remains the
-only production writer and local runs use isolated state. A later explicit
-cutover must back up state, disable the cloud schedule, activate local
-ownership, prove health, and retain timed rollback. Both writers must never be
-active against the same state.
+P4.LC took two generation-stable backups, paused Cloud Scheduler and drained
+active executions before each local activation, proved local and co-resident
+health, and completed timed rollback in 96 seconds by stopping local before
+cloud resume. Final activation paused/drained cloud again and refreshed the
+recovered generation. The Mac is now the only production writer; the retained
+cloud schedule is paused. Both writers must never be active concurrently.
 
 ## Design principles
 
@@ -667,10 +671,10 @@ Requirements:
 - retain enough immutable input to reproduce a transition or diagnosis.
 
 Phase 0's original executable ownership model assigned mutable control state
-to the cloud and immutable results to the Mac. P4.L1 now adds an explicit
-local target control role plus a durable per-database owner without weakening
-the no-overlap rule; the current cloud mode remains authoritative until
-cutover. P2.1's
+to the cloud and immutable results to the Mac. P4.L1 adds an explicit local
+control role plus a durable per-database owner without weakening the
+no-overlap rule; P4.LC made that local role authoritative while retaining the
+paused cloud mode for tested rollback. P2.1's
 `FileSnapshotStore` proves local content-addressed source snapshot replay but
 is not the cloud state store or a GCS adapter. P2.4's
 `ControlStateRepository` implements schema-versioned local SQLite control
@@ -998,8 +1002,9 @@ Simple execution of an unchanged existing scraper does not require Codex.
 
 ## Security boundaries
 
-- Current cloud baseline: only its existing provider, Prefect, SMTP, and
-  monitor-storage credentials; no access to future local control state.
+- Retained cloud rollback: only its existing provider, Prefect, SMTP, and
+  monitor-storage credentials; no access to local control state. Its schedule
+  remains paused while local is active.
 - Local scheduler account: repository/data access plus only the provider,
   notification, optional backup/export, and later Codex credentials required
   by an accepted package; no Prefect credential and no inbound command

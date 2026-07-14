@@ -1,14 +1,16 @@
 # Local control service package
 
-This directory contains the completed P4.L3 packaging boundary and P4.LS
-isolated host-shadow boundary for the accepted local-first control plane. It
+This directory contains the completed P4.L3 package, P4.LS isolated shadow,
+and P4.LC production boundary for the accepted local-first control plane. It
 renders a credential-free system LaunchDaemon, provides bounded local
-health/run records, and exposes one marker-gated scheduler-only shadow mode.
+health/run records, and exposes mutually exclusive marker-gated shadow and
+production modes.
 
-The existing Cloud Run monitor remains the sole production scheduler and
-writer. One authorized Mac installed and drilled the isolated shadow on
-2026-07-14; repository files alone are not proof of its current external
-health. P4.LC owns the no-overlap production cutover.
+On 2026-07-14 one authorized Mac completed the no-overlap P4.LC cutover. The
+local LaunchDaemon is the production writer and the retained Cloud Scheduler
+job is paused for rollback. Repository files alone are not proof of current
+external health; verify launchd, bounded records, the cloud schedule, and
+co-resident services before making an operational claim.
 
 ## Fixed storage and process boundary
 
@@ -48,8 +50,8 @@ Standard output and error go to `/dev/null`; bounded application records live
 only under the internal root.
 
 The ordinary rendered command has no concrete wakeup effect. Running
-`python -m automation.local_service` without a test-injected effect or the
-explicit shadow flag records and reports `effect_unconfigured`, returns
+`python -m automation.local_service` without a test-injected effect or an
+explicit concrete mode records and reports `effect_unconfigured`, returns
 nonzero, and does not open the control database.
 
 P4.LS adds `render_isolated_shadow_launchdaemon` and the fixed
@@ -58,6 +60,22 @@ P4.LS adds `render_isolated_shadow_launchdaemon` and the fixed
 only effect invokes `run_scheduler_wakeup` against that isolated local-owned
 SQLite database. It has no discovery, verification, notification, job,
 command, scraper, result, cloud, Codex, or production adapter.
+
+P4.LC adds `render_production_launchdaemon` and the fixed
+`--production-control` flag. A distinct exact production marker binds a
+private configuration file to the SHA-256 of an immutable monitor backup and
+the restored GCS state generation. A separate private secret file contains
+only the existing OpenReview and SMTP values; neither file appears in launchd
+arguments, environment, bounded records, tests, documentation, or Git.
+
+The production effect verifies the restored legacy monitor SQLite schema and
+six registered source rows before opening mutable state. At or after 08:00
+America/Chicago it durably claims one daily monitor run, checks the existing
+three-venue/six-source registry, sends the existing change/error notification
+through TLS SMTP, and then executes the schema-v6 local scheduler against a
+separate control database. Hourly wakeups before the monitor slot still run
+the local due scheduler. Exact daily replay does not repeat monitoring or
+notification; an interrupted active claim remains ambiguous and blocks work.
 
 ## Focused verification
 
@@ -71,7 +89,7 @@ The tests use temporary private directories, fake clocks, fake volume probes,
 and fake effects. They do not inspect a real role account or volume and do not
 copy a plist or invoke the service manager.
 
-## Isolated installation evidence and scoped rollback
+## Installation, cutover evidence, and scoped rollback
 
 The authorized P4.LS installation used a root-owned read-only runtime and
 minimal Python environment, a dedicated non-login role, private isolated
@@ -95,7 +113,17 @@ unrelated launchd label. P4.LS exercised that rollback and byte-identical
 reinstall without touching a co-resident label. This package still exposes no
 function that invokes the service manager or deletes a path.
 
-The shadow database must never be treated as migrated production state merely
-because it is local-owned. P4.LC requires separate authorization, backup,
-cloud-schedule disablement, no-overlap ownership activation, health checks, and
-timed rollback.
+P4.LC retained the shadow and production roots separately, restored and
+integrity-checked the cloud monitor tree, copied the closed schema-v6 local
+control database, and paused Cloud Scheduler only after a generation-bound
+backup and zero-active-execution gate. The first and final local activations
+each checked all six sources with zero errors and passed five local plus five
+co-resident health checks.
+
+The timed rollback stopped the local label before resuming the exact cloud
+schedule, waited for a successful Cloud Run recovery, and completed in 96
+seconds. Final cutover paused and drained cloud again before refreshing the
+recovery generation and starting local. Rollback must preserve both local
+state roots, backups, runtime/venv snapshots, cloud state, external data, and
+unrelated labels. Never resume cloud until the local label is confirmed
+stopped, and never start local until cloud is paused with zero active runs.

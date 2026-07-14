@@ -110,6 +110,14 @@ concrete effect and fails closed. P4.LS adds a separately marked scheduler-only
 mode and has installed it against isolated local state on the authorized Mac.
 Duplicate, SSH-disconnect, reboot, missing-volume, ambiguous-recovery,
 bounded-record, exact rollback/reinstall, and co-resident health drills passed
-without a live domain effect or production authority. P4.LC is next and retains
-backup, cloud-schedule disablement, ownership transfer, live production wiring,
-health verification, and timed rollback.
+without a live domain effect or production authority. At that boundary P4.LC
+remained next, retaining backup, cloud-schedule disablement, ownership
+transfer, live production wiring, health verification, and timed rollback.
+
+P4.LC subsequently completed those invariants on 2026-07-14. It preserved the
+existing deterministic six-source monitor and TLS SMTP notifications inside a
+strict local production boundary, kept legacy monitor and schema-v6 control
+state separate, and paused/drained cloud before local activation. Initial and
+final local health passed; a real rollback stopped local before cloud resume,
+recovered remote state, and completed in 96 seconds. The Mac is authoritative,
+the retained cloud schedule is paused, and P5.1 is next.

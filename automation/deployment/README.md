@@ -15,7 +15,8 @@ python -m unittest discover -s automation/tests -v
 
 ## Topology
 
-Cloud Scheduler starts a Cloud Run Job. The job executes
+This retained rollback topology lets Cloud Scheduler start a Cloud Run Job.
+The schedule is paused after P4.LC. When resumed, the job executes
 `automation.run_monitor_flow`, reports flow and task state to Prefect Cloud,
 and persists its SQLite state and immutable source snapshots in GCS.
 
@@ -30,16 +31,19 @@ credential-free local service renderer, private internal paths, bounded
 records, missing-volume closure, and exact rollback scope. P4.LS adds a
 marker-gated scheduler-only mode installed on one authorized Mac against
 isolated local state; its reboot/SSH/missing-volume/recovery/rollback and
-co-resident health drills passed. None of these packages is imported or
-scheduled here, and the installed shadow makes no live domain call, delivery
-attempt, job, or command. Legacy version 1-4
-databases remain cloud-owned. Do not reuse the monitor tree or grant a shadow
-Mac process access to `control/state.sqlite3`.
-The accepted local-first design keeps this deployment authoritative until a
-later package has passed isolated host drills. Its cutover must back up state,
-disable Cloud Scheduler before activating the local writer, verify health, and
-retain rollback; both writers must never mutate the same state concurrently.
-No such cutover is implemented or authorized by this document.
+co-resident health drills passed. P4.LC adds the separately marked local
+production effect; it restores a validated copy of this legacy monitor tree
+without treating it as schema-v6 control state. None of the P4.L modules is
+imported by the retained cloud job. The local production service makes only
+the existing deterministic monitor/TLS SMTP calls plus local due selection; it
+makes no discovery, verifier, case-delivery, job, or command call.
+P4.LC completed the authorized no-overlap cutover on 2026-07-14. The local
+LaunchDaemon is now authoritative and this Cloud Scheduler job is paused. The
+Cloud Run job, secrets, and GCS monitor tree are retained as the tested
+rollback path. Timed rollback proved that local can be stopped before cloud is
+resumed and recovered; final activation paused/drained cloud again before
+local opened the refreshed generation. Never enable this schedule while the
+local production label is loaded.
 
 ## Build
 
