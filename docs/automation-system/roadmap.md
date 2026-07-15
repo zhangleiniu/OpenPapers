@@ -13,7 +13,7 @@ graph.
 | Baseline monitor | Deterministic source monitor, local LaunchDaemon, SQLite, change/error email | Implemented |
 | Local due selection | Lease-protected selection from persisted `next_check_at`; no external effect | Implemented |
 | Date initialization | One approximate event-date lookup for an explicitly registered venue/year | Implemented |
-| Due-state policy | Sleep before the estimate; agent retry/backoff/stop transitions afterward | Planned |
+| Due-state policy | Sleep before the estimate; agent retry/backoff/stop transitions afterward | Implemented |
 | Agent execution | Coding agent in an isolated worktree, with broad scraper judgment and narrow authority | Planned |
 | Run notification | One replay-safe email per agent run | Planned |
 | State simplification | Migrate away from vestigial verification/case/job/notification schema | Planned after target run state is fixed |
@@ -83,7 +83,15 @@ venue/year, exact replay causes no second call, future estimates sleep, and
 failure schedules a bounded later attempt. No live provider call is part of
 ordinary tests.
 
-## Due-state policy (Planned)
+## Due-state policy (Implemented, uninstalled)
+
+`automation/due_policy.py` and schema version 9 implement this boundary
+without invoking an agent. A successful date estimate creates an
+`agent_schedule`; from that handoff onward its nullable `next_check_at` is the
+executable clock, while the schema-8 value remains immutable date provenance.
+Claims are protected by the existing local lease and one global active-run
+index. Immutable run history supplies the monthly usage and systemic-failure
+evidence without a second mutable ledger.
 
 Deliverables:
 
@@ -104,6 +112,13 @@ The policy may be implemented as a small state reducer around
 Acceptance: fixture/fake-clock tests cover every disposition, suggested and
 default retry dates, duplicate wakeups, concurrency exclusion, budget pause,
 failure backoff, and recovery.
+
+Acceptance met: fake-clock tests cover all four dispositions, pre-date sleep,
+valid and rejected suggestions, default retry, three-step failure pause and
+explicit recovery, active-run exclusion, UTC-month budget deferral, and a
+24-hour distinct-venue failure circuit. Schema-8 migration seeds the new due
+state without losing date history. No installed caller or external effect
+exists.
 
 ## Agent execution (Planned)
 

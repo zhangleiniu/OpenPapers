@@ -61,12 +61,14 @@ wakeup therefore does not mean every conference is searched or checked.
 An uninstalled library boundary can now initialize an explicit venue/year with
 one approximate event date and sleep on replay until that date. An isolated
 ICML 2026 live canary passed on 2026-07-15, but this boundary is not called by
-the service or connected to the automatic budget ledger. Target-cohort
-creation, installed wiring, post-date retry policy, agent execution, and
-run-report email remain future work. See the
+the service or connected to the automatic budget ledger. An uninstalled,
+effect-free due-state boundary now applies post-date retry/stop outcomes and
+enforces agent concurrency, monthly usage, and systemic-failure gates, but it
+does not start an agent. Target-cohort creation, installed wiring, agent
+execution, and run-report email remain future work. See the
 [`roadmap`](./automation-system/roadmap.md).
 
-Schema version 8 adds event-date schedule/attempt tables.
+Schema version 9 adds event-date and agent schedule/attempt tables.
 `automation/control_state.py` still also contains tables and interfaces for the
 abandoned verification, case/reminder, notification, and typed-job design.
 They are vestigial compatibility surface and are not wired into production.

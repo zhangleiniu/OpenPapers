@@ -130,6 +130,8 @@ Currently reusable:
 - Gemini adapter, after simplifying its target use to approximate dates;
 - additive schema-v8 approximate-date schedules and the uninstalled
   `initialize_event_dates()` composition boundary;
+- additive schema-v9 agent schedules/run history and the uninstalled,
+  effect-free `due_policy.py` transition boundary;
 - lease-protected SQLite repository and local due selector;
 - marker-gated LaunchDaemon service and bounded local records;
 - paused Cloud Run monitor as a rollback mechanism;

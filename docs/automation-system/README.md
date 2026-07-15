@@ -81,7 +81,8 @@ The following exists and runs today:
   No selected item is dispatched to an agent today.
 - `automation/local_scheduler.py` and `automation/control_state.py`: local,
   lease-protected due-work selection and versioned SQLite storage. The schema
-  is now version 8 and adds approximate-date schedules/attempts, while still
+  is now version 9 and adds approximate-date plus coding-agent schedules and
+  immutable attempts, while still
   containing case, verification, notification, and execution-job tables
   inherited from the abandoned design. They are not evidence that those old
   workflows are active.
@@ -94,6 +95,11 @@ The following exists and runs today:
   2026-07-15 returned the correct main-conference start date after the adapter
   was adjusted for the provider's optional explanation field; it did not
   retain state or change the installed service.
+- `automation/due_policy.py`: an uninstalled, effect-free agent-run policy.
+  It claims at most one due schedule, durably applies `success`, `not_ready`,
+  `needs_human`, and `failed`, and enforces default/suggested retries, bounded
+  failure backoff, a global active slot, a monthly ceiling, and a recent
+  distinct-venue systemic-failure circuit. It does not start an agent.
 - `automation/discovery.py` and `automation/providers/gemini.py`: a budgeted,
   cached Gemini Search Grounding adapter with an explicit manual `--live`
   command. Its current output is stricter than the approximate-date signal the
@@ -111,10 +117,8 @@ claim; repository files only describe the expected topology.
 
 - Target-cohort/year creation, automatic budget-ledger integration, and
   LaunchDaemon wiring for the implemented date initializer.
-- The due-state transition that sleeps until the estimate, retries
-  `not_ready` outcomes after a few days, and stops or backs off failures.
-- Global agent concurrency, monthly budget, cooldown, and systemic-failure
-  limits.
+- Production policy configuration and LaunchDaemon wiring for the implemented
+  but uninstalled due-state boundary.
 - Coding-agent execution in an isolated worktree: prompt, subprocess timeout,
   result capture, and enforced no-commit/no-push/no-merge/no-deploy boundary.
 - One-shot email reporting for each agent run.

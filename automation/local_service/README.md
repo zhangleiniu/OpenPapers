@@ -60,8 +60,8 @@ daily monitor or its emails; an interrupted active claim remains ambiguous and
 blocks work.
 
 The due selector currently dispatches nothing. The fake-tested date initializer
-is a separate uninstalled callable; coding-agent execution and agent-run emails
-are planned in
+and effect-free due-state policy are separate uninstalled callables;
+coding-agent execution and agent-run emails are planned in
 [`docs/automation-system/roadmap.md`](../../docs/automation-system/roadmap.md).
 
 ## Focused verification

@@ -27,6 +27,7 @@ from automation.control_state import (
     _MIGRATION_5,
     _MIGRATION_6,
     _MIGRATION_7,
+    _MIGRATION_8,
 )
 from automation.cases import CaseObservation, case_event_payload, observe_case
 from automation.contracts import artifact_fingerprint
@@ -449,11 +450,80 @@ class SchemaAndBoundaryTests(unittest.TestCase):
                 writer=Writer.LOCAL_CONTROL_PLANE,
                 clock=MutableClock(),
             ) as repository:
-                self.assertEqual(repository.schema_version, 8)
+                self.assertEqual(repository.schema_version, CONTROL_SCHEMA_VERSION)
                 self.assertEqual(
                     repository.get_conference_state("icml", 2026).state, state
                 )
                 self.assertEqual(repository.list_event_date_schedules(), ())
+
+    def test_valid_version_eight_seeds_agent_schedule_without_losing_date(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "local-v8.sqlite3"
+            connection = sqlite3.connect(path)
+            connection.execute("PRAGMA foreign_keys = ON")
+            for statement in (
+                *_MIGRATION_1,
+                *_MIGRATION_2,
+                *_MIGRATION_3,
+                *_MIGRATION_4,
+                *_MIGRATION_5,
+                *_MIGRATION_6,
+                *_MIGRATION_7,
+                *_MIGRATION_8,
+            ):
+                connection.execute(statement)
+            connection.executemany(
+                "INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)",
+                tuple(
+                    (version, f"2026-07-13T20:3{version}:00Z")
+                    for version in range(1, 9)
+                ),
+            )
+            connection.execute(
+                "INSERT INTO control_ownership VALUES (1, ?, ?)",
+                ("local_control_plane", "2026-07-13T20:35:00Z"),
+            )
+            attempt_id = "event-date-attempt:" + artifact_fingerprint({
+                "venue_id": "icml", "year": 2026, "attempt_number": 1,
+            })
+            connection.execute(
+                "INSERT INTO event_date_schedule VALUES (?, ?, 'scheduled', ?, "
+                "?, ?, ?, ?, ?, 1, NULL, NULL, ?)",
+                (
+                    "icml", 2026, "2026-07-15T14:00:00Z", "2026-07-15",
+                    "2026-01-10T14:00:00Z", "fake-date", "fake-model", "v1",
+                    "2026-01-10T14:00:00Z",
+                ),
+            )
+            connection.execute(
+                "INSERT INTO event_date_attempt VALUES (?, ?, ?, 1, ?, ?, "
+                "'scheduled', ?, ?, ?, ?, NULL)",
+                (
+                    attempt_id, "icml", 2026, "2026-01-10T14:00:00Z",
+                    "2026-01-10T14:00:00Z", "fake-date", "fake-model", "v1",
+                    "2026-07-15",
+                ),
+            )
+            connection.execute("PRAGMA user_version = 8")
+            connection.commit()
+            connection.close()
+
+            with ControlStateRepository(
+                path,
+                writer=Writer.LOCAL_CONTROL_PLANE,
+                clock=MutableClock(),
+            ) as repository:
+                self.assertEqual(repository.schema_version, CONTROL_SCHEMA_VERSION)
+                date_record = repository.get_event_date_schedule("icml", 2026)
+                agent_record = repository.get_agent_schedule("icml", 2026)
+                self.assertEqual(date_record.estimated_event_date, "2026-07-15")
+                self.assertEqual(len(repository.event_date_attempt_history(
+                    "icml", 2026
+                )), 1)
+                self.assertEqual(agent_record.status, "scheduled")
+                self.assertEqual(agent_record.next_check_at,
+                                 "2026-07-15T14:00:00Z")
+                self.assertEqual(agent_record.attempt_count, 0)
 
     def test_legacy_database_cannot_be_claimed_local_or_lose_cloud_owner(self):
         with tempfile.TemporaryDirectory() as directory:

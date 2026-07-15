@@ -56,7 +56,7 @@ from automation.notifications import (
 from automation.verification import validate_verification_result
 
 
-CONTROL_SCHEMA_VERSION = 8
+CONTROL_SCHEMA_VERSION = 9
 DEFAULT_LEASE_TTL_SECONDS = 300
 MAX_LEASE_TTL_SECONDS = 86_400
 DEFAULT_SCHEDULER_SELECTION_LIMIT = 100
@@ -114,6 +114,10 @@ class ExecutionQueueError(ControlStateError):
 
 class EventDateScheduleError(ControlStateError):
     """Raised when approximate-date scheduling cannot proceed safely."""
+
+
+class AgentScheduleError(ControlStateError):
+    """Raised when an agent schedule or run transition is unsafe."""
 
 
 class StoredDataError(ControlStateError):
@@ -278,6 +282,60 @@ class EventDateAttemptRecord:
     prompt_version: str
     estimated_event_date: str | None
     failure_category: str | None
+
+
+@dataclass(frozen=True)
+class AgentScheduleRecord:
+    """Current durable coding-agent schedule for one venue/year."""
+
+    venue_id: str
+    year: int
+    status: str
+    next_check_at: str | None
+    attempt_count: int
+    active_run_id: str | None
+    consecutive_failures: int
+    last_disposition: str | None
+    last_run_at: str | None
+    suggested_retry_at: str | None
+    last_gate_reason: str | None
+    updated_at: str
+
+
+@dataclass(frozen=True)
+class AgentRunClaim:
+    """Opaque authority for one retained in-flight coding-agent run."""
+
+    run_id: str
+    venue_id: str
+    year: int
+    attempt_number: int
+    started_at: str
+
+
+@dataclass(frozen=True)
+class AgentRunAttemptRecord:
+    """One immutable-numbered coding-agent run attempt."""
+
+    run_id: str
+    venue_id: str
+    year: int
+    attempt_number: int
+    started_at: str
+    completed_at: str | None
+    disposition: str
+    explanation: str | None
+    suggested_retry_at: str | None
+    failure_category: str | None
+
+
+@dataclass(frozen=True)
+class AgentRunClaimOutcome:
+    """One claim, idle result, or durable policy-gate deferral."""
+
+    claim: AgentRunClaim | None
+    schedule: AgentScheduleRecord | None
+    reason: str
 
 
 @dataclass(frozen=True)
@@ -871,6 +929,95 @@ _MIGRATION_8 = (
     """,
 )
 
+_MIGRATION_9 = (
+    """
+    CREATE TABLE agent_schedule (
+        venue_id TEXT NOT NULL,
+        year INTEGER NOT NULL,
+        status TEXT NOT NULL CHECK (status IN (
+            'scheduled', 'active', 'completed', 'needs_human', 'paused'
+        )),
+        next_check_at TEXT,
+        attempt_count INTEGER NOT NULL CHECK (attempt_count >= 0),
+        active_run_id TEXT,
+        consecutive_failures INTEGER NOT NULL CHECK (consecutive_failures >= 0),
+        last_disposition TEXT CHECK (last_disposition IN (
+            'success', 'not_ready', 'needs_human', 'failed'
+        )),
+        last_run_at TEXT,
+        suggested_retry_at TEXT,
+        last_gate_reason TEXT,
+        updated_at TEXT NOT NULL,
+        PRIMARY KEY (venue_id, year),
+        FOREIGN KEY (venue_id, year)
+            REFERENCES event_date_schedule (venue_id, year),
+        CHECK (
+            (status = 'scheduled' AND next_check_at IS NOT NULL
+                AND active_run_id IS NULL)
+            OR
+            (status = 'active' AND next_check_at IS NULL
+                AND active_run_id IS NOT NULL)
+            OR
+            (status IN ('completed', 'needs_human', 'paused')
+                AND next_check_at IS NULL AND active_run_id IS NULL)
+        )
+    )
+    """,
+    """
+    CREATE INDEX agent_schedule_due
+    ON agent_schedule (status, next_check_at, venue_id, year)
+    """,
+    """
+    CREATE TABLE agent_run_attempt (
+        run_id TEXT PRIMARY KEY,
+        venue_id TEXT NOT NULL,
+        year INTEGER NOT NULL,
+        attempt_number INTEGER NOT NULL CHECK (attempt_number >= 1),
+        started_at TEXT NOT NULL,
+        completed_at TEXT,
+        disposition TEXT NOT NULL CHECK (disposition IN (
+            'active', 'success', 'not_ready', 'needs_human', 'failed'
+        )),
+        explanation TEXT,
+        suggested_retry_at TEXT,
+        failure_category TEXT,
+        UNIQUE (venue_id, year, attempt_number),
+        FOREIGN KEY (venue_id, year)
+            REFERENCES agent_schedule (venue_id, year),
+        CHECK (
+            (disposition = 'active' AND completed_at IS NULL
+                AND explanation IS NULL AND suggested_retry_at IS NULL
+                AND failure_category IS NULL)
+            OR
+            (disposition IN ('success', 'not_ready', 'needs_human')
+                AND completed_at IS NOT NULL AND explanation IS NOT NULL
+                AND failure_category IS NULL)
+            OR
+            (disposition = 'failed' AND completed_at IS NOT NULL
+                AND explanation IS NOT NULL AND failure_category IS NOT NULL)
+        )
+    )
+    """,
+    """
+    CREATE UNIQUE INDEX agent_one_active_run
+    ON agent_run_attempt (disposition) WHERE disposition = 'active'
+    """,
+    """
+    CREATE INDEX agent_run_attempt_started
+    ON agent_run_attempt (started_at, venue_id, year)
+    """,
+    """
+    INSERT INTO agent_schedule (
+        venue_id, year, status, next_check_at, attempt_count,
+        active_run_id, consecutive_failures, last_disposition,
+        last_run_at, suggested_retry_at, last_gate_reason, updated_at
+    )
+    SELECT venue_id, year, 'scheduled', next_check_at, 0,
+        NULL, 0, NULL, NULL, NULL, NULL, updated_at
+    FROM event_date_schedule WHERE status = 'scheduled'
+    """,
+)
+
 _MIGRATIONS = {
     1: _MIGRATION_1,
     2: _MIGRATION_2,
@@ -880,6 +1027,7 @@ _MIGRATIONS = {
     6: _MIGRATION_6,
     7: _MIGRATION_7,
     8: _MIGRATION_8,
+    9: _MIGRATION_9,
 }
 
 _REQUIRED_COLUMNS_V1 = {
@@ -991,6 +1139,19 @@ _REQUIRED_COLUMNS_V8 = {
     },
 }
 
+_REQUIRED_COLUMNS_V9 = {
+    "agent_schedule": {
+        "venue_id", "year", "status", "next_check_at", "attempt_count",
+        "active_run_id", "consecutive_failures", "last_disposition",
+        "last_run_at", "suggested_retry_at", "last_gate_reason", "updated_at",
+    },
+    "agent_run_attempt": {
+        "run_id", "venue_id", "year", "attempt_number", "started_at",
+        "completed_at", "disposition", "explanation", "suggested_retry_at",
+        "failure_category",
+    },
+}
+
 _REQUIRED_COLUMNS_BY_VERSION = {
     1: _REQUIRED_COLUMNS_V1,
     2: _REQUIRED_COLUMNS_V2,
@@ -1000,6 +1161,7 @@ _REQUIRED_COLUMNS_BY_VERSION = {
     6: _REQUIRED_COLUMNS_V6,
     7: _REQUIRED_COLUMNS_V7,
     8: _REQUIRED_COLUMNS_V8,
+    9: _REQUIRED_COLUMNS_V9,
 }
 
 
@@ -2114,6 +2276,18 @@ class ControlStateRepository:
                     claim.venue_id, claim.year, claim.attempt_id,
                 ),
             )
+            connection.execute(
+                """
+                INSERT INTO agent_schedule (
+                    venue_id, year, status, next_check_at, attempt_count,
+                    active_run_id, consecutive_failures, last_disposition,
+                    last_run_at, suggested_retry_at, last_gate_reason, updated_at
+                ) VALUES (?, ?, 'scheduled', ?, 0, NULL, 0, NULL, NULL,
+                    NULL, NULL, ?)
+                ON CONFLICT (venue_id, year) DO NOTHING
+                """,
+                (claim.venue_id, claim.year, next_check, estimated),
+            )
             row = connection.execute(
                 "SELECT * FROM event_date_schedule WHERE venue_id = ? AND year = ?",
                 (claim.venue_id, claim.year),
@@ -2379,6 +2553,491 @@ class ControlStateRepository:
             prompt_version=str(row["prompt_version"]),
             estimated_event_date=estimated_event_date,
             failure_category=failure_category,
+        )
+
+    def claim_due_agent_run(
+        self,
+        *,
+        claimed_at: datetime | str,
+        monthly_run_limit: int,
+        systemic_failure_threshold: int,
+        systemic_failure_window: timedelta,
+        systemic_circuit_delay: timedelta,
+        lease: LeaseHandle,
+    ) -> AgentRunClaimOutcome:
+        """Claim one due target after durable concurrency and budget gates."""
+        if self.writer is not Writer.LOCAL_CONTROL_PLANE:
+            raise OwnershipError("agent schedules require local ownership")
+        for value, field in (
+            (monthly_run_limit, "monthly run limit"),
+            (systemic_failure_threshold, "systemic failure threshold"),
+        ):
+            if not isinstance(value, int) or isinstance(value, bool) or value < 1:
+                raise AgentScheduleError(f"{field} must be a positive integer")
+        for value, field in (
+            (systemic_failure_window, "systemic failure window"),
+            (systemic_circuit_delay, "systemic circuit delay"),
+        ):
+            if not isinstance(value, timedelta) or value <= timedelta(0):
+                raise AgentScheduleError(f"{field} must be positive")
+        claimed = _timestamp(claimed_at, field="agent run claimed_at")
+        claimed_dt = _parse_timestamp(claimed, field="agent run claimed_at")
+        month_start = claimed_dt.replace(
+            day=1, hour=0, minute=0, second=0, microsecond=0
+        )
+        if month_start.month == 12:
+            next_month = month_start.replace(
+                year=month_start.year + 1, month=1
+            )
+        else:
+            next_month = month_start.replace(month=month_start.month + 1)
+        with self._write_transaction() as connection:
+            self._require_lease(connection, lease, self._now())
+            active = connection.execute(
+                "SELECT * FROM agent_schedule WHERE status = 'active'"
+            ).fetchone()
+            if active is not None:
+                return AgentRunClaimOutcome(
+                    claim=None,
+                    schedule=self._agent_schedule_from_row(active),
+                    reason="active_run",
+                )
+            row = connection.execute(
+                "SELECT * FROM agent_schedule WHERE status = 'scheduled' "
+                "AND next_check_at <= ? ORDER BY next_check_at, venue_id, year "
+                "LIMIT 1",
+                (claimed,),
+            ).fetchone()
+            if row is None:
+                return AgentRunClaimOutcome(None, None, "nothing_due")
+            schedule = self._agent_schedule_from_row(row)
+            monthly_count = int(connection.execute(
+                "SELECT COUNT(*) FROM agent_run_attempt "
+                "WHERE started_at >= ? AND started_at < ?",
+                (
+                    _timestamp(month_start, field="agent budget month start"),
+                    _timestamp(next_month, field="agent budget next month"),
+                ),
+            ).fetchone()[0])
+            if monthly_count >= monthly_run_limit:
+                connection.execute(
+                    "UPDATE agent_schedule SET next_check_at = ?, "
+                    "last_gate_reason = 'monthly_budget', updated_at = ? "
+                    "WHERE venue_id = ? AND year = ? AND status = 'scheduled'",
+                    (
+                        _timestamp(next_month, field="agent budget retry"),
+                        claimed, schedule.venue_id, schedule.year,
+                    ),
+                )
+                deferred = connection.execute(
+                    "SELECT * FROM agent_schedule WHERE venue_id = ? AND year = ?",
+                    (schedule.venue_id, schedule.year),
+                ).fetchone()
+                return AgentRunClaimOutcome(
+                    None, self._agent_schedule_from_row(deferred), "monthly_budget"
+                )
+            window_start = claimed_dt - systemic_failure_window
+            failures = connection.execute(
+                "SELECT COUNT(DISTINCT venue_id), MAX(completed_at) "
+                "FROM agent_run_attempt WHERE disposition = 'failed' "
+                "AND completed_at >= ? AND completed_at <= ?",
+                (
+                    _timestamp(window_start, field="systemic window start"),
+                    claimed,
+                ),
+            ).fetchone()
+            distinct_failures = int(failures[0])
+            latest_failure = failures[1]
+            if distinct_failures >= systemic_failure_threshold and \
+                    latest_failure is not None:
+                circuit_until_dt = _parse_timestamp(
+                    str(latest_failure), field="latest systemic failure"
+                ) + systemic_circuit_delay
+                if circuit_until_dt > claimed_dt:
+                    circuit_until = _timestamp(
+                        circuit_until_dt, field="systemic circuit retry"
+                    )
+                    connection.execute(
+                        "UPDATE agent_schedule SET next_check_at = ?, "
+                        "last_gate_reason = 'systemic_failure', updated_at = ? "
+                        "WHERE venue_id = ? AND year = ? AND status = 'scheduled'",
+                        (
+                            circuit_until, claimed, schedule.venue_id,
+                            schedule.year,
+                        ),
+                    )
+                    deferred = connection.execute(
+                        "SELECT * FROM agent_schedule "
+                        "WHERE venue_id = ? AND year = ?",
+                        (schedule.venue_id, schedule.year),
+                    ).fetchone()
+                    return AgentRunClaimOutcome(
+                        None,
+                        self._agent_schedule_from_row(deferred),
+                        "systemic_failure",
+                    )
+            attempt_number = schedule.attempt_count + 1
+            run_id = "agent-run:" + artifact_fingerprint({
+                "venue_id": schedule.venue_id,
+                "year": schedule.year,
+                "attempt_number": attempt_number,
+            })
+            connection.execute(
+                "INSERT INTO agent_run_attempt (run_id, venue_id, year, "
+                "attempt_number, started_at, completed_at, disposition, "
+                "explanation, suggested_retry_at, failure_category) "
+                "VALUES (?, ?, ?, ?, ?, NULL, 'active', NULL, NULL, NULL)",
+                (
+                    run_id, schedule.venue_id, schedule.year, attempt_number,
+                    claimed,
+                ),
+            )
+            connection.execute(
+                "UPDATE agent_schedule SET status = 'active', "
+                "next_check_at = NULL, attempt_count = ?, active_run_id = ?, "
+                "last_gate_reason = NULL, updated_at = ? "
+                "WHERE venue_id = ? AND year = ? AND status = 'scheduled'",
+                (
+                    attempt_number, run_id, claimed, schedule.venue_id,
+                    schedule.year,
+                ),
+            )
+            claimed_row = connection.execute(
+                "SELECT * FROM agent_schedule WHERE venue_id = ? AND year = ?",
+                (schedule.venue_id, schedule.year),
+            ).fetchone()
+        claim = AgentRunClaim(
+            run_id=run_id,
+            venue_id=schedule.venue_id,
+            year=schedule.year,
+            attempt_number=attempt_number,
+            started_at=claimed,
+        )
+        return AgentRunClaimOutcome(
+            claim, self._agent_schedule_from_row(claimed_row), "claimed"
+        )
+
+    def complete_agent_run_attempt(
+        self,
+        claim: AgentRunClaim,
+        *,
+        disposition: str,
+        explanation: str,
+        completed_at: datetime | str,
+        next_check_at: datetime | str | None,
+        suggested_retry_at: datetime | str | None,
+        failure_category: str | None,
+        pause_after_failure: bool,
+        lease: LeaseHandle,
+    ) -> AgentScheduleRecord:
+        """Complete one claimed run with an already-reduced policy result."""
+        if disposition not in {"success", "not_ready", "needs_human", "failed"}:
+            raise AgentScheduleError("agent disposition is invalid")
+        explanation = _bounded_event_text(
+            explanation, field="agent explanation", maximum=4000
+        )
+        failure = None if failure_category is None else _bounded_event_text(
+            failure_category, field="agent failure category"
+        )
+        assert_secret_free({
+            "explanation": explanation,
+            "failure_category": failure or "",
+        })
+        completed = _timestamp(completed_at, field="agent run completed_at")
+        next_check = None if next_check_at is None else _timestamp(
+            next_check_at, field="agent next_check_at"
+        )
+        suggested = None if suggested_retry_at is None else _timestamp(
+            suggested_retry_at, field="agent suggested_retry_at"
+        )
+        if disposition == "not_ready":
+            if next_check is None or failure is not None or pause_after_failure:
+                raise AgentScheduleError("not-ready completion is inconsistent")
+        elif disposition == "failed":
+            if failure is None or suggested is not None:
+                raise AgentScheduleError("failed completion is inconsistent")
+            if pause_after_failure != (next_check is None):
+                raise AgentScheduleError("failed pause state is inconsistent")
+        elif any((next_check, suggested, failure)) or pause_after_failure:
+            raise AgentScheduleError("terminal completion is inconsistent")
+        completed_dt = _parse_timestamp(completed, field="agent run completed_at")
+        for value, field in (
+            (next_check, "agent next_check_at"),
+            (suggested, "agent suggested_retry_at"),
+        ):
+            if value is not None and _parse_timestamp(value, field=field) <= completed_dt:
+                raise AgentScheduleError(f"{field} must be in the future")
+        with self._write_transaction() as connection:
+            schedule = self._require_agent_run_claim(connection, claim, lease)
+            failures = schedule.consecutive_failures + int(disposition == "failed")
+            if disposition != "failed":
+                failures = 0
+            if disposition == "success":
+                status = "completed"
+            elif disposition == "needs_human":
+                status = "needs_human"
+            elif disposition == "failed" and pause_after_failure:
+                status = "paused"
+            else:
+                status = "scheduled"
+            connection.execute(
+                "UPDATE agent_run_attempt SET completed_at = ?, disposition = ?, "
+                "explanation = ?, suggested_retry_at = ?, failure_category = ? "
+                "WHERE run_id = ? AND disposition = 'active'",
+                (
+                    completed, disposition, explanation, suggested, failure,
+                    claim.run_id,
+                ),
+            )
+            connection.execute(
+                "UPDATE agent_schedule SET status = ?, next_check_at = ?, "
+                "active_run_id = NULL, consecutive_failures = ?, "
+                "last_disposition = ?, last_run_at = ?, suggested_retry_at = ?, "
+                "last_gate_reason = NULL, updated_at = ? "
+                "WHERE venue_id = ? AND year = ? AND status = 'active' "
+                "AND active_run_id = ?",
+                (
+                    status, next_check, failures, disposition, completed,
+                    suggested, completed, claim.venue_id, claim.year,
+                    claim.run_id,
+                ),
+            )
+            row = connection.execute(
+                "SELECT * FROM agent_schedule WHERE venue_id = ? AND year = ?",
+                (claim.venue_id, claim.year),
+            ).fetchone()
+        return self._agent_schedule_from_row(row)
+
+    def resume_agent_schedule(
+        self,
+        venue_id: str,
+        year: int,
+        *,
+        next_check_at: datetime | str,
+        resumed_at: datetime | str,
+        lease: LeaseHandle,
+    ) -> AgentScheduleRecord:
+        """Explicitly resume a failure-paused target after operator review."""
+        _validate_event_date_target(venue_id, year)
+        resumed = _timestamp(resumed_at, field="agent resumed_at")
+        next_check = _timestamp(next_check_at, field="agent resume next_check_at")
+        if _parse_timestamp(next_check, field="agent resume next_check_at") < \
+                _parse_timestamp(resumed, field="agent resumed_at"):
+            raise AgentScheduleError("agent resume time cannot be in the past")
+        with self._write_transaction() as connection:
+            self._require_lease(connection, lease, self._now())
+            row = connection.execute(
+                "SELECT * FROM agent_schedule WHERE venue_id = ? AND year = ?",
+                (venue_id, year),
+            ).fetchone()
+            if row is None or self._agent_schedule_from_row(row).status != "paused":
+                raise AgentScheduleError("agent schedule is not failure-paused")
+            connection.execute(
+                "UPDATE agent_schedule SET status = 'scheduled', "
+                "next_check_at = ?, consecutive_failures = 0, "
+                "last_gate_reason = NULL, updated_at = ? "
+                "WHERE venue_id = ? AND year = ? AND status = 'paused'",
+                (next_check, resumed, venue_id, year),
+            )
+            updated = connection.execute(
+                "SELECT * FROM agent_schedule WHERE venue_id = ? AND year = ?",
+                (venue_id, year),
+            ).fetchone()
+        return self._agent_schedule_from_row(updated)
+
+    def get_agent_schedule(
+        self, venue_id: str, year: int
+    ) -> AgentScheduleRecord | None:
+        """Return one validated coding-agent schedule."""
+        _validate_event_date_target(venue_id, year)
+        row = self._connection.execute(
+            "SELECT * FROM agent_schedule WHERE venue_id = ? AND year = ?",
+            (venue_id, year),
+        ).fetchone()
+        return None if row is None else self._agent_schedule_from_row(row)
+
+    def list_agent_schedules(self) -> tuple[AgentScheduleRecord, ...]:
+        """Return validated coding-agent schedules in stable target order."""
+        rows = self._connection.execute(
+            "SELECT * FROM agent_schedule ORDER BY venue_id, year"
+        ).fetchall()
+        return tuple(self._agent_schedule_from_row(row) for row in rows)
+
+    def agent_run_history(
+        self, venue_id: str, year: int
+    ) -> tuple[AgentRunAttemptRecord, ...]:
+        """Return immutable coding-agent attempts for one target."""
+        _validate_event_date_target(venue_id, year)
+        rows = self._connection.execute(
+            "SELECT * FROM agent_run_attempt WHERE venue_id = ? AND year = ? "
+            "ORDER BY attempt_number",
+            (venue_id, year),
+        ).fetchall()
+        return tuple(self._agent_run_attempt_from_row(row) for row in rows)
+
+    def _require_agent_run_claim(
+        self,
+        connection: sqlite3.Connection,
+        claim: AgentRunClaim,
+        lease: LeaseHandle,
+    ) -> AgentScheduleRecord:
+        if not isinstance(claim, AgentRunClaim):
+            raise AgentScheduleError("agent run claim is invalid")
+        self._require_lease(connection, lease, self._now())
+        schedule_row = connection.execute(
+            "SELECT * FROM agent_schedule WHERE venue_id = ? AND year = ?",
+            (claim.venue_id, claim.year),
+        ).fetchone()
+        attempt_row = connection.execute(
+            "SELECT * FROM agent_run_attempt WHERE run_id = ?",
+            (claim.run_id,),
+        ).fetchone()
+        if schedule_row is None or attempt_row is None:
+            raise AgentScheduleError("agent run claim is not retained")
+        schedule = self._agent_schedule_from_row(schedule_row)
+        attempt = self._agent_run_attempt_from_row(attempt_row)
+        if (
+            schedule.status != "active"
+            or schedule.active_run_id != claim.run_id
+            or schedule.attempt_count != claim.attempt_number
+            or attempt.disposition != "active"
+            or attempt.venue_id != claim.venue_id
+            or attempt.year != claim.year
+            or attempt.attempt_number != claim.attempt_number
+            or attempt.started_at != claim.started_at
+        ):
+            raise AgentScheduleError("agent run claim is stale or already completed")
+        return schedule
+
+    def _agent_schedule_from_row(self, row: sqlite3.Row) -> AgentScheduleRecord:
+        venue_id = str(row["venue_id"])
+        year = int(row["year"])
+        _validate_event_date_target(venue_id, year)
+        status = str(row["status"])
+        if status not in {"scheduled", "active", "completed", "needs_human", "paused"}:
+            raise StoredDataError("stored agent schedule status is invalid")
+        next_check = None if row["next_check_at"] is None else _timestamp(
+            str(row["next_check_at"]), field="stored agent next_check_at"
+        )
+        updated = _timestamp(str(row["updated_at"]), field="stored agent updated_at")
+        attempt_count = int(row["attempt_count"])
+        consecutive_failures = int(row["consecutive_failures"])
+        if attempt_count < 0 or consecutive_failures < 0:
+            raise StoredDataError("stored agent counters are invalid")
+        optional = {
+            name: None if row[name] is None else str(row[name])
+            for name in (
+                "active_run_id", "last_disposition", "last_run_at",
+                "suggested_retry_at", "last_gate_reason",
+            )
+        }
+        for name in ("last_run_at", "suggested_retry_at"):
+            if optional[name] is not None:
+                optional[name] = _timestamp(
+                    optional[name], field=f"stored agent {name}"
+                )
+        if optional["last_disposition"] is not None and \
+                optional["last_disposition"] not in {
+                    "success", "not_ready", "needs_human", "failed"
+                }:
+            raise StoredDataError("stored agent disposition is invalid")
+        if optional["last_gate_reason"] is not None and \
+                optional["last_gate_reason"] not in {
+                    "monthly_budget", "systemic_failure"
+                }:
+            raise StoredDataError("stored agent gate reason is invalid")
+        attempts = int(self._connection.execute(
+            "SELECT COUNT(*) FROM agent_run_attempt WHERE venue_id = ? AND year = ?",
+            (venue_id, year),
+        ).fetchone()[0])
+        if attempts != attempt_count:
+            raise StoredDataError("stored agent attempt count does not match")
+        if status == "scheduled" and (
+            next_check is None or optional["active_run_id"] is not None
+        ):
+            raise StoredDataError("stored scheduled agent state is invalid")
+        if status == "active":
+            if next_check is not None or optional["active_run_id"] is None:
+                raise StoredDataError("stored active agent state is invalid")
+            active = self._connection.execute(
+                "SELECT disposition FROM agent_run_attempt WHERE run_id = ?",
+                (optional["active_run_id"],),
+            ).fetchone()
+            if active is None or active["disposition"] != "active":
+                raise StoredDataError("stored active agent run is inconsistent")
+        if status in {"completed", "needs_human", "paused"} and (
+            next_check is not None or optional["active_run_id"] is not None
+        ):
+            raise StoredDataError("stored terminal agent state is invalid")
+        return AgentScheduleRecord(
+            venue_id=venue_id,
+            year=year,
+            status=status,
+            next_check_at=next_check,
+            attempt_count=attempt_count,
+            active_run_id=optional["active_run_id"],
+            consecutive_failures=consecutive_failures,
+            last_disposition=optional["last_disposition"],
+            last_run_at=optional["last_run_at"],
+            suggested_retry_at=optional["suggested_retry_at"],
+            last_gate_reason=optional["last_gate_reason"],
+            updated_at=updated,
+        )
+
+    def _agent_run_attempt_from_row(
+        self, row: sqlite3.Row
+    ) -> AgentRunAttemptRecord:
+        venue_id = str(row["venue_id"])
+        year = int(row["year"])
+        _validate_event_date_target(venue_id, year)
+        attempt_number = int(row["attempt_number"])
+        run_id = str(row["run_id"])
+        expected = "agent-run:" + artifact_fingerprint({
+            "venue_id": venue_id,
+            "year": year,
+            "attempt_number": attempt_number,
+        })
+        if attempt_number < 1 or run_id != expected:
+            raise StoredDataError("stored agent run identity is invalid")
+        disposition = str(row["disposition"])
+        if disposition not in {"active", "success", "not_ready", "needs_human", "failed"}:
+            raise StoredDataError("stored agent run disposition is invalid")
+        started = _timestamp(str(row["started_at"]), field="stored agent run start")
+        completed = None if row["completed_at"] is None else _timestamp(
+            str(row["completed_at"]), field="stored agent run completion"
+        )
+        explanation = None if row["explanation"] is None else str(row["explanation"])
+        suggested = None if row["suggested_retry_at"] is None else _timestamp(
+            str(row["suggested_retry_at"]), field="stored agent suggested retry"
+        )
+        failure = None if row["failure_category"] is None else str(row["failure_category"])
+        if completed is not None and _parse_timestamp(
+            completed, field="stored agent run completion"
+        ) < _parse_timestamp(started, field="stored agent run start"):
+            raise StoredDataError("stored agent run time regresses")
+        if disposition == "active" and any((completed, explanation, suggested, failure)):
+            raise StoredDataError("stored active agent run is invalid")
+        if disposition in {"success", "not_ready", "needs_human"} and (
+            completed is None or explanation is None or failure is not None
+        ):
+            raise StoredDataError("stored completed agent run is invalid")
+        if disposition != "not_ready" and suggested is not None:
+            raise StoredDataError("stored agent retry suggestion is invalid")
+        if disposition == "failed" and (
+            completed is None or explanation is None or failure is None
+        ):
+            raise StoredDataError("stored failed agent run is invalid")
+        return AgentRunAttemptRecord(
+            run_id=run_id,
+            venue_id=venue_id,
+            year=year,
+            attempt_number=attempt_number,
+            started_at=started,
+            completed_at=completed,
+            disposition=disposition,
+            explanation=explanation,
+            suggested_retry_at=suggested,
+            failure_category=failure,
         )
 
     def accept_verification(

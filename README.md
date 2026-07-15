@@ -157,9 +157,10 @@ The target local-first control plane estimates each venue/year's event date
 once, sleeps until that date, and then gives the venue/year to Codex or Claude
 Code in an isolated worktree. The agent decides readiness, investigates
 sources, and may repair and run the scraper; the maintainer reviews and commits
-manually. The one-time date initializer now exists as an uninstalled library
-boundary with fake tests and one isolated ICML 2026 live canary; target-cohort
-wiring, agent execution, and the run-report path remain planned in the
+manually. The one-time date initializer and effect-free due-state policy now
+exist as uninstalled library boundaries, with fake tests and one isolated ICML
+2026 date canary. Target-cohort wiring, agent execution, and the run-report
+path remain planned in the
 [automation system development guide](./docs/automation-system/README.md) and
 are not deployed.
 
