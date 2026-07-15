@@ -79,6 +79,7 @@ class CodexAgentTests(unittest.TestCase):
                      "workspace-write", "never", "--output-schema"):
             self.assertIn(flag, argv)
         self.assertIn('mcp_servers={}', argv)
+        self.assertLess(argv.index("--ask-for-approval"), argv.index("exec"))
         self.assertEqual(outcome.result.disposition, "success")
 
     def test_timeout_and_malformed_output_fail_closed_and_preserve_worktree(self):

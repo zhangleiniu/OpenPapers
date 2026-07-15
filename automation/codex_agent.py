@@ -134,9 +134,9 @@ def run_claimed_codex_agent(
     _git(repository_root, "worktree", "add", "-b", branch, str(worktree), primary_head)
     invocation = CodexInvocation(
         (
-            config.codex_binary, "exec", "--ephemeral", "--ignore-user-config",
-            "--ignore-rules", "--sandbox", "workspace-write",
-            "--ask-for-approval", "never", "--cd", str(worktree),
+            config.codex_binary, "--ask-for-approval", "never", "exec",
+            "--ephemeral", "--ignore-user-config", "--ignore-rules",
+            "--sandbox", "workspace-write", "--cd", str(worktree),
             "--config", 'mcp_servers={}', "--config", 'web_search="cached"',
             "--output-schema", str(RESULT_SCHEMA), _prompt(claim),
         ),
