@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 from html.parser import HTMLParser
 from typing import Any, Mapping, Sequence
+from urllib.parse import urljoin, urlparse
 
 from automation.contracts import (
     ContractName,
@@ -166,6 +167,18 @@ class HtmlVerificationProfile:
             raise HtmlVerificationError(
                 "paper field selectors require a paper entry selector"
             )
+
+
+COLT_PMLR_VOLUME_PROFILE = HtmlVerificationProfile(
+    paper_entry_selector=ElementSelector("div", classes=("paper",)),
+    paper_title_selector=ElementSelector("p", classes=("title",)),
+    paper_author_selector=ElementSelector("span", classes=("authors",)),
+    minimum_paper_count=100,
+    maximum_paper_count=500,
+    proceedings_entry_selector=ElementSelector("p", classes=("title",)),
+    minimum_proceedings_count=100,
+    proceedings_status="archival",
+)
 
 
 @dataclass(frozen=True)
@@ -583,6 +596,61 @@ def analyze_html(
         metadata_complete_count=metadata_count,
         proceedings_count=proceedings_count,
     )
+
+
+def extract_pmlr_pdf_urls(
+    response: FetchResponse,
+    *,
+    minimum_count: int = 100,
+    maximum_count: int = 500,
+) -> tuple[str, ...]:
+    """Return bounded same-volume PDF links from retained PMLR HTML."""
+    if not 1 <= minimum_count <= maximum_count <= 5000:
+        raise HtmlVerificationError("PMLR PDF count bounds are invalid")
+    listing = urlparse(response.requested_url)
+    if (
+        listing.scheme != "https"
+        or listing.username is not None
+        or listing.password is not None
+        or (listing.hostname or "").lower().rstrip(".")
+        != "proceedings.mlr.press"
+        or re.fullmatch(r"/v[1-9][0-9]*/", listing.path) is None
+        or listing.query
+        or listing.fragment
+    ):
+        raise HtmlVerificationError("PMLR listing URL is not a volume root")
+    root = _parse_html(response)
+    paper_selector = COLT_PMLR_VOLUME_PROFILE.paper_entry_selector
+    assert paper_selector is not None
+    urls: set[str] = set()
+    for paper in _select(root, paper_selector):
+        for anchor in _walk(paper):
+            if anchor.tag != "a" or "pdf" not in _normalized_text(_node_text(anchor)):
+                continue
+            raw = anchor.attributes.get("href")
+            if not raw:
+                continue
+            resolved = urljoin(response.requested_url, raw)
+            parsed = urlparse(resolved)
+            if (
+                parsed.scheme != "https"
+                or parsed.username is not None
+                or parsed.password is not None
+                or (parsed.hostname or "").lower().rstrip(".")
+                != "proceedings.mlr.press"
+                or not parsed.path.startswith(listing.path)
+                or not parsed.path.lower().endswith(".pdf")
+                or "%" in parsed.path
+                or parsed.query
+                or parsed.fragment
+            ):
+                raise HtmlVerificationError(
+                    "PMLR listing contains an unsafe PDF link"
+                )
+            urls.add(resolved)
+    if not minimum_count <= len(urls) <= maximum_count:
+        raise HtmlVerificationError("PMLR listing PDF count is implausible")
+    return tuple(sorted(urls))
 
 
 def fetch_html_evidence(

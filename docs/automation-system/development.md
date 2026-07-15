@@ -331,6 +331,27 @@ bounded operator review recorded in
 `p2-7-production-crawl-policy-review-2026-07-14.md`; no verifier test made a
 live request. Nothing imports or changes `automation/local_service/`.
 
+The P2.9 grounding-redirect resolution and COLT/PMLR profile checks are:
+
+```bash
+.venv/bin/python -m unittest automation.tests.test_grounding_resolution -v
+.venv/bin/python -m unittest automation.tests.test_gemini_provider -v
+.venv/bin/python -m unittest automation.tests.test_html_verification -v
+.venv/bin/python -m unittest automation.tests.test_pdf_verification -v
+.venv/bin/python -m unittest automation.tests.test_production_verification -v
+```
+
+These tests replay only the sanitized P2.8S redirect-only fixture and fake
+HTML/PDF responses. The installed `google-genai` model exposes no resolved URL
+beyond `GroundingChunkWeb.uri`, so `automation/grounding_resolution.py`
+contains the closed reviewed mapping for `colt`/2025 only. Unknown or signed
+wrapper shapes return no URL. The fake fetch log must contain only catalog
+sources, PMLR listing identity/count must pass before link extraction, and
+each stable PDF sample must independently pass the existing processing and
+internal-copy gates. Do not run P2.9S or any live command as part of these
+checks. The production crawl-policy artifact is unchanged and its
+`vertexaisearch.cloud.google.com` entry remains `denied`.
+
 The generalized live fetch adapter retains its transport-level DNS/SSRF and
 operational crawl controls. The existence of that injected interface or the
 P2.7 review artifact is not permission to make a live call; P2.8S owns any

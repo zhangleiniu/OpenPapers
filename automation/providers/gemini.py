@@ -16,6 +16,10 @@ from automation.discovery import (
     ProviderResponse,
     RetryableProviderError,
 )
+from automation.grounding_resolution import (
+    is_known_colt_pmlr_volume,
+    resolve_known_grounding_redirect,
+)
 
 
 DEFAULT_MODEL = "gemini-2.5-flash"
@@ -438,6 +442,61 @@ def _downgrade_unsupported_statuses(body: Mapping[str, Any]) -> dict[str, Any]:
     return result
 
 
+def _add_known_pmlr_pdf_candidate(
+    body: Mapping[str, Any],
+    sources: list[GroundingSource],
+    request: DiscoveryRequest,
+) -> dict[str, Any]:
+    """Add one verification candidate for a reviewed PMLR volume listing.
+
+    The listing is grounded evidence for a deterministic inspection, not proof
+    of PDF readiness.  Accordingly this adds only a claim target and never
+    upgrades ``pdf_status``; P2.3 must still fetch and validate sampled bytes.
+    """
+    result = deepcopy(dict(body))
+    claims = result.get("claims")
+    if not isinstance(claims, list) or any(
+        isinstance(claim, Mapping) and claim.get("claim_kind") == "pdf"
+        for claim in claims
+    ):
+        return result
+    known_urls = {
+        source.uri
+        for source in sources
+        if source.provider_uri is not None
+        and (source.domain or "").lower().rstrip(".")
+        == "proceedings.mlr.press"
+        and is_known_colt_pmlr_volume(
+            venue_id=request.venue_id,
+            year=request.year,
+            url=source.uri,
+        )
+    }
+    supported_urls = sorted({
+        url
+        for claim in claims
+        if isinstance(claim, Mapping)
+        and claim.get("claim_kind") in {"paper_list", "proceedings"}
+        for url in claim.get("evidence_urls", [])
+        if url in known_urls
+    })
+    if not supported_urls:
+        return result
+    claims.append({
+        "venue_id": request.venue_id,
+        "year": request.year,
+        "claim_kind": "pdf",
+        "statement": (
+            "The reviewed PMLR volume listing is a candidate for "
+            "deterministic PDF-link and signature verification."
+        ),
+        "evidence_urls": supported_urls,
+        "source_type": "archival",
+        "published_at": None,
+    })
+    return result
+
+
 class GeminiSearchGroundingProvider:
     """Use Vertex AI Gemini with Google Search and return allowlisted evidence."""
 
@@ -616,6 +675,7 @@ class GeminiSearchGroundingProvider:
         sources: list[GroundingSource] = []
         seen_uris: set[str] = set()
         source_id_by_uri: dict[str, str] = {}
+        source_id_by_evidence_uri: dict[str, str] = {}
         chunk_source_ids: dict[int, str] = {}
         for chunk_index, chunk in enumerate(
                 getattr(metadata, "grounding_chunks", None) or []):
@@ -627,13 +687,28 @@ class GeminiSearchGroundingProvider:
                 chunk_source_ids[chunk_index] = source_id_by_uri[uri]
                 continue
             seen_uris.add(uri)
+            domain = _bounded_optional(getattr(web, "domain", None), 253)
+            resolved_uri = resolve_known_grounding_redirect(
+                venue_id=request.venue_id,
+                year=request.year,
+                provider_uri=uri,
+                source_domain=domain,
+            )
+            evidence_uri = resolved_uri or uri
+            if evidence_uri in source_id_by_evidence_uri:
+                source_id = source_id_by_evidence_uri[evidence_uri]
+                source_id_by_uri[uri] = source_id
+                chunk_source_ids[chunk_index] = source_id
+                continue
             sources.append(GroundingSource(
-                uri=uri,
+                uri=evidence_uri,
                 title=_bounded_optional(getattr(web, "title", None), 500),
-                domain=_bounded_optional(getattr(web, "domain", None), 253),
+                domain=domain,
+                provider_uri=uri if resolved_uri is not None else None,
             ))
             source_id = f"s{len(sources)}"
             source_id_by_uri[uri] = source_id
+            source_id_by_evidence_uri[evidence_uri] = source_id
             chunk_source_ids[chunk_index] = source_id
         if not sources:
             raise ProviderError(
@@ -716,6 +791,9 @@ class GeminiSearchGroundingProvider:
                 diagnostics=_response_diagnostics(structure_response),
             ) from exc
         reconciled = _reconcile_grounding_urls(body, sources, request)
+        reconciled = _add_known_pmlr_pdf_candidate(
+            reconciled, sources, request
+        )
         return ProviderResponse(
             body=_downgrade_unsupported_statuses(reconciled),
             grounding_sources=tuple(sources),

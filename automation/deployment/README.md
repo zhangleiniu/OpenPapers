@@ -62,6 +62,12 @@ resumed and recovered; final activation paused/drained cloud again before
 local opened the refreshed generation. Never enable this schedule while the
 local production label is loaded.
 
+P2.9's fixture-only grounding-redirect resolution and COLT/PMLR verification
+profile are not imported by this retained cloud job or the installed local
+service. The reviewed Google grounding domain remains denied and no live P2.9S
+run, deployment change, credential, schedule, or runtime migration is part of
+that package.
+
 ## Build
 
 The Cloud Build configuration uses the active project ID and publishes the

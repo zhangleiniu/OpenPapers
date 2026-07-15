@@ -195,11 +195,19 @@ gap the earlier P2.S 15-venue review already recorded; see
 [`p2-8s-live-canary-review-2026-07-14.md`](./p2-8s-live-canary-review-2026-07-14.md).
 Because P2.8S's own package text treats a no-action outcome as a failed
 canary, it is `Review fix required`, not `Complete`.
-[`work-packages.md`](./work-packages.md) defines P2.9 (`Ready`; closes the
-grounding-redirect gap without weakening verification or crawl policy) and
-P2.9S (`Blocked` on P2.9; a second live run against the same `colt`/2025
-venue/year) as the path to closing that finding. P5.5S remains blocked until
-a live run reaches a genuine authoritative `pdf_status=ready` facet.
+P2.9 is now complete at the fixture/fake boundary. Because the installed
+`google-genai` response model has no alternate resolved-source field, a pure
+closed mapping resolves only the reviewed `colt`/2025 domain labels to the
+already-known COLT and PMLR URLs while preserving the opaque wrapper as
+non-fetchable provenance. A bounded PMLR profile verifies venue/year identity,
+100--500 distinct entries, same-volume PDF links, and three policy-gated PDF
+signatures. The sanitized redirect-only fixture reaches a promotable
+`pdf_status=ready` result without any grounding-domain fetch. The P2.7 policy
+is unchanged and still denies `vertexaisearch.cloud.google.com`; no
+redistribution was granted. [`work-packages.md`](./work-packages.md) now marks
+P2.9S `Ready` for the separately authorized second live run against the same
+`colt`/2025 venue/year. P5.5S remains blocked until that run reaches a genuine
+authoritative `pdf_status=ready` facet.
 
 Phase 3.1 persistent unresolved cases, P3.2 reminder/digest policy, P3.3's
 fake-only notification delivery boundary, P3.4's persistent shadow-output

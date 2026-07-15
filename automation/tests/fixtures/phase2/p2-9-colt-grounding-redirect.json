@@ -1,0 +1,141 @@
+{
+  "grounding_sources": [
+    {
+      "uri": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/colt-official-fixture",
+      "title": "COLT 2025",
+      "domain": "learningtheory.org"
+    },
+    {
+      "uri": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/colt-pmlr-fixture",
+      "title": "Proceedings of the Thirty-Eighth Conference on Learning Theory",
+      "domain": "proceedings.mlr.press"
+    },
+    {
+      "uri": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/colt-official-dates-fixture",
+      "title": "COLT 2025 dates",
+      "domain": "learningtheory.org"
+    },
+    {
+      "uri": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/colt-pmlr-list-fixture",
+      "title": "COLT 2025 paper listing",
+      "domain": "proceedings.mlr.press"
+    },
+    {
+      "uri": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/colt-pmlr-metadata-fixture",
+      "title": "COLT 2025 paper metadata",
+      "domain": "proceedings.mlr.press"
+    },
+    {
+      "uri": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/colt-pmlr-proceedings-fixture",
+      "title": "COLT 2025 proceedings",
+      "domain": "proceedings.mlr.press"
+    },
+    {
+      "uri": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/colt-official-program-fixture",
+      "title": "COLT 2025 program",
+      "domain": "learningtheory.org"
+    },
+    {
+      "uri": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/colt-pmlr-archive-fixture",
+      "title": "PMLR volume 291",
+      "domain": "proceedings.mlr.press"
+    }
+  ],
+  "search_queries": ["COLT 2025 proceedings PDFs"],
+  "body": {
+    "venue_id": "colt",
+    "year": 2025,
+    "conference_status": "ended",
+    "paper_list_status": "released",
+    "metadata_status": "ready",
+    "pdf_status": "unknown",
+    "proceedings_status": "archival",
+    "claims": [
+      {
+        "venue_id": "colt",
+        "year": 2025,
+        "claim_kind": "conference",
+        "statement": "COLT 2025 was held in Lyon.",
+        "evidence_urls": ["s1"],
+        "source_type": "official",
+        "published_at": null
+      },
+      {
+        "venue_id": "colt",
+        "year": 2025,
+        "claim_kind": "paper_list",
+        "statement": "The PMLR volume lists the COLT 2025 papers.",
+        "evidence_urls": ["s2"],
+        "source_type": "archival",
+        "published_at": null
+      },
+      {
+        "venue_id": "colt",
+        "year": 2025,
+        "claim_kind": "paper_list",
+        "statement": "The archival listing contains paper entries.",
+        "evidence_urls": ["s2"],
+        "source_type": "archival",
+        "published_at": null
+      },
+      {
+        "venue_id": "colt",
+        "year": 2025,
+        "claim_kind": "metadata",
+        "statement": "The archival source exposes paper metadata.",
+        "evidence_urls": ["s2"],
+        "source_type": "archival",
+        "published_at": null
+      },
+      {
+        "venue_id": "colt",
+        "year": 2025,
+        "claim_kind": "proceedings",
+        "statement": "PMLR volume 291 is the archival proceedings.",
+        "evidence_urls": ["s2"],
+        "source_type": "archival",
+        "published_at": null
+      },
+      {
+        "venue_id": "colt",
+        "year": 2025,
+        "claim_kind": "proceedings",
+        "statement": "The proceedings index is publicly available.",
+        "evidence_urls": ["s2"],
+        "source_type": "archival",
+        "published_at": null
+      }
+    ],
+    "candidate_milestones": [
+      {
+        "venue_id": "colt",
+        "year": 2025,
+        "milestone_type": "conference_start",
+        "scope": "conference",
+        "date": "2025-06-30",
+        "evidence_urls": ["s1"],
+        "source_type": "official"
+      },
+      {
+        "venue_id": "colt",
+        "year": 2025,
+        "milestone_type": "conference_end",
+        "scope": "conference",
+        "date": "2025-07-04",
+        "evidence_urls": ["s1"],
+        "source_type": "official"
+      },
+      {
+        "venue_id": "colt",
+        "year": 2025,
+        "milestone_type": "acceptance_notification",
+        "scope": "main_track",
+        "date": "2025-04-25",
+        "evidence_urls": ["s1"],
+        "source_type": "official"
+      }
+    ],
+    "confidence": 0.94,
+    "uncertainties": []
+  }
+}

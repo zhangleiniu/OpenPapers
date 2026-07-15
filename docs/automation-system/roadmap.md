@@ -350,8 +350,10 @@ is `Review fix required`, not `Complete`.
 P2.8 supplies the automatic verifier/action-source implementation prerequisite
 for P5.5S; P2.8S was meant to separately supply its real operational
 evidence, but that evidence did not include a genuine retained action. P2.9
-(`Ready`) closes the identified grounding-redirect gap without weakening
-verification or crawl policy, and P2.9S (`Blocked` on P2.9) is the second
+is now complete at the fixture/fake boundary: exact reviewed COLT/2025 domain
+labels resolve to repository-known URLs without contacting the denied wrapper,
+and bounded PMLR identity/count/link extraction plus existing P2.3 sampling
+produces a strict promotable PDF-ready result. P2.9S (`Ready`) is the second
 live run — against the same `colt`/2025 venue/year — that must reach a
 genuine retained action to close P2.8S's finding and prove P5.5S's
 action-source prerequisite end-to-end. Installation, production database

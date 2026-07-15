@@ -109,6 +109,7 @@ class GroundingSource:
     uri: str
     title: str | None = None
     domain: str | None = None
+    provider_uri: str | None = None
 
 
 @dataclass(frozen=True)
@@ -378,6 +379,11 @@ def normalize_provider_response(
             raise DiscoveryValidationError("grounding source title is too long")
         if source.domain is not None and len(source.domain) > 253:
             raise DiscoveryValidationError("grounding source domain is too long")
+        if source.provider_uri is not None:
+            _safe_https_url(
+                source.provider_uri,
+                field=f"grounding_sources[{index}].provider_uri",
+            )
         sources[uri] = source
 
     normalized_claims: list[dict[str, Any]] = []

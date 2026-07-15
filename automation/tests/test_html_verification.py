@@ -7,6 +7,7 @@ from pathlib import Path
 
 from automation.configuration import load_policy_config, load_venue_catalog
 from automation.html_verification import (
+    COLT_PMLR_VOLUME_PROFILE,
     MAX_HTML_BYTES,
     ElementSelector,
     HtmlEvidence,
@@ -14,6 +15,7 @@ from automation.html_verification import (
     HtmlVerificationProfile,
     RedirectChainError,
     analyze_html,
+    extract_pmlr_pdf_urls,
     fetch_html_evidence,
     verify_html_evidence,
 )
@@ -97,6 +99,20 @@ class MappingFetcher:
             body=response.get("body", b""),
             fetched_at=response.get("fetched_at", "2026-07-13T19:30:00Z"),
         )
+
+
+def colt_pmlr_listing(count=181, *, extra_link=""):
+    papers = "".join(
+        "<div class='paper'><p class='title'>Sanitized Paper "
+        f"{index}</p><span class='authors'>Author {index}</span>"
+        f"<a href='paper{index}/paper{index}.pdf'>Download PDF</a></div>"
+        for index in range(count)
+    )
+    return (
+        "<html><title>Proceedings of the Thirty-Eighth Conference on "
+        "Learning Theory 2025</title><h1>COLT 2025</h1>"
+        f"{papers}{extra_link}</html>"
+    ).encode("utf-8")
 
 
 def discovery(venue_id, year, url, claim_kinds=(), *, milestone=None):
@@ -288,6 +304,54 @@ class RedirectCoordinatorTests(unittest.TestCase):
 
 
 class HtmlAnalysisTests(unittest.TestCase):
+    def test_colt_pmlr_profile_requires_identity_and_plausible_distinct_count(self):
+        response = FetchResponse(
+            requested_url="https://proceedings.mlr.press/v291/",
+            status_code=200,
+            headers={"Content-Type": "text/html; charset=utf-8"},
+            body=colt_pmlr_listing(),
+            fetched_at="2026-07-13T19:30:00Z",
+        )
+        analysis = analyze_html(
+            response,
+            catalog=load_venue_catalog(),
+            venue_id="colt",
+            year=2025,
+            profile=COLT_PMLR_VOLUME_PROFILE,
+        )
+        self.assertTrue(analysis.identity_matches)
+        self.assertEqual(analysis.paper_count, 181)
+        self.assertEqual(analysis.proceedings_count, 181)
+        urls = extract_pmlr_pdf_urls(response)
+        self.assertEqual(len(urls), 181)
+        self.assertTrue(all(url.startswith(
+            "https://proceedings.mlr.press/v291/"
+        ) for url in urls))
+
+        unsafe = replace(
+            response,
+            body=colt_pmlr_listing(
+                extra_link=(
+                    "<div class='paper'><a href='https://example.test/evil.pdf'>"
+                    "Download PDF</a></div>"
+                )
+            ),
+        )
+        with self.assertRaisesRegex(HtmlVerificationError, "unsafe PDF link"):
+            extract_pmlr_pdf_urls(unsafe)
+
+        encoded_escape = replace(
+            response,
+            body=colt_pmlr_listing(
+                extra_link=(
+                    "<div class='paper'><a href='%2e%2e/v292/evil.pdf'>"
+                    "Download PDF</a></div>"
+                )
+            ),
+        )
+        with self.assertRaisesRegex(HtmlVerificationError, "unsafe PDF link"):
+            extract_pmlr_pdf_urls(encoded_escape)
+
     def test_ijcai_fixture_has_exact_identity_date_distinct_list_and_metadata(self):
         analysis = analyze_html(
             response(IJCAI_URL, fixture("ijcai-2026-accepted.html")),

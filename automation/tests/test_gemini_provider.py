@@ -14,6 +14,11 @@ FIXTURE = (
     / "phase1"
     / "gemini-grounded-response.v1.json"
 )
+P2_9_FIXTURE = (
+    Path(__file__).with_name("fixtures")
+    / "phase2"
+    / "p2-9-colt-grounding-redirect.json"
+)
 
 
 class FakeModels:
@@ -61,6 +66,29 @@ def sdk_response(*, include_metadata=True, text=None, usage_metadata=None):
         text=text if text is not None else json.dumps(fixture["body"]),
         candidates=[candidate],
         usage_metadata=usage_metadata,
+    )
+
+
+def p2_9_sdk_response():
+    fixture = json.loads(P2_9_FIXTURE.read_text(encoding="utf-8"))
+    metadata = SimpleNamespace(
+        grounding_chunks=[
+            SimpleNamespace(web=SimpleNamespace(**source))
+            for source in fixture["grounding_sources"]
+        ],
+        web_search_queries=fixture["search_queries"],
+        grounding_supports=[
+            SimpleNamespace(
+                segment=SimpleNamespace(text="Sanitized COLT fixture excerpt."),
+                grounding_chunk_indices=list(range(len(fixture["grounding_sources"]))),
+            )
+        ],
+    )
+    return SimpleNamespace(
+        parsed=None,
+        text=json.dumps(fixture["body"]),
+        candidates=[SimpleNamespace(grounding_metadata=metadata)],
+        usage_metadata=None,
     )
 
 
@@ -181,6 +209,42 @@ class GeminiProviderTests(unittest.TestCase):
             ["evidence_urls"],
             [redirect],
         )
+
+    def test_colt_redirect_only_sources_resolve_without_contacting_wrapper(self):
+        request = request_from_catalog(load_venue_catalog(), "colt", 2025)
+        fixture = json.loads(P2_9_FIXTURE.read_text(encoding="utf-8"))
+        response = GeminiSearchGroundingProvider(
+            FakeClient(p2_9_sdk_response())
+        ).discover(request)
+
+        self.assertEqual(
+            [source.uri for source in response.grounding_sources],
+            [
+                "https://learningtheory.org/colt2025/",
+                "https://proceedings.mlr.press/v291/",
+            ],
+        )
+        self.assertEqual(
+            [source.provider_uri for source in response.grounding_sources],
+            [source["uri"] for source in fixture["grounding_sources"][:2]],
+        )
+        cited = {
+            url
+            for collection in ("claims", "candidate_milestones")
+            for item in response.body[collection]
+            for url in item["evidence_urls"]
+        }
+        self.assertFalse(any("vertexaisearch.cloud.google.com" in url for url in cited))
+        pdf_claims = [
+            claim for claim in response.body["claims"]
+            if claim["claim_kind"] == "pdf"
+        ]
+        self.assertEqual(len(pdf_claims), 1)
+        self.assertEqual(
+            pdf_claims[0]["evidence_urls"],
+            ["https://proceedings.mlr.press/v291/"],
+        )
+        self.assertEqual(response.body["pdf_status"], "unknown")
 
     def test_short_source_ids_map_to_exact_grounding_uris(self):
         fixture = json.loads(FIXTURE.read_text(encoding="utf-8"))

@@ -8,6 +8,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from automation.configuration import load_policy_config, load_venue_catalog
+from automation.discovery import normalize_provider_response, request_from_catalog
 from automation.live_fetch import LiveFetchError
 from automation.local_control_plane import run_local_control_wakeup
 from automation.production_verification import (
@@ -20,6 +21,8 @@ from automation.production_verification import (
     ProductionVerificationEffect,
     load_production_crawl_policy,
 )
+from automation.providers.gemini import GeminiSearchGroundingProvider
+from automation.tests.test_gemini_provider import FakeClient, p2_9_sdk_response
 from automation.tests.test_local_control_plane import (
     FakeDiscovery,
     due_state,
@@ -93,6 +96,20 @@ def html_response(url, *, body=None, status=200, headers=None):
         ),
         fetched_at="2026-07-14T21:30:00Z",
     )
+
+
+def colt_pmlr_listing(count=181):
+    papers = "".join(
+        "<div class='paper'><p class='title'>Sanitized Paper "
+        f"{index}</p><span class='authors'>Author {index}</span>"
+        f"<a href='paper{index}/paper{index}.pdf'>Download PDF</a></div>"
+        for index in range(count)
+    )
+    return (
+        "<html><title>Proceedings of the Thirty-Eighth Conference on "
+        "Learning Theory 2025</title><h1>COLT 2025</h1>"
+        f"{papers}</html>"
+    ).encode("utf-8")
 
 
 class MappingFetcher:
@@ -235,6 +252,64 @@ class ProductionVerificationTests(unittest.TestCase):
         self.assert_strict_bundles(bundles, source)
         self.assertEqual(bundles[0].result["verified_facets"]["pdf_status"]["value"], "ready")
         self.assertEqual(fetcher.requests[0].permission.value, "pdf_fetch_for_processing")
+
+    def test_colt_redirect_only_fixture_reaches_promotable_pdf_result(self):
+        request = request_from_catalog(self.catalog, "colt", 2025)
+        provider = GeminiSearchGroundingProvider(
+            FakeClient(p2_9_sdk_response()), "fixture-gemini"
+        )
+        source = normalize_provider_response(
+            request,
+            provider,
+            provider.discover(request),
+            datetime(2026, 7, 14, 21, 0, tzinfo=timezone.utc),
+        )
+        official_url = "https://learningtheory.org/colt2025/"
+        volume_url = "https://proceedings.mlr.press/v291/"
+        official_body = (
+            b"<html><title>COLT 2025</title><h1>Conference on Learning Theory "
+            b"2025</h1><p>April 25, 2025; June 30, 2025; July 4, 2025</p></html>"
+        )
+        responses = {
+            official_url: html_response(official_url, body=official_body),
+            volume_url: html_response(volume_url, body=colt_pmlr_listing()),
+        }
+        for index in range(181):
+            url = (
+                "https://proceedings.mlr.press/v291/"
+                f"paper{index}/paper{index}.pdf"
+            )
+            body = b"%PDF-1.7\n" + bytes(str(index), "ascii") + b"x" * 2048
+            responses[url] = FetchResponse(
+                requested_url=url,
+                status_code=200,
+                headers={
+                    "Content-Type": "application/pdf",
+                    "Content-Length": str(len(body)),
+                },
+                body=body,
+                fetched_at="2026-07-14T21:30:00Z",
+            )
+        fetcher = MappingFetcher(responses)
+
+        bundles = self.effect(fetcher).verify(source, observed_at=NOW)
+
+        self.assert_strict_bundles(bundles, source)
+        ready = [
+            bundle for bundle in bundles
+            if bundle.result["verified_facets"]["pdf_status"] is not None
+        ]
+        self.assertEqual(len(ready), 1)
+        self.assertEqual(
+            ready[0].result["verified_facets"]["pdf_status"]["value"],
+            "ready",
+        )
+        requested_urls = [item.url for item in fetcher.requests]
+        self.assertIn(volume_url, requested_urls)
+        self.assertEqual(sum(url.endswith(".pdf") for url in requested_urls), 3)
+        self.assertFalse(any(
+            "vertexaisearch.cloud.google.com" in url for url in requested_urls
+        ))
 
     def test_redirect_hops_are_independently_gated_and_retained(self):
         initial = "https://icml.cc/openpapers-fixture/redirect"
@@ -441,9 +516,11 @@ class ProductionVerificationTests(unittest.TestCase):
         }
         source = MODULE.read_text(encoding="utf-8")
         for forbidden in (
+            "automation.execution_dispatch",
             "automation.execution_pipeline",
             "automation.mac_worker",
             "automation.local_service",
+            "automation.staging_executor",
             "prefect",
             "requests",
             "subprocess",

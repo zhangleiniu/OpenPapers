@@ -83,10 +83,10 @@ explicitly authorized live canary for the exact P2.8 composition: one real
 Gemini discovery call and zero live HTTP fetches, reconfirming the
 already-documented COLT source-shape gap and retaining no action. Because the
 package's own acceptance text treats a no-action outcome as a failed canary,
-P2.8S is `Review fix required`, not `Complete`. P2.9 is now the sole `Ready`
-package: it closes that exact grounding-redirect gap without weakening
-verification or crawl policy, and P2.9S (`Blocked` on P2.9) supplies the
-second live run that must close P2.8S's finding and prove P5.5S's
+P2.8S is `Review fix required`, not `Complete`. P2.9 has completed the
+fixture-only grounding-redirect fix without weakening verification or crawl
+policy. P2.9S is now the sole `Ready` package: it supplies the separately
+authorized second live run that must close P2.8S's finding and prove P5.5S's
 action-source prerequisite. Phase 2 remains `Shadow`. See "Phase 2 packages"
 below.
 P3.1 has completed the persistent
@@ -127,8 +127,9 @@ reconciliation with no installed caller or live request. Phase 5 remains
 authorized. P2.8 is `Complete` (the uninstalled automatic deterministic
 verifier/action-source composition), but P2.8S — its separately authorized
 live-evidence half — is `Review fix required`: its one authorized run
-retained no action, so P5.5S remains `Blocked` pending P2.9's fix and P2.9S's
-live evidence of a genuine authoritative `pdf_status=ready` facet. The local
+retained no action, so P5.5S remains `Blocked` pending P2.9S's live evidence
+that the completed P2.9 fix reaches a genuine authoritative
+`pdf_status=ready` facet. The local
 LaunchDaemon is authoritative and the retained Cloud Scheduler job is paused.
 
 ### P2.1R — harden verifier contract semantics
@@ -606,7 +607,7 @@ is end-to-end proven. Neither P2.9 nor P2.9S may touch P5.5S, Phase 6, Phase
 
 ### P2.9 — deterministic verification of grounding-redirect citations
 
-Status: `Ready`
+Status: `Complete`
 
 Depends on: P2.8S's review finding
 
@@ -674,9 +675,36 @@ Acceptance:
 - static scope tests prove no import of `automation.execution_dispatch`,
   `execution_pipeline`, `mac_worker`, `staging_executor`, or `local_service`.
 
+Completed boundary: local inspection of the installed `google-genai` response
+models confirmed that `GroundingChunkWeb` exposes only `uri`, `title`, and
+`domain`; there is no second resolved source URL to consume. The new pure
+`automation/grounding_resolution.py` therefore resolves only the exact
+reviewed `colt`/2025 `learningtheory.org` and `proceedings.mlr.press` domain
+labels to repository-known URLs. It accepts only an unsigned HTTPS
+`vertexaisearch.cloud.google.com/grounding-api-redirect/...` provider URI,
+never requests it, and returns no URL for any other venue/year/domain/path
+shape. `GroundingSource.provider_uri` preserves the original wrapper as
+non-fetchable artifact provenance while the normalized discovery cites the
+resolved catalog URL.
+
+When that resolved PMLR volume supports a paper-list or proceedings claim, the
+Gemini adapter adds one deterministic PDF verification candidate without
+changing the discovery `pdf_status`. The P2.9 COLT/PMLR HTML profile requires
+exact venue/year identity and 100--500 distinct paper entries. The production
+verifier fetches the retained volume only through the existing metadata gate,
+extracts only unsigned same-host/same-volume PDF links, applies P2.3's stable
+bounded sampling, and independently gates every selected PDF for processing
+and internal retention before checking its HTTP result, size, Content-Length,
+and `%PDF-` signature. A sanitized redirect-only fixture produces a strict
+promotable `pdf_status=ready` result with three fake PDF requests and zero
+grounding-redirect requests. Unknown mappings, unsafe links, implausible
+counts, and failed identity remain closed. The P2.7 policy file is unchanged;
+its grounding entry remains `denied`, and no redistribution permission was
+added. Nothing is installed or connected to `automation/local_service/`.
+
 ### P2.9S — second authorized live canary against the P2.9 fix
 
-Status: `Blocked`
+Status: `Ready`
 
 Depends on: P2.9
 
@@ -732,8 +760,8 @@ occur only in P2.S and remain isolated from production.
 | P2.7 | Complete | P2.6 | Fixture-only production-capable `VerificationEffect` plus fully reviewed per-domain production crawl policy and durable fetch-failure guardrails. Only bounded read-only robots/terms research was live; no live verifier request or production wiring. |
 | P2.8 | Complete | P2.7 | Fixture-only automatic discovery→verification→P2.5→P5.5 retention composition with exact replay and failure closure. Uninstalled; no live call, dispatch, or production state. |
 | P2.8S | Review fix required | P2.8 | Separately authorized isolated live canary for the exact P2.8 composition. One real run made a live Gemini call, correctly refused to weaken verification, and retained no action because every citation was an unresolved grounding-redirect URL. Per the package's own acceptance text this fails the canary's acceptance criterion; P2.9/P2.9S define the fix and its closing evidence. |
-| P2.9 | Ready | P2.8S | Deterministic verification of grounding-redirect citations: closes the exact source-shape gap P2.8S located without weakening the grounding-redirect domain's `denied` crawl-policy verdict or any existing verifier assertion. Fixture-only. |
-| P2.9S | Blocked | P2.9 | Second separately authorized isolated live canary, reusing P2.8S's unchanged infrastructure, against the same `colt`/2025 venue/year, to prove the P2.9 fix reaches a genuine retained action. |
+| P2.9 | Complete | P2.8S | Fixture-only exact COLT/2025 grounding-domain resolution plus bounded PMLR identity/count/link extraction and existing P2.3 PDF sampling. The grounding wrapper remains denied and is never fetched. |
+| P2.9S | Ready | P2.9 | Second separately authorized isolated live canary, reusing P2.8S's unchanged infrastructure, against the same `colt`/2025 venue/year, to prove the P2.9 fix reaches a genuine retained action. |
 
 Phase 2 has passed its shadow gate with the reviewed record in
 `phase2-live-review-2026-07-13.md`. It remains `Shadow`, not `Implemented`,
@@ -742,10 +770,10 @@ coverage remains conservative. P2.6, P2.7, and P2.8 are accepted. P2.8S's one
 authorized live run did not reach a genuine authoritative `pdf_status=ready`
 facet (see `p2-8s-live-canary-review-2026-07-14.md`), so per its own
 acceptance text the package is `Review fix required`, not `Complete`. P2.9 is
-now the sole `Ready` package: it closes the specific, now-identified
-grounding-redirect gap without touching crawl policy or weakening any
-existing verifier check. P2.9S is `Blocked` on P2.9 and supplies the live
-evidence that both closes P2.8S's finding and, if it reaches a genuine
+now `Complete`: fixture/fake evidence closes the specific deterministic
+grounding-redirect source-shape gap without touching crawl policy or weakening
+any existing verifier check. P2.9S is the sole `Ready` package and supplies
+the live evidence that both closes P2.8S's finding and, if it reaches a genuine
 retained action, satisfies P5.5S's action-source prerequisite.
 
 ## Phase 3 packages — cases and notifications
@@ -1504,8 +1532,8 @@ reaching a genuine authoritative `pdf_status=ready` facet — Vertex AI Search
 Grounding returned only redirect-wrapped citations for COLT/2025, which the
 existing verifier correctly left `review_required` rather than promote. Per
 P2.8S's own acceptance text this is a failed canary attempt, not merely an
-inconclusive one. P2.9 (`Ready`) defines the fix and P2.9S (`Blocked` on
-P2.9) defines the second live run that must reach a genuine retained
+inconclusive one. P2.9 (`Complete`) supplies the fixture-only fix and P2.9S
+(`Ready`) defines the second live run that must reach a genuine retained
 `queue_existing_scraper` action against real evidence — closing P2.8S's
 finding — before P5.5S's action-source prerequisite is considered end-to-end
 proven. P5.5S therefore remains `Blocked` on that chain, not merely on a

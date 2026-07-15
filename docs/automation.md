@@ -122,6 +122,13 @@ execution, and MustCite deployment are not implemented.
 P5.1/P5.2/P5.3/P5.4 remain unconnected to the installed runtime; P5.S is a
 manual shadow-only caller and changes no service or deployment.
 
+P2.9 additionally closes the fixture-reproducible COLT/2025 grounding-wrapper
+source shape in the uninstalled automatic verifier. It uses only exact
+repository-known source URLs, a bounded PMLR listing/PDF profile, and the
+existing crawl gates; the Google wrapper remains denied and is never fetched.
+P2.9S is still a separate manual live package, so this change does not alter
+the installed LaunchDaemon or current deployed behavior.
+
 Start at the [automation system development guide](./automation-system/README.md) for
 the implemented foundation, target architecture, roadmap, and zero-context
 development workflow.
