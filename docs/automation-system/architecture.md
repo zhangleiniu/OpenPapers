@@ -271,7 +271,8 @@ whole wakeup is left `active`. Nothing here is imported by or connected to
 `automation/local_service/production.py`.
 
 P2.8S separately exercises that exact composition through an authorized
-manual live canary against isolated roots. It is complete:
+manual live canary against isolated roots. Its infrastructure is built and
+sound, but the package itself is `Review fix required`, not `Complete`:
 `automation/production_wakeup_canary.py` and `automation/
 run_production_wakeup_canary.py` add a private marked-root lifecycle and a
 one-time seed for the one preselected `colt`/2025 venue/year around the
@@ -291,13 +292,15 @@ existing P4.L2/P5.5 exact-replay guarantee. Neither installs the service or
 dispatches a scraper. The sanitized record is
 `p2-8s-live-canary-review-2026-07-14.md`.
 
-Only P2.8 plus P2.8S together satisfy P5.5S's action-source prerequisite, and
-that prerequisite is about proving the real composition runs correctly
-against real, crawl-policy-allowed, venue/year-bound evidence — not that
-every live attempt must retain an action. Because this run's real evidence
-did not reach a genuine authoritative `pdf_status=ready` facet, P5.5S still
-requires a future live run that does before its prerequisite is considered
-end-to-end proven.
+P2.8S's own package text is explicit that a no-action outcome "fails the
+canary," so P5.5S's action-source prerequisite is not satisfied merely by
+the composition running correctly against real evidence — it requires that
+real evidence to include a genuine retained action. `work-packages.md`
+defines P2.9 (closes the grounding-redirect gap without weakening
+verification or crawl policy) and P2.9S (a second, separately authorized
+live run against the same `colt`/2025 venue/year) as the path to that
+outcome; only when P2.9S reaches a genuine retained action are both P2.8S's
+finding and P5.5S's action-source prerequisite considered end-to-end proven.
 
 P3.1 adds a local case domain and extends the same control repository, P3.2
 adds a separate pure reminder projection, P3.3 adds an injected delivery

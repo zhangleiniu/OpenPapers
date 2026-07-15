@@ -179,8 +179,8 @@ Fixture/fake tests drive the real production pair to a genuine authoritative
 `pdf_status=ready` facet that P5.5 retention persists as exactly one
 execution job, prove exact zero-call replay, and prove that invalid evidence,
 an open discovery circuit, and budget exhaustion all persist no action.
-Nothing is installed or connected to the deployed monitor. P2.8S has
-completed its separately authorized isolated live evidence
+Nothing is installed or connected to the deployed monitor. P2.8S ran its
+separately authorized isolated live evidence
 (`automation/production_wakeup_canary.py`,
 `automation/run_production_wakeup_canary.py`): one 2026-07-14 `--live` run
 against a private marked root made a real Gemini Search Grounding call and
@@ -193,9 +193,13 @@ replay of the same marked root made zero further live calls. This
 reconfirms, on the real production-capable pair, the same COLT source-shape
 gap the earlier P2.S 15-venue review already recorded; see
 [`p2-8s-live-canary-review-2026-07-14.md`](./p2-8s-live-canary-review-2026-07-14.md).
-P5.5S remains blocked: both of its named dependency packages are complete,
-but its action-source prerequisite still needs a future live run that
-reaches a genuine authoritative `pdf_status=ready` facet.
+Because P2.8S's own package text treats a no-action outcome as a failed
+canary, it is `Review fix required`, not `Complete`.
+[`work-packages.md`](./work-packages.md) defines P2.9 (`Ready`; closes the
+grounding-redirect gap without weakening verification or crawl policy) and
+P2.9S (`Blocked` on P2.9; a second live run against the same `colt`/2025
+venue/year) as the path to closing that finding. P5.5S remains blocked until
+a live run reaches a genuine authoritative `pdf_status=ready` facet.
 
 Phase 3.1 persistent unresolved cases, P3.2 reminder/digest policy, P3.3's
 fake-only notification delivery boundary, P3.4's persistent shadow-output

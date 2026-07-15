@@ -140,12 +140,13 @@ this query shape, not resolved catalog hostnames.
 - No production database, LaunchDaemon, scraper, notification, canonical
   write, promotion, or Codex path was touched. The canary root is fully
   disjoint from this host's actual installed production internal root.
-- Completion of this package supplies only the live-evidence half of
-  P5.5S's automatic verifier/action-source prerequisite. Because that
-  evidence did not include a genuine retained action, P5.5S's
-  prerequisite is not yet satisfied end-to-end; installation and automatic
-  scraper dispatch remain separately authorized P5.5S work, unchanged from
-  before this package.
+- This package's own acceptance text is explicit that a no-action outcome
+  "fails the canary." Because this run did not retain an eligible action,
+  P2.8S does not satisfy its own acceptance criterion and is `Review fix
+  required`, not `Complete`; P5.5S's automatic verifier/action-source
+  prerequisite remains unsatisfied end-to-end, and installation and
+  automatic scraper dispatch remain separately authorized P5.5S work,
+  unchanged from before this package.
 
 ## Rollback and follow-up
 
@@ -157,6 +158,8 @@ concrete, reviewable next step this run identifies — resolving Vertex AI
 Search Grounding's redirect-wrapped citations to their real catalog hostname
 before they reach verification, or adding a supported COLT/PMLR source
 profile that can be verified through the redirect-resolution the P2.7 policy
-already anticipates — belongs to the future Phase 8 venue-family rollout
-work referenced by both this review and `phase2-live-review-2026-07-13.md`,
-not to P2.8S itself.
+already anticipates — is now scoped as its own Phase 2 work package,
+`work-packages.md`'s P2.9 (the fix) and P2.9S (a second, independently
+authorized live run against this same `colt`/2025 venue/year), rather than
+folded into the still-`Planned` Phase 8 venue-family rollout that both this
+review and `phase2-live-review-2026-07-13.md` otherwise reference.

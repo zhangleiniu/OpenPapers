@@ -78,14 +78,17 @@ discovery effect plus durable per-venue cooldown and distinct-venue systemic
 circuit guardrails. P2.7 has completed the fixture-only production-capable
 verification effect, separate durable source cooldown, and dated per-domain
 production crawl-policy review. P2.8 has completed the fixture-only automatic
-discovery→verification→P2.5→P5.5 retention composition. P2.8S has completed
-the explicitly authorized live canary for the exact P2.8 composition: one
-real Gemini discovery call and zero live HTTP fetches, reconfirming the
-already-documented COLT source-shape gap and retaining no action. Phase 2
-remains `Shadow`. P5.5S still waits for a live run that reaches a genuine
-authoritative `pdf_status=ready` facet before its action-source prerequisite
-is end-to-end proven; no package in this sequence is currently `Ready`. See
-"Phase 2 packages" below.
+discovery→verification→P2.5→P5.5 retention composition. P2.8S has run the
+explicitly authorized live canary for the exact P2.8 composition: one real
+Gemini discovery call and zero live HTTP fetches, reconfirming the
+already-documented COLT source-shape gap and retaining no action. Because the
+package's own acceptance text treats a no-action outcome as a failed canary,
+P2.8S is `Review fix required`, not `Complete`. P2.9 is now the sole `Ready`
+package: it closes that exact grounding-redirect gap without weakening
+verification or crawl policy, and P2.9S (`Blocked` on P2.9) supplies the
+second live run that must close P2.8S's finding and prove P5.5S's
+action-source prerequisite. Phase 2 remains `Shadow`. See "Phase 2 packages"
+below.
 P3.1 has completed the persistent
 case slice, P3.2 has completed reminder aging and grouped digest data, P3.3 has
 completed the fake-only durable delivery boundary, and P3.4 has completed
@@ -121,12 +124,12 @@ private immutable results. P5.5 has completed fake-only durable action/job
 persistence (control-state schema version 7) and bounded dispatch/
 reconciliation with no installed caller or live request. Phase 5 remains
 `Shadow`; no automatic runtime connection or canonical promotion is
-authorized. P2.8 and P2.8S are both `Complete` — the former is the uninstalled
-automatic deterministic verifier/action-source composition, and the latter is
-its separately authorized live evidence — but P2.8S's one authorized run
-retained no action, so P5.5S remains `Blocked` pending a future live run that
-reaches a genuine authoritative `pdf_status=ready` facet. The local LaunchDaemon
-is authoritative and the retained Cloud Scheduler job is paused.
+authorized. P2.8 is `Complete` (the uninstalled automatic deterministic
+verifier/action-source composition), but P2.8S — its separately authorized
+live-evidence half — is `Review fix required`: its one authorized run
+retained no action, so P5.5S remains `Blocked` pending P2.9's fix and P2.9S's
+live evidence of a genuine authoritative `pdf_status=ready` facet. The local
+LaunchDaemon is authoritative and the retained Cloud Scheduler job is paused.
 
 ### P2.1R — harden verifier contract semantics
 
@@ -529,7 +532,7 @@ left `active`. Static scope tests prove no import of
 
 ### P2.8S — authorized live discovery and verification canary
 
-Status: `Complete`
+Status: `Review fix required`
 
 Depends on: P2.8
 
@@ -554,19 +557,20 @@ and has no canonical, statistics, promotion, deployment, notification, or
 Codex authority. Completion supplies only the live-evidence half of P5.5S's
 prerequisite; installation and automatic scraper dispatch remain P5.5S.
 
-Completed boundary: `automation/production_wakeup_canary.py` adds a private
-root/marker lifecycle (`prepare_canary_root`, modeled on the existing P5.S/
-P4.L3 "fresh or exactly marked" pattern, and refusing outright if a
-production-control or host-shadow marker is found inside the supplied root),
-a one-time seed of the canonical all-`unknown` schema-v1 conference-state row
-the preselected `colt`/2025 venue/year needs to become due, and `run_canary`,
-which calls the unmodified `automation.production_wakeup.
+Implementation and live-run record: `automation/production_wakeup_canary.py`
+adds a private root/marker lifecycle (`prepare_canary_root`, modeled on the
+existing P5.S/P4.L3 "fresh or exactly marked" pattern, and refusing outright
+if a production-control or host-shadow marker is found inside the supplied
+root), a one-time seed of the canonical all-`unknown` schema-v1
+conference-state row the preselected `colt`/2025 venue/year needs to become
+due, and `run_canary`, which calls the unmodified `automation.production_wakeup.
 run_production_control_wakeup` with both private injection seams left empty
 so it builds the real `ProductionDiscoveryEffect`/`ProductionVerificationEffect`
 pair. `automation/run_production_wakeup_canary.py` is the explicit `--live`
 CLI wrapper. Nothing in `automation/production_wakeup.py` changed; P2.8S only
 supplies the root, the one preselected venue/year, and a bounded sanitized
-JSON evidence summary around that existing boundary.
+JSON evidence summary around that existing boundary. This infrastructure is
+sound and is reused, not rebuilt, by P2.9S below.
 
 The one authorized live invocation (repeated once more to prove replay) made
 one real Gemini Search Grounding discovery call (two billed Vertex AI
@@ -582,14 +586,133 @@ further provider or fetch calls, confirmed by the unchanged discovery budget
 ledger and artifact count. This reconfirms, on the real production-capable
 pair, the same COLT source-shape gap the earlier P2.S 15-venue review already
 recorded, and identifies its precise mechanism (redirect-wrapped grounding
-citations) for the future Phase 8 venue-rollout follow-up. The sanitized
-record is
+citations). The sanitized record is
 [`p2-8s-live-canary-review-2026-07-14.md`](./p2-8s-live-canary-review-2026-07-14.md).
-P5.5S's action-source prerequisite therefore still requires a future P2.8S-
-style live run that reaches a genuine authoritative `pdf_status=ready` facet
-before it is considered end-to-end proven; this package's own scope — running
-one authorized live canary safely and recording honest evidence — is
-complete.
+
+Review finding: the package text above is explicit — "failure to produce an
+eligible action is retained as evidence and fails the canary." No eligible
+action was produced, so this run does not satisfy P2.8S's own acceptance
+criterion, and the package cannot be `Complete` merely because its
+infrastructure and safety boundary worked correctly. The finding that must
+close before dependent work (P5.5S) starts is the specific, now-identified
+gap itself — grounding-redirect citations cannot yet be verified — not a
+defect in the canary machinery. P2.9 below defines that fix, scoped tightly
+so it cannot weaken verification or crawl policy, and P2.9S defines the
+separate, independently authorized live run that must reach a genuine
+retained action against this same `colt`/2025 venue/year before this P2.8S
+finding is considered closed and before P5.5S's action-source prerequisite
+is end-to-end proven. Neither P2.9 nor P2.9S may touch P5.5S, Phase 6, Phase
+8, or `automation/local_service/`.
+
+### P2.9 — deterministic verification of grounding-redirect citations
+
+Status: `Ready`
+
+Depends on: P2.8S's review finding
+
+P2.9 closes the exact, real gap P2.8S's live run located: Vertex AI Search
+Grounding returned every citation for a genuine, fully archived venue/year
+(`colt`/2025) as an opaque `vertexaisearch.cloud.google.com/
+grounding-api-redirect/...` wrapper URL rather than an already-resolved
+`learningtheory.org`/`proceedings.mlr.press` URL, so the existing
+deterministic verifier — which by design only recognizes already-resolved
+catalog source shapes — could not classify any of the nine targets. The
+earlier P2.S 15-venue live review independently recorded the identical COLT
+finding on 2026-07-13, so this is a real, reproducible, not one-off gap.
+
+Included:
+
+- investigate whether the existing `google-genai`/Vertex AI Search Grounding
+  API exposes an already-resolved source URL or hostname anywhere in its
+  grounding metadata (a different response field, attribute, or request
+  option) that `automation/providers/gemini.py`'s existing grounding-source
+  normalization is not yet reading; prefer and require that field
+  deterministically if it exists;
+- if no such field exists, add a narrowly scoped, explicitly reviewed
+  capability that lets the deterministic verifier derive an already-known
+  catalog URL from the discovery-supplied `domain` label alone — never from
+  redirect content, and only for domains the P2.7 production crawl-policy
+  review already covers — and verify that derived URL; the grounding-redirect
+  domain itself is never fetched, followed, or otherwise contacted;
+- add a supported COLT/PMLR source-shape profile to
+  `automation/html_verification.py`/`automation/pdf_verification.py` so a
+  correctly resolved PMLR proceedings/paper listing for COLT can pass
+  deterministic identity, count, and PDF-signature checks — the one concrete
+  source-shape gap both the P2.S and P2.8S live reviews independently found
+  for this venue; and
+- add a sanitized fixture reproducing the exact grounding-redirect-only
+  citation shape P2.8S observed (see
+  `p2-8s-live-canary-review-2026-07-14.md`), so the fix is provable without
+  another live call.
+
+Excluded:
+
+- any weakening of the `vertexaisearch.cloud.google.com` entry's `denied`
+  verdict in the P2.7 production crawl policy, or any code path that fetches
+  or follows it; that domain's robots policy is the reason it is denied, and
+  this package does not reinterpret or bypass that reading;
+- any change to `automation/production_wakeup.py`,
+  `automation/production_wakeup_canary.py`,
+  `automation/run_production_wakeup_canary.py`,
+  `automation/local_control_plane.py`, P2.5 reduction, or P5.5 retention —
+  P2.9 only extends what P2.2/P2.3/P2.6/P2.7 already deterministically
+  classify and verify;
+- P5.5S, Phase 6, Phase 8, or `automation/local_service/` in any form; and
+- any live network call in this package's own tests (fixtures/fakes only,
+  matching every prior P2.x package).
+
+Acceptance:
+
+- the sanitized fixture reproducing P2.8S's exact grounding-redirect-only
+  COLT/2025 citation shape now deterministically reaches a verified,
+  promotable result through the fix, without the fetcher ever being called
+  with the grounding-redirect domain;
+- the P2.7 production crawl policy's `vertexaisearch.cloud.google.com` entry
+  is unchanged and still `denied`;
+- every existing P2.1R/P2.2/P2.3/P2.6/P2.7/P2.8 fixture suite remains green
+  with no weakened, removed, or skipped assertion; and
+- static scope tests prove no import of `automation.execution_dispatch`,
+  `execution_pipeline`, `mac_worker`, `staging_executor`, or `local_service`.
+
+### P2.9S — second authorized live canary against the P2.9 fix
+
+Status: `Blocked`
+
+Depends on: P2.9
+
+P2.9S is the concrete evidence that closes P2.8S's review finding. It reuses
+`automation/production_wakeup_canary.py`'s existing root/marker/seed/replay
+infrastructure unchanged — that machinery is not what needs fixing — but is
+its own separately authorized live event with a fresh marked root, not a
+rerun of P2.8S's own recorded root/evidence.
+
+Included:
+
+- one fresh, separately authorized `--live` invocation of the P2.9-fixed
+  composition against the exact same preselected `colt`/2025 venue/year
+  P2.8S used, so success is attributable to the P2.9 fix and not to picking
+  an easier venue after the fact;
+- a durable sanitized review recording whether a genuine authoritative
+  `pdf_status=ready` facet and exactly one retained `queue_existing_scraper`
+  action were reached, using the same "failure is retained as evidence, not
+  forced" discipline P2.8S already established; and
+- if and only if this run reaches a genuine retained action, updating
+  P2.8S's status entry above to record that its review finding is closed.
+
+Excluded:
+
+- installing anything, dispatching the retained job, writing production or
+  canonical state, or touching P5.5S, Phase 6, Phase 8, or
+  `automation/local_service/` — identical exclusions to P2.8S; and
+  weakening verifier or crawl-policy rules to force success. A second
+  no-action outcome must be retained just as honestly as the first; P5.5S
+  remains blocked pending a further iteration rather than a relaxed rule.
+
+Acceptance: identical to P2.8S's acceptance criteria (missing `--live`,
+unsafe/non-isolated roots, budget/circuit closure, policy denial, or identity
+conflict all refuse before the corresponding effect; exact completed replay
+makes no second live call; the durable review is sanitized), plus: the run
+must exercise `colt`/2025, not a substituted venue/year.
 
 ## Phase 2 packages — verification and lifecycle state
 
@@ -608,18 +731,22 @@ occur only in P2.S and remain isolated from production.
 | P2.6 | Complete | Phase 2 gate | Fixture-only production-capable `DiscoveryEffect` with required budget/artifact ledgers plus durable per-venue cooldown and distinct-venue systemic circuit state. No live LLM call, installed caller, or production wiring. |
 | P2.7 | Complete | P2.6 | Fixture-only production-capable `VerificationEffect` plus fully reviewed per-domain production crawl policy and durable fetch-failure guardrails. Only bounded read-only robots/terms research was live; no live verifier request or production wiring. |
 | P2.8 | Complete | P2.7 | Fixture-only automatic discovery→verification→P2.5→P5.5 retention composition with exact replay and failure closure. Uninstalled; no live call, dispatch, or production state. |
-| P2.8S | Complete | P2.8 | Separately authorized isolated live canary for the exact P2.8 composition. One real run made a live Gemini call and reconfirmed the known COLT source-shape gap; it retained no action and never touched production/canonical state. |
+| P2.8S | Review fix required | P2.8 | Separately authorized isolated live canary for the exact P2.8 composition. One real run made a live Gemini call, correctly refused to weaken verification, and retained no action because every citation was an unresolved grounding-redirect URL. Per the package's own acceptance text this fails the canary's acceptance criterion; P2.9/P2.9S define the fix and its closing evidence. |
+| P2.9 | Ready | P2.8S | Deterministic verification of grounding-redirect citations: closes the exact source-shape gap P2.8S located without weakening the grounding-redirect domain's `denied` crawl-policy verdict or any existing verifier assertion. Fixture-only. |
+| P2.9S | Blocked | P2.9 | Second separately authorized isolated live canary, reusing P2.8S's unchanged infrastructure, against the same `colt`/2025 venue/year, to prove the P2.9 fix reaches a genuine retained action. |
 
 Phase 2 has passed its shadow gate with the reviewed record in
 `phase2-live-review-2026-07-13.md`. It remains `Shadow`, not `Implemented`,
 because live observation has no production action authority and source-shape
-coverage remains conservative. P2.6, P2.7, P2.8, and P2.8S are all accepted.
-P2.8S's one authorized live run did not reach a genuine authoritative
-`pdf_status=ready` facet (see
-`p2-8s-live-canary-review-2026-07-14.md`), so P5.5S's action-source
-prerequisite is not yet end-to-end proven even though both of its named
-dependency packages are complete; a future live run reaching that outcome
-remains necessary before P5.5S can start.
+coverage remains conservative. P2.6, P2.7, and P2.8 are accepted. P2.8S's one
+authorized live run did not reach a genuine authoritative `pdf_status=ready`
+facet (see `p2-8s-live-canary-review-2026-07-14.md`), so per its own
+acceptance text the package is `Review fix required`, not `Complete`. P2.9 is
+now the sole `Ready` package: it closes the specific, now-identified
+grounding-redirect gap without touching crawl policy or weakening any
+existing verifier check. P2.9S is `Blocked` on P2.9 and supplies the live
+evidence that both closes P2.8S's finding and, if it reaches a genuine
+retained action, satisfies P5.5S's action-source prerequisite.
 
 ## Phase 3 packages — cases and notifications
 
@@ -1290,7 +1417,7 @@ host recovery evidence.
 | P5.4 | Complete | P5.3 | Fixture-only guarded job-to-staging-to-validation-to-immutable-result composition with readiness routing, replay recovery, and transient/operational/structural classification. No runtime connection or real scrape. |
 | P5.S | Complete | P5.4 | Manual sandboxed COLT 2025 archival shadow: confirmed failure and timeout recovery, 181/181 independent validation, private create-only result, exact duplicate suppression, canonical invariance, coexistence, and scoped rollback. No installed or automatic caller. |
 | P5.5 | Complete | P5.S | Persists only strict P2.5 `queue_existing_scraper` actions and their recomputed v2 jobs in local-owned control state (schema version 7), then claims and reconciles at most one job through an injected P5.4 effect after releasing the global control lease. Schema migration, exact replay, crash ambiguity, result reconciliation, and rollback use temporary state/fakes only. No installed caller, live request, scraper process, canonical write, promotion, or Phase 6 capability. |
-| P5.5S | Blocked | P5.5, P2.8, P2.8S | Separately authorized installed automatic shadow using the accepted automatic verified-action composition and its live canary evidence, on a bounded venue family not covered by COLT. It may write only isolated staging/artifact/result space and cannot promote, deploy, run statistics writes, or enter Codex repair. |
+| P5.5S | Blocked | P5.5, P2.8, P2.8S, P2.9S | Separately authorized installed automatic shadow using the accepted automatic verified-action composition and its live canary evidence, on a bounded venue family not covered by COLT. It may write only isolated staging/artifact/result space and cannot promote, deploy, run statistics writes, or enter Codex repair. |
 
 P5.S completed boundary: `automation/execution_shadow.py` and the explicit
 `automation.run_execution_shadow --live` command bind P5.4 to a private marked
@@ -1370,16 +1497,19 @@ composition with fixtures and P2.8S proves that exact composition against real
 retained, crawl-policy-allowed, venue/year-bound evidence. Neither a manual
 synthetic action nor the live canary alone satisfies both prerequisites.
 
-P2.8 and P2.8S are both now `Complete`, but P2.8S's one authorized live run
-(`p2-8s-live-canary-review-2026-07-14.md`) retained real verification
-evidence and correctly advanced conference state without reaching a genuine
-authoritative `pdf_status=ready` facet — Vertex AI Search Grounding returned
-only redirect-wrapped citations for COLT/2025, which the existing verifier
-correctly left `review_required` rather than promote. P5.5S therefore remains
-`Blocked`: a future P2.8S-style live run that reaches a genuine retained
-`queue_existing_scraper` action against real evidence is still needed before
-the action-source prerequisite is considered end-to-end proven, not merely a
-second package status flip.
+P2.8 is `Complete`, but P2.8S is `Review fix required`: its one authorized
+live run (`p2-8s-live-canary-review-2026-07-14.md`) retained real
+verification evidence and correctly advanced conference state without
+reaching a genuine authoritative `pdf_status=ready` facet — Vertex AI Search
+Grounding returned only redirect-wrapped citations for COLT/2025, which the
+existing verifier correctly left `review_required` rather than promote. Per
+P2.8S's own acceptance text this is a failed canary attempt, not merely an
+inconclusive one. P2.9 (`Ready`) defines the fix and P2.9S (`Blocked` on
+P2.9) defines the second live run that must reach a genuine retained
+`queue_existing_scraper` action against real evidence — closing P2.8S's
+finding — before P5.5S's action-source prerequisite is considered end-to-end
+proven. P5.5S therefore remains `Blocked` on that chain, not merely on a
+package status flip.
 
 When that prerequisite exists, P5.5S must receive separate authority for the
 installed-service change and live requests. It starts with the same
