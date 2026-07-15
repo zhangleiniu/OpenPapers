@@ -67,6 +67,12 @@ returned `no_due_work` with zero target rows and unchanged baseline monitor
 state. Each live adapter and final activation still requires separate operator
 authorization. See the [`roadmap`](./automation-system/roadmap.md).
 
+Dedicated-role credential-path injection, three adapter-specific canary
+commands, and disabled-only marker-last refresh are implemented in the
+repository. They are not live deployment evidence: no credential has been
+provisioned through that path, no new canary has run, and the installed global
+gate remains false until separately authorized activation.
+
 Schema version 10 adds event-date and agent schedule/attempt tables plus the
 new execution-artifact and agent-run-report records.
 `automation/control_state.py` still also contains tables and interfaces for the

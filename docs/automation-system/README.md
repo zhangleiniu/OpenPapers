@@ -123,6 +123,17 @@ The following exists and runs today:
   production composition and explicit AISTATS/ICML/IJCAI 2026 cohort. A date
   lookup, agent run, report attempt, and retention cleanup are separately
   bounded; its installed caller returns before adapters are constructed.
+- `automation/agent_credentials.py` and `automation/agent_canary.py`: private
+  dedicated-role credential layout plus three mutually exclusive operator
+  canaries. Codex receives an explicit private `CODEX_HOME`, Gemini loads an
+  explicit private ADC file, and Resend secrets are marker-bound without
+  activation. Each canary requires its own live authorization flag; no live
+  canary has run through these commands.
+- `automation/local_service/agent_control.py`: disabled-only marker-last
+  replacement primitives for runtime/source refresh and Resend secret
+  provisioning. Either an enabled current configuration or an enabled
+  candidate is rejected, and an interrupted replacement fails marker
+  validation closed.
 - `automation/control_state_migration.py`: a safe-summary read-only audit,
   new-file SQLite backup, and isolated-copy schema rehearsal command. Fixture
   rehearsal passed; the dedicated-role production database was migrated from
@@ -143,8 +154,8 @@ claim; repository files only describe the expected topology.
 ## Not yet built
 
 - Automatic future-year cohort creation.
-- Dedicated-role ADC and Resend secret provisioning, separately authorized
-  Gemini/Codex/Resend live canaries, and final external-effect activation.
+- Actual dedicated-role Codex/ADC/Resend credential provisioning, the three
+  separately authorized live canaries, and final external-effect activation.
 - Migration of `control_state.py` from its vestigial old schema to the small
   date/dispatch/run model.
 

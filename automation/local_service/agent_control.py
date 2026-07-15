@@ -19,6 +19,7 @@ from automation.agent_production import (
     build_live_agent_production_effect,
     load_agent_production_configuration,
 )
+from automation.agent_credentials import validate_agent_credential_context
 from automation.local_service.production import (
     PRODUCTION_CONFIG,
     PRODUCTION_MARKER,
@@ -48,6 +49,23 @@ class InstalledAgentConfiguration:
     external_effects_enabled: bool
     agent_source_commit: str
     agent: AgentProductionConfiguration
+
+
+def _agent_marker(config_bytes: bytes, secret_bytes: bytes, root: Path) -> bytes:
+    return _canonical({
+        "schema_version": 2,
+        "label": LOCAL_SERVICE_LABEL,
+        "mode": "agent_production_control",
+        "configuration_sha256": _fingerprint(config_bytes),
+        "secrets_sha256": _fingerprint(secret_bytes),
+        "baseline_marker_sha256": _fingerprint(_private_file(root / PRODUCTION_MARKER)),
+        "baseline_configuration_sha256": _fingerprint(
+            _private_file(root / PRODUCTION_CONFIG)
+        ),
+        "baseline_secrets_sha256": _fingerprint(
+            _private_file(root / PRODUCTION_SECRETS)
+        ),
+    })
 
 
 def _agent_configuration(
@@ -171,24 +189,12 @@ def initialize_agent_production_root(
         raise ProductionControlError("enabled agent production secrets are missing")
     config_bytes = _canonical(configuration)
     secret_bytes = _canonical(secrets)
-    marker_payload = {
-        "schema_version": 2,
-        "label": LOCAL_SERVICE_LABEL,
-        "mode": "agent_production_control",
-        "configuration_sha256": _fingerprint(config_bytes),
-        "secrets_sha256": _fingerprint(secret_bytes),
-        "baseline_marker_sha256": _fingerprint(_private_file(root / PRODUCTION_MARKER)),
-        "baseline_configuration_sha256": _fingerprint(
-            _private_file(root / PRODUCTION_CONFIG)
-        ),
-        "baseline_secrets_sha256": _fingerprint(
-            _private_file(root / PRODUCTION_SECRETS)
-        ),
-    }
     files = (
         (root / AGENT_PRODUCTION_CONFIG, config_bytes),
         (root / AGENT_PRODUCTION_SECRETS, secret_bytes),
-        (root / AGENT_PRODUCTION_MARKER, _canonical(marker_payload)),
+        (root / AGENT_PRODUCTION_MARKER, _agent_marker(
+            config_bytes, secret_bytes, root
+        )),
     )
     for path, encoded in files:
         try:
@@ -216,7 +222,91 @@ def initialize_agent_production_root(
     return files[0][0], files[1][0], files[2][0]
 
 
-def _validate_agent_source(path: Path, expected_commit: str) -> Path:
+def replace_disabled_agent_production_root(
+    internal_root: Path,
+    current_repository_root: Path,
+    candidate_repository_root: Path,
+    configuration: Mapping[str, Any],
+    secrets: Mapping[str, Any],
+    *,
+    replace_file: Callable[[Path, Path], None] = os.replace,
+) -> tuple[Path, Path, Path]:
+    """Replace v2 files marker-last while both endpoints remain disabled.
+
+    The caller must stop the service and retain byte-exact rollback copies.
+    Any interruption before the marker replacement leaves validation closed.
+    """
+    root = Path(internal_root)
+    current, _ = validate_agent_production_root(root, current_repository_root)
+    if current.external_effects_enabled:
+        raise ProductionControlError("enabled agent production cannot be refreshed")
+    installed = _agent_configuration(
+        configuration,
+        targets_path=(Path(candidate_repository_root) / "automation" / "config"
+                      / "agent_targets.v1.json"),
+    )
+    _agent_secrets(secrets)
+    if installed.external_effects_enabled:
+        raise ProductionControlError("disabled refresh cannot enable external effects")
+    config_bytes = _canonical(configuration)
+    secret_bytes = _canonical(secrets)
+    files = (
+        (root / AGENT_PRODUCTION_CONFIG, config_bytes),
+        (root / AGENT_PRODUCTION_SECRETS, secret_bytes),
+        (root / AGENT_PRODUCTION_MARKER, _agent_marker(
+            config_bytes, secret_bytes, root
+        )),
+    )
+    candidates: list[Path] = []
+    try:
+        for index, (target, encoded) in enumerate(files):
+            candidate = root / f".{target.name}.candidate-{os.getpid()}-{index}"
+            descriptor = os.open(
+                candidate,
+                os.O_WRONLY | os.O_CREAT | os.O_EXCL
+                | getattr(os, "O_NOFOLLOW", 0),
+                0o600,
+            )
+            candidates.append(candidate)
+            with os.fdopen(descriptor, "wb") as file_obj:
+                file_obj.write(encoded)
+                file_obj.flush()
+                os.fsync(file_obj.fileno())
+        for candidate, (target, _) in zip(candidates, files):
+            replace_file(candidate, target)
+        directory = os.open(root, os.O_RDONLY)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
+    except OSError as exc:
+        raise ProductionControlError("agent production replacement failed") from exc
+    finally:
+        for candidate in candidates:
+            try:
+                candidate.unlink()
+            except FileNotFoundError:
+                pass
+    validate_agent_production_root(root, candidate_repository_root)
+    return files[0][0], files[1][0], files[2][0]
+
+
+def replace_disabled_agent_secrets(
+    internal_root: Path,
+    repository_root: Path,
+    secrets: Mapping[str, Any],
+) -> tuple[Path, Path, Path]:
+    """Replace only disabled secrets while rebinding the marker last."""
+    _, configuration = _payload(
+        Path(internal_root) / AGENT_PRODUCTION_CONFIG,
+        field="agent production configuration",
+    )
+    return replace_disabled_agent_production_root(
+        internal_root, repository_root, repository_root, configuration, secrets
+    )
+
+
+def validate_agent_source(path: Path, expected_commit: str) -> Path:
     source = Path(path).resolve()
     try:
         metadata = source.lstat()
@@ -275,7 +365,7 @@ class InstalledAgentProductionEffect:
             scheduled_for=scheduled_for,
             observed_at=observed_at,
         )
-        agent_source = _validate_agent_source(
+        agent_source = validate_agent_source(
             Path(execution_root) / "agent-source",
             configuration.agent_source_commit,
         )
@@ -283,10 +373,14 @@ class InstalledAgentProductionEffect:
             return baseline
         if secrets is None:  # Defensive; validation rejects this state.
             raise ProductionControlError("enabled agent production secrets are missing")
+        credentials = validate_agent_credential_context(
+            internal_root, require_codex_auth=True, require_google_adc=True,
+        )
         agent = self._live_builder(
             repository_root=agent_source,
             configuration=configuration.agent,
             secrets=secrets,
+            credentials=credentials,
         )
         outcome = agent.run(
             state_path=state,

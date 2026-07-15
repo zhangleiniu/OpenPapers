@@ -67,6 +67,13 @@ retention, and Resend delivery are wired but inactive. Hourly replay therefore
 preserves the baseline monitor and returns without a new external effect until
 activation and each live canary are separately authorized.
 
+Post-install operations use `automation.agent_credentials` for a fixed private
+credential layout and `automation.agent_canary` for three independently gated
+Gemini, Codex, and Resend checks. Disabled runtime/source updates must call the
+marker-last `replace_disabled_agent_production_root` boundary while the service
+is stopped. That boundary rejects enabled state on either side; it is not an
+activation interface.
+
 ## Focused verification
 
 ```bash

@@ -495,11 +495,36 @@ class GeminiSearchGroundingProvider:
                 "google-genai is required for live Gemini discovery",
                 category="dependency_missing",
             ) from exc
+        client_arguments: dict[str, Any] = {}
+        credentials_path = resolved.get("GOOGLE_APPLICATION_CREDENTIALS")
+        if credentials_path:
+            try:
+                from google.auth import load_credentials_from_file
+                from google.auth.exceptions import GoogleAuthError
+            except ImportError as exc:
+                raise ProviderError(
+                    "google-auth is required for explicit credentials",
+                    category="dependency_missing",
+                ) from exc
+            try:
+                credentials, credential_project = load_credentials_from_file(
+                    credentials_path,
+                    scopes=("https://www.googleapis.com/auth/cloud-platform",),
+                )
+            except (GoogleAuthError, OSError, ValueError) as exc:
+                raise ProviderError(
+                    "Google Application Default Credentials are unavailable",
+                    category="configuration_missing_credentials",
+                ) from exc
+            client_arguments["credentials"] = credentials
+            if not project and credential_project:
+                project = credential_project
         client = genai.Client(
             vertexai=True,
             project=project,
             location=location,
             http_options=types.HttpOptions(api_version="v1"),
+            **client_arguments,
         )
         return cls(client, model=model)
 

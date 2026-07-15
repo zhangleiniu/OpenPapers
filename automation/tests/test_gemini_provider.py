@@ -280,6 +280,18 @@ class GeminiProviderTests(unittest.TestCase):
         self.assertEqual(client_class.call_args.kwargs["location"],
                          "us-central1")
 
+    def test_explicit_adc_is_loaded_and_passed_to_sdk_client(self):
+        credential = object()
+        with patch("google.auth.load_credentials_from_file") as loader, \
+                patch("google.genai.Client") as client_class:
+            loader.return_value = (credential, "credential-project")
+            GeminiSearchGroundingProvider.from_environment({
+                "GCP_PROJECT_ID": "fixture-project",
+                "GOOGLE_APPLICATION_CREDENTIALS": "/private/adc.json",
+            })
+        self.assertEqual(loader.call_args.args, ("/private/adc.json",))
+        self.assertIs(client_class.call_args.kwargs["credentials"], credential)
+
     def test_close_releases_sdk_client(self):
         client = FakeClient(sdk_response())
         GeminiSearchGroundingProvider(client).close()

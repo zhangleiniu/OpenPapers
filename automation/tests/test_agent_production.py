@@ -162,6 +162,7 @@ class AgentProductionTests(unittest.TestCase):
                 repository_root=self.repo,
                 configuration=self.configuration,
                 secrets=secrets,
+                credentials=None,
             )
 
     def test_execution_volume_capacity_gate_precedes_every_external_effect(self):

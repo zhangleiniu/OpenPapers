@@ -18,6 +18,7 @@ graph.
 | Run notification | One replay-safe email per agent run | Implemented |
 | Production composition | Explicit cohort/config plus one bounded agent wakeup effect | Implemented |
 | Installation | Private config v2, production backup/migration, and LaunchDaemon switch | Implemented |
+| Post-install operations | Private credentials, isolated live-canary commands, and disabled refresh | Implemented |
 | State simplification | Migrate away from vestigial verification/case/job/notification schema | Planned after target run state is fixed |
 
 Valid phase statuses are `Planned`, `In progress`, `Implemented`, and
@@ -250,6 +251,33 @@ wake returned `no_due_work`, created zero target rows, left the baseline monitor
 bytes unchanged, and kept cloud scheduling paused. The installed v2 gate is
 `external_effects_enabled=false`; Gemini, Codex agent execution, and Resend
 remain inactive until separately authorized canaries and activation.
+
+## Post-install operations (Implemented, not exercised live)
+
+`automation/agent_credentials.py` prepares and validates a fixed private
+credential layout beneath the dedicated role's internal root. It can hand an
+interactive terminal to Codex login or Google ADC login without placing a key
+in arguments or output, and can marker-last install Resend values while the
+service is stopped. The installed builder passes the private Codex home and
+explicit ADC path to their adapters instead of relying on the role account's
+`/var/empty` HOME or a maintainer login.
+
+`automation/agent_canary.py` exposes three subcommands. Each requires a
+different exact live flag and constructs only its selected adapter. Gemini
+returns a bounded date summary, Codex retains a dedicated no-remote canary
+checkout, and Resend returns only delivery status. None changes
+`external_effects_enabled` or production scheduler state.
+
+`replace_disabled_agent_production_root` stages canonical private files,
+fsyncs them, and replaces the marker last. It rejects enabled current or
+candidate configurations, so refresh permission cannot become activation
+permission; an interrupted set fails validation closed. Fake filesystem tests
+cover successful replacement, activation rejection, Resend-only secret
+provisioning, and partial replacement.
+
+Acceptance met in repository tests. Actual credential login, every live
+canary, and activation remain separate operator actions. The first authorized
+host refresh is operational evidence, not permission for those actions.
 
 ## State simplification (Planned)
 

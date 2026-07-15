@@ -59,6 +59,39 @@ bounds, and the SHA-256 fingerprint of the approved plain recipient. Resend API
 key, sender, and recipient values are supplied
 separately at runtime and must never be committed.
 
+Post-install credential preparation and safe status checks use the dedicated
+role and private internal root. These commands do not call a model or send
+email:
+
+```bash
+python -m automation.agent_credentials --internal-root <private-root> prepare
+python -m automation.agent_credentials --internal-root <private-root> status
+```
+
+`codex-login`, `google-adc-login`, and `configure-resend` are interactive
+operator actions. Resend configuration additionally requires the fixed service
+to be stopped and the exact `--confirm-service-stopped` flag. Never pipe or
+paste their credential values into logs, prompts, or tracked files.
+
+Live adapter checks are intentionally three subcommands with three unrelated
+flags:
+
+```bash
+python -m automation.agent_canary --internal-root <private-root> \
+  --repository-root <runtime> --external-root <execution-root> \
+  gemini --venue icml --year 2026 --authorize-gemini-live
+python -m automation.agent_canary --internal-root <private-root> \
+  --repository-root <runtime> --external-root <execution-root> \
+  codex --venue icml --year 2026 --authorization-id <id> \
+  --authorize-codex-live
+python -m automation.agent_canary --internal-root <private-root> \
+  --repository-root <runtime> --external-root <execution-root> \
+  resend --authorization-id <id> --authorize-resend-live
+```
+
+These examples document interfaces; they are not standing live authorization.
+One canary flag never authorizes either other adapter or automatic activation.
+
 The migration helper has two explicit modes. `audit` is read-only and never
 prints the supplied path. `rehearse` creates and migrates a new SQLite backup
 inside an already-created private directory; it refuses an existing

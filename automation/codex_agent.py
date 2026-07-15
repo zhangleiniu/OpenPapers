@@ -8,7 +8,7 @@ import subprocess
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Callable, Protocol
+from typing import Callable, Mapping, Protocol
 
 from automation.control_state import (
     DEFAULT_LEASE_TTL_SECONDS,
@@ -59,11 +59,16 @@ class CodexInvoker(Protocol):
 
 
 class SubprocessCodexInvoker:
+    def __init__(self, environment: Mapping[str, str] | None = None) -> None:
+        self._environment = (
+            os.environ.copy() if environment is None else dict(environment)
+        )
+
     def invoke(self, invocation: CodexInvocation) -> CodexProcessResult:
         completed = subprocess.run(
             invocation.argv,
             cwd=invocation.cwd,
-            env=os.environ.copy(),
+            env=self._environment,
             text=True,
             capture_output=True,
             timeout=invocation.timeout_seconds,
@@ -103,7 +108,7 @@ validation complete; not_ready for unpublished data; needs_human for policy or
 access ambiguity; failed for operational or code failure."""
 
 
-def _parse_result(raw: str) -> AgentRunResult:
+def parse_codex_result(raw: str) -> AgentRunResult:
     try:
         body = json.loads(raw)
     except (TypeError, json.JSONDecodeError) as exc:
@@ -205,7 +210,7 @@ def run_claimed_codex_agent(
             result = AgentRunResult("failed", "Codex exited unsuccessfully.", failure_category="process_exit")
         else:
             try:
-                result = _parse_result(process.stdout)
+                result = parse_codex_result(process.stdout)
             except ValueError:
                 result = AgentRunResult("failed", "Codex returned invalid structured output.", failure_category="invalid_result")
     except subprocess.TimeoutExpired:

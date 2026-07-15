@@ -13,6 +13,9 @@ composition, but `external_effects_enabled=false` prevents every new external
 effect. The deterministic baseline monitor remains active. Treat the checklist
 below as the completed installation record and as prerequisites for any future
 replacement; activation and live canaries remain separate operations.
+The repository now has disabled-only marker-last refresh and dedicated-role
+credential/canary tooling. Their existence does not mean credentials are
+configured or that a live canary has been authorized or run.
 
 ## Read-only audit gate
 
@@ -83,6 +86,13 @@ rehearsal:
    no-network/no-due wakeup.
 6. Separately authorize a date-provider canary, Codex canary, and Resend email
    canary. A canary permission does not authorize the next canary.
+
+A later refresh must use a fresh candidate runtime and clean no-remote source,
+retain byte-exact rollback copies, and replace v2 bindings marker-last through
+`replace_disabled_agent_production_root`. Both installed and candidate
+configuration must remain `external_effects_enabled=false`; refresh permission
+cannot be reused for activation. The production database is already schema 10
+and must not be migrated or downgraded during refresh.
 
 If any step fails, stop the service. Restore the pre-migration database and
 private config/marker/plist as one set before restarting; never attempt an

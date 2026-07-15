@@ -1,5 +1,6 @@
 import hashlib
 import json
+import os
 import tempfile
 import unittest
 import subprocess
@@ -10,8 +11,11 @@ from automation.local_service.agent_control import (
     AGENT_PRODUCTION_MARKER,
     InstalledAgentProductionEffect,
     initialize_agent_production_root,
+    replace_disabled_agent_production_root,
+    replace_disabled_agent_secrets,
     validate_agent_production_root,
 )
+from automation.agent_credentials import prepare_agent_credential_context
 from automation.local_service.production import initialize_production_root
 from automation.local_service.service import LocalEffectOutcome, LocalEffectStatus
 from automation.resend_notifications import recipient_fingerprint
@@ -184,6 +188,11 @@ class AgentControlTests(unittest.TestCase):
         initialize_agent_production_root(
             self.internal, self.repository, self._configuration(enabled=True), secrets,
         )
+        credentials = prepare_agent_credential_context(self.internal)
+        (credentials.codex_home / "auth.json").write_text("{}\n", encoding="utf-8")
+        credentials.google_adc.write_text("{}\n", encoding="utf-8")
+        os.chmod(credentials.codex_home / "auth.json", 0o600)
+        os.chmod(credentials.google_adc, 0o600)
         baseline = Baseline()
         agent = Agent()
         builds = []
@@ -207,6 +216,7 @@ class AgentControlTests(unittest.TestCase):
         )
         self.assertEqual(len(agent.calls), 1)
         self.assertNotIn("placeholder-key", repr(builds[0]["secrets"]))
+        self.assertIs(builds[0]["credentials"].__class__, credentials.__class__)
 
     def test_marker_binds_baseline_and_agent_files(self):
         initialize_agent_production_root(
@@ -217,6 +227,85 @@ class AgentControlTests(unittest.TestCase):
         marker.write_text('{"schema_version":2}\n', encoding="utf-8")
         with self.assertRaisesRegex(ValueError, "marker is invalid"):
             validate_agent_production_root(self.internal, self.repository)
+
+    def test_disabled_replacement_is_marker_last_and_rejects_activation(self):
+        initialize_agent_production_root(
+            self.internal, self.repository, self._configuration(),
+            {"schema_version": 2, "resend": None},
+        )
+        replacement = self._configuration()
+        replacement["agent_configuration"] = dict(
+            self.agent_payload, monthly_run_limit=121
+        )
+        calls = []
+
+        def replace(source, target):
+            calls.append(target.name)
+            return os.replace(source, target)
+
+        replace_disabled_agent_production_root(
+            self.internal, self.repository, self.repository,
+            replacement, {"schema_version": 2, "resend": None},
+            replace_file=replace,
+        )
+        self.assertEqual(calls[-1], AGENT_PRODUCTION_MARKER)
+        configuration, _ = validate_agent_production_root(
+            self.internal, self.repository
+        )
+        self.assertEqual(configuration.agent.due_policy.monthly_run_limit, 121)
+        with self.assertRaisesRegex(ValueError, "cannot enable"):
+            replace_disabled_agent_production_root(
+                self.internal, self.repository, self.repository,
+                self._configuration(enabled=True),
+                {"schema_version": 2, "resend": None},
+            )
+
+    def test_partial_disabled_replacement_fails_closed(self):
+        initialize_agent_production_root(
+            self.internal, self.repository, self._configuration(),
+            {"schema_version": 2, "resend": None},
+        )
+        replacement = self._configuration()
+        replacement["agent_configuration"] = dict(
+            self.agent_payload, monthly_run_limit=121
+        )
+        calls = 0
+
+        def interrupt(source, target):
+            nonlocal calls
+            calls += 1
+            if calls == 2:
+                raise OSError("fixture interruption")
+            os.replace(source, target)
+
+        with self.assertRaisesRegex(ValueError, "replacement failed"):
+            replace_disabled_agent_production_root(
+                self.internal, self.repository, self.repository,
+                replacement, {"schema_version": 2, "resend": None},
+                replace_file=interrupt,
+            )
+        with self.assertRaisesRegex(ValueError, "marker is invalid"):
+            validate_agent_production_root(self.internal, self.repository)
+
+    def test_resend_secrets_can_be_installed_without_activation(self):
+        initialize_agent_production_root(
+            self.internal, self.repository, self._configuration(),
+            {"schema_version": 2, "resend": None},
+        )
+        replace_disabled_agent_secrets(
+            self.internal, self.repository,
+            {"schema_version": 2, "resend": {
+                "api_key": "placeholder-key",
+                "email_from": "from@example.test",
+                "email_to": "to@example.test",
+            }},
+        )
+        configuration, secrets = validate_agent_production_root(
+            self.internal, self.repository
+        )
+        self.assertFalse(configuration.external_effects_enabled)
+        self.assertIsNotNone(secrets)
+        self.assertNotIn("placeholder-key", repr(secrets))
 
 
 if __name__ == "__main__":

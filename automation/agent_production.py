@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any, Callable, Mapping, Protocol
 
 from automation.agent_run_notifications import deliver_agent_run_email
+from automation.agent_credentials import AgentCredentialContext
 from automation.agent_worktree_retention import (
     WorktreeRetentionPolicy,
     prune_agent_worktrees,
@@ -338,22 +339,26 @@ def build_live_agent_production_effect(
     repository_root: Path,
     configuration: AgentProductionConfiguration,
     secrets: AgentProductionSecrets,
+    credentials: AgentCredentialContext,
 ) -> AgentProductionEffect:
     """Construct real adapters without invoking them or installing a caller."""
     if recipient_fingerprint(secrets.email_to) != configuration.resend_recipient_sha256:
         raise AgentProductionConfigurationError("agent recipient approval changed")
+    if not isinstance(credentials, AgentCredentialContext):
+        raise AgentProductionConfigurationError("agent credential context is invalid")
     from automation.providers.gemini import GeminiEventDateProvider
 
     provider = GeminiEventDateProvider.from_environment({
         "GCP_PROJECT_ID": configuration.gemini_project_id,
         "AUTOMATION_GEMINI_LOCATION": configuration.gemini_location,
         "AUTOMATION_GEMINI_MODEL": configuration.gemini_model,
+        "GOOGLE_APPLICATION_CREDENTIALS": str(credentials.google_adc),
     })
     return AgentProductionEffect(
         repository_root=repository_root,
         configuration=configuration,
         event_date_provider=provider,
-        codex_invoker=SubprocessCodexInvoker(),
+        codex_invoker=SubprocessCodexInvoker(credentials.codex_environment()),
         transport_factory=lambda: ResendNotificationTransport(
             api_key=secrets.resend_api_key,
             email_from=secrets.email_from,

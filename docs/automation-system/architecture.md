@@ -120,6 +120,9 @@ forward or require intervention; they must not create a tight retry loop.
   change a run disposition or cause the agent's worktree to be promoted.
 - **Documents do not prove deployment.** Only executable wiring and an
   authorized live check establish that a component is active.
+- **Canary authority is adapter-specific.** Gemini, Codex, and Resend live
+  canaries are distinct commands and permissions. No canary permission enables
+  the automatic production composition or another adapter.
 
 ## Current and retired components
 
@@ -140,6 +143,8 @@ Currently reusable:
   sole provider-idempotent transport; baseline monitor SMTP remains separate;
 - the installed-disabled explicit target cohort and bounded production composition;
 - read-only control-state audit and isolated-copy migration rehearsal tooling;
+- dedicated-role credential-path validation, three separately gated canary
+  commands, and disabled-only marker-last refresh binding;
 - lease-protected SQLite repository and local due selector;
 - marker-gated LaunchDaemon service and bounded local records;
 - paused Cloud Run monitor as a rollback mechanism;
