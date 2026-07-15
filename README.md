@@ -159,9 +159,10 @@ Code in an isolated worktree. The agent decides readiness, investigates
 sources, and may repair and run the scraper; the maintainer reviews and commits
 manually. The one-time date initializer and effect-free due-state policy now
 exist as uninstalled library boundaries, with fake tests and one isolated ICML
-2026 date canary. A Codex-only isolated-worktree runner is also fake-tested but
-has no live canary or installed caller. Target-cohort wiring, durable execution
-artifacts, and the run-report path remain planned in the
+2026 date canary. A Codex-only isolated-worktree runner is fake-tested and has
+one accepted isolated ICML 2026 `not_ready` canary, but no installed caller.
+Target-cohort wiring, durable execution artifacts, and the run-report path
+remain planned in the
 [automation system development guide](./docs/automation-system/README.md) and
 are not deployed.
 
