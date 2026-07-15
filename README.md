@@ -144,18 +144,24 @@ python automation/monitor.py --venue icml --year 2026
 ```
 
 Runtime hashes, counts, and status are stored separately under
-`$SCRAPER_DATA_ROOT/monitor/state.sqlite3`. The JSON-line output can feed a
-scheduler, notification system, or agent repair workflow. See the
-[automation design](./docs/automation.md).
+`$SCRAPER_DATA_ROOT/monitor/state.sqlite3`. The installed local service uses
+this deterministic monitor for daily change/error coverage; it does not use
+the monitor as proof that papers are ready or as authority to run a scraper.
+See the [current automation deployment](./docs/automation.md).
 
 Prefect, container, and cloud deployment support is an optional component kept
 under [`automation/deployment`](./automation/deployment/README.md). The core
 scrapers do not require those dependencies.
 
-Development of the next local-first automation control plane—including
-LLM-assisted source discovery, evidence-gated actions, Mac mini execution, and
-bounded Codex repair workflows—is specified separately in the
-[automation system development guide](./docs/automation-system/README.md).
+The target local-first control plane estimates each venue/year's event date
+once, sleeps until that date, and then gives the venue/year to Codex or Claude
+Code in an isolated worktree. The agent decides readiness, investigates
+sources, and may repair and run the scraper; the maintainer reviews and commits
+manually. The one-time date initializer now exists as an uninstalled library
+boundary with fake tests and one isolated ICML 2026 live canary; target-cohort
+wiring, agent execution, and the run-report path remain planned in the
+[automation system development guide](./docs/automation-system/README.md) and
+are not deployed.
 
 
 ## Data Structure
@@ -198,8 +204,8 @@ The scraper generates detailed logs saved to `scraper.log` and displays progress
   independent bulk repair; `--enrich-missing` exposes the same fallback in the
   main CLI.
 - See the [documentation index](./docs/index.md), [data schema](./docs/data-schema.md),
-  [pipeline](./docs/pipeline.md), [automation design](./docs/automation.md), and
-  [validation guide](./docs/validation.md).
+  [pipeline](./docs/pipeline.md), [current automation deployment](./docs/automation.md),
+  and [validation guide](./docs/validation.md).
 
 ## Citation
 

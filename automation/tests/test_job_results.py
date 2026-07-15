@@ -5,13 +5,7 @@ import unittest
 from copy import deepcopy
 from pathlib import Path
 
-from automation.control_state import (
-    ControlStateRepository,
-    LeaseHandle,
-    LeaseLostError,
-)
 from automation.domain import OwnershipError, Writer
-from automation.job_result_consumer import consume_published_result
 from automation.job_results import (
     GcsImmutableResultStore,
     ImmutableObjectConflictError,
@@ -268,53 +262,6 @@ class ScopeBoundaryTests(unittest.TestCase):
         self.assertNotIn("subprocess", imports)
         self.assertNotIn("prefect", imports)
         self.assertNotIn("storage.Client(", source)
-
-
-class CloudConsumerTests(unittest.TestCase):
-    def test_exact_generation_pair_is_consumed_once_under_cloud_lease(self):
-        job, manifest, result = result_bundle()
-        bucket, store = fake_store()
-        publication = store.publish(job, manifest, result)
-        with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "state.sqlite3"
-            with ControlStateRepository(path) as repository:
-                lease = repository.acquire_lease("result-consumer")
-                first = consume_published_result(
-                    job,
-                    store,
-                    repository,
-                    lease=lease,
-                    consumed_at="2026-07-13T14:03:00Z",
-                )
-                replay = consume_published_result(
-                    job,
-                    store,
-                    repository,
-                    lease=lease,
-                    consumed_at="2026-07-13T14:04:00Z",
-                )
-                self.assertTrue(first.applied)
-                self.assertFalse(replay.applied)
-                self.assertEqual(first.record, replay.record)
-                self.assertEqual(
-                    (first.record.manifest_generation, first.record.result_generation),
-                    (publication.manifest_generation, publication.result_generation),
-                )
-
-            with ControlStateRepository(path) as reopened:
-                records = reopened.replay_job_result_consumptions()
-                self.assertEqual(len(records), 1)
-                stale = LeaseHandle(
-                    "missing", "missing", "2099-01-01T00:00:00Z"
-                )
-                with self.assertRaises(LeaseLostError):
-                    consume_published_result(
-                        job,
-                        store,
-                        reopened,
-                        lease=stale,
-                        consumed_at="2026-07-13T14:05:00Z",
-                    )
 
 
 if __name__ == "__main__":

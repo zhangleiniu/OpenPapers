@@ -1340,7 +1340,7 @@ evidence remains only in the ignored local operations record.
 Do not resume P4.O unless a future decision explicitly accepts either the
 recurring service cost or the operational burden of self-hosting. The adopted
 replacement is documented in
-[`local-first-decision.md`](./local-first-decision.md).
+[`local-first-decision.md`](../local-first-decision.md).
 
 ### P4.L1 — local ownership and due-work scheduler foundation
 

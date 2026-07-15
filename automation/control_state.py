@@ -8,7 +8,7 @@ import uuid
 from contextlib import contextmanager
 from copy import deepcopy
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Iterator, Mapping
 
@@ -56,7 +56,7 @@ from automation.notifications import (
 from automation.verification import validate_verification_result
 
 
-CONTROL_SCHEMA_VERSION = 7
+CONTROL_SCHEMA_VERSION = 8
 DEFAULT_LEASE_TTL_SECONDS = 300
 MAX_LEASE_TTL_SECONDS = 86_400
 DEFAULT_SCHEDULER_SELECTION_LIMIT = 100
@@ -110,6 +110,10 @@ class SchedulerWakeupConflictError(ControlStateError):
 
 class ExecutionQueueError(ControlStateError):
     """Raised when durable execution enqueue, claim, or completion is unsafe."""
+
+
+class EventDateScheduleError(ControlStateError):
+    """Raised when approximate-date scheduling cannot proceed safely."""
 
 
 class StoredDataError(ControlStateError):
@@ -215,6 +219,65 @@ class SchedulerWakeupOutcome:
     record: SchedulerWakeupRecord
     selections: tuple[DueWorkSelection, ...]
     applied: bool
+
+
+@dataclass(frozen=True)
+class EventDateScheduleRecord:
+    """Current durable approximate-date state for one venue/year."""
+
+    venue_id: str
+    year: int
+    status: str
+    next_check_at: str
+    estimated_event_date: str | None
+    estimated_at: str | None
+    provider_name: str | None
+    provider_model: str | None
+    prompt_version: str | None
+    attempt_count: int
+    active_attempt_id: str | None
+    last_failure_category: str | None
+    updated_at: str
+
+
+@dataclass(frozen=True)
+class EventDateScheduleWriteOutcome:
+    """Result of idempotently registering one event-date target."""
+
+    record: EventDateScheduleRecord
+    applied: bool
+
+
+@dataclass(frozen=True)
+class EventDateAttemptClaim:
+    """Opaque authority for one in-flight approximate-date provider call."""
+
+    attempt_id: str
+    venue_id: str
+    year: int
+    attempt_number: int
+    started_at: str
+    provider_name: str
+    provider_model: str
+    prompt_version: str
+
+
+@dataclass(frozen=True)
+class EventDateAttemptRecord:
+    """One immutable-numbered approximate-date lookup attempt."""
+
+    attempt_id: str
+    venue_id: str
+    year: int
+    attempt_number: int
+    started_at: str
+    completed_at: str | None
+    outcome: str
+    provider_name: str
+    provider_model: str
+    prompt_version: str
+    estimated_event_date: str | None
+    failure_category: str | None
 
 
 @dataclass(frozen=True)
@@ -733,6 +796,81 @@ _MIGRATION_7 = (
     """,
 )
 
+_MIGRATION_8 = (
+    """
+    CREATE TABLE event_date_schedule (
+        venue_id TEXT NOT NULL,
+        year INTEGER NOT NULL,
+        status TEXT NOT NULL CHECK (status IN ('pending', 'active', 'scheduled')),
+        next_check_at TEXT NOT NULL,
+        estimated_event_date TEXT,
+        estimated_at TEXT,
+        provider_name TEXT,
+        provider_model TEXT,
+        prompt_version TEXT,
+        attempt_count INTEGER NOT NULL CHECK (attempt_count >= 0),
+        active_attempt_id TEXT,
+        last_failure_category TEXT,
+        updated_at TEXT NOT NULL,
+        PRIMARY KEY (venue_id, year),
+        CHECK (
+            (status = 'pending' AND estimated_event_date IS NULL
+                AND estimated_at IS NULL AND provider_name IS NULL
+                AND provider_model IS NULL AND prompt_version IS NULL
+                AND active_attempt_id IS NULL)
+            OR
+            (status = 'active' AND estimated_event_date IS NULL
+                AND estimated_at IS NULL AND provider_name IS NULL
+                AND provider_model IS NULL AND prompt_version IS NULL
+                AND active_attempt_id IS NOT NULL)
+            OR
+            (status = 'scheduled' AND estimated_event_date IS NOT NULL
+                AND estimated_at IS NOT NULL AND provider_name IS NOT NULL
+                AND provider_model IS NOT NULL AND prompt_version IS NOT NULL
+                AND active_attempt_id IS NULL
+                AND last_failure_category IS NULL)
+        )
+    )
+    """,
+    """
+    CREATE INDEX event_date_schedule_due
+    ON event_date_schedule (status, next_check_at, venue_id, year)
+    """,
+    """
+    CREATE TABLE event_date_attempt (
+        attempt_id TEXT PRIMARY KEY,
+        venue_id TEXT NOT NULL,
+        year INTEGER NOT NULL,
+        attempt_number INTEGER NOT NULL CHECK (attempt_number >= 1),
+        started_at TEXT NOT NULL,
+        completed_at TEXT,
+        outcome TEXT NOT NULL CHECK (outcome IN ('active', 'scheduled', 'retry')),
+        provider_name TEXT NOT NULL,
+        provider_model TEXT NOT NULL,
+        prompt_version TEXT NOT NULL,
+        estimated_event_date TEXT,
+        failure_category TEXT,
+        UNIQUE (venue_id, year, attempt_number),
+        FOREIGN KEY (venue_id, year)
+            REFERENCES event_date_schedule (venue_id, year),
+        CHECK (
+            (outcome = 'active' AND completed_at IS NULL
+                AND estimated_event_date IS NULL AND failure_category IS NULL)
+            OR
+            (outcome = 'scheduled' AND completed_at IS NOT NULL
+                AND estimated_event_date IS NOT NULL AND failure_category IS NULL)
+            OR
+            (outcome = 'retry' AND completed_at IS NOT NULL
+                AND estimated_event_date IS NULL AND failure_category IS NOT NULL)
+        )
+    )
+    """,
+    """
+    CREATE INDEX event_date_attempt_target
+    ON event_date_attempt (venue_id, year, attempt_number)
+    """,
+)
+
 _MIGRATIONS = {
     1: _MIGRATION_1,
     2: _MIGRATION_2,
@@ -741,6 +879,7 @@ _MIGRATIONS = {
     5: _MIGRATION_5,
     6: _MIGRATION_6,
     7: _MIGRATION_7,
+    8: _MIGRATION_8,
 }
 
 _REQUIRED_COLUMNS_V1 = {
@@ -838,6 +977,20 @@ _REQUIRED_COLUMNS_V7 = {
     },
 }
 
+_REQUIRED_COLUMNS_V8 = {
+    "event_date_schedule": {
+        "venue_id", "year", "status", "next_check_at",
+        "estimated_event_date", "estimated_at", "provider_name",
+        "provider_model", "prompt_version", "attempt_count",
+        "active_attempt_id", "last_failure_category", "updated_at",
+    },
+    "event_date_attempt": {
+        "attempt_id", "venue_id", "year", "attempt_number", "started_at",
+        "completed_at", "outcome", "provider_name", "provider_model",
+        "prompt_version", "estimated_event_date", "failure_category",
+    },
+}
+
 _REQUIRED_COLUMNS_BY_VERSION = {
     1: _REQUIRED_COLUMNS_V1,
     2: _REQUIRED_COLUMNS_V2,
@@ -846,6 +999,7 @@ _REQUIRED_COLUMNS_BY_VERSION = {
     5: _REQUIRED_COLUMNS_V5,
     6: _REQUIRED_COLUMNS_V6,
     7: _REQUIRED_COLUMNS_V7,
+    8: _REQUIRED_COLUMNS_V8,
 }
 
 
@@ -923,6 +1077,43 @@ def _validate_selection_limit(value: int) -> None:
             "scheduler selection limit must be between 1 and "
             f"{MAX_SCHEDULER_SELECTION_LIMIT}"
         )
+
+
+def _validate_event_date_target(venue_id: str, year: int) -> None:
+    if (
+        not isinstance(venue_id, str)
+        or not 2 <= len(venue_id) <= 32
+        or not venue_id[0].isalnum()
+        or any(character not in "abcdefghijklmnopqrstuvwxyz0123456789-"
+                for character in venue_id)
+    ):
+        raise EventDateScheduleError("event-date venue_id is invalid")
+    if isinstance(year, bool) or not isinstance(year, int) or not 1900 <= year <= 2200:
+        raise EventDateScheduleError("event-date year is invalid")
+
+
+def _bounded_event_text(value: str, *, field: str, maximum: int = 200) -> str:
+    if (
+        not isinstance(value, str)
+        or not value
+        or len(value) > maximum
+        or any(character in value for character in ("\x00", "\n", "\r"))
+    ):
+        raise EventDateScheduleError(f"{field} is invalid")
+    return value
+
+
+def _event_date(value: str, *, field: str) -> str:
+    if not isinstance(value, str):
+        raise EventDateScheduleError(f"{field} must be an ISO date")
+    try:
+        parsed = date.fromisoformat(value)
+    except ValueError as exc:
+        raise EventDateScheduleError(f"{field} must be an ISO date") from exc
+    canonical = parsed.isoformat()
+    if canonical != value:
+        raise EventDateScheduleError(f"{field} must be a canonical ISO date")
+    return canonical
 
 
 def _decode_json(raw: str, *, label: str) -> dict[str, Any]:
@@ -1739,6 +1930,455 @@ class ControlStateRepository:
             first_wakeup_id=first_wakeup_id,
             state_revision=state_revision,
             state_fingerprint=state_fingerprint,
+        )
+
+    def register_event_date_target(
+        self,
+        venue_id: str,
+        year: int,
+        *,
+        registered_at: datetime | str,
+        lease: LeaseHandle,
+    ) -> EventDateScheduleWriteOutcome:
+        """Idempotently register one venue/year for approximate-date lookup."""
+        if self.writer is not Writer.LOCAL_CONTROL_PLANE:
+            raise OwnershipError("event-date schedules require local ownership")
+        _validate_event_date_target(venue_id, year)
+        registered = _timestamp(registered_at, field="event-date registered_at")
+        with self._write_transaction() as connection:
+            self._require_lease(connection, lease, self._now())
+            existing = connection.execute(
+                "SELECT * FROM event_date_schedule WHERE venue_id = ? AND year = ?",
+                (venue_id, year),
+            ).fetchone()
+            if existing is not None:
+                return EventDateScheduleWriteOutcome(
+                    self._event_date_schedule_from_row(existing), applied=False
+                )
+            connection.execute(
+                """
+                INSERT INTO event_date_schedule (
+                    venue_id, year, status, next_check_at,
+                    estimated_event_date, estimated_at, provider_name,
+                    provider_model, prompt_version, attempt_count,
+                    active_attempt_id, last_failure_category, updated_at
+                ) VALUES (?, ?, 'pending', ?, NULL, NULL, NULL, NULL, NULL,
+                    0, NULL, NULL, ?)
+                """,
+                (venue_id, year, registered, registered),
+            )
+            row = connection.execute(
+                "SELECT * FROM event_date_schedule WHERE venue_id = ? AND year = ?",
+                (venue_id, year),
+            ).fetchone()
+        return EventDateScheduleWriteOutcome(
+            self._event_date_schedule_from_row(row), applied=True
+        )
+
+    def list_due_event_date_schedules(
+        self,
+        due_at: datetime | str,
+        *,
+        limit: int = 1,
+    ) -> tuple[EventDateScheduleRecord, ...]:
+        """Return bounded pending date lookups without claiming an effect."""
+        _validate_selection_limit(limit)
+        due = _timestamp(due_at, field="event-date due_at")
+        rows = self._connection.execute(
+            "SELECT * FROM event_date_schedule "
+            "WHERE status = 'pending' AND next_check_at <= ? "
+            "ORDER BY next_check_at, venue_id, year LIMIT ?",
+            (due, limit),
+        ).fetchall()
+        return tuple(self._event_date_schedule_from_row(row) for row in rows)
+
+    def claim_event_date_attempt(
+        self,
+        venue_id: str,
+        year: int,
+        *,
+        provider_name: str,
+        provider_model: str,
+        prompt_version: str,
+        claimed_at: datetime | str,
+        lease: LeaseHandle,
+    ) -> EventDateAttemptClaim:
+        """Durably claim one due provider call before crossing that boundary."""
+        if self.writer is not Writer.LOCAL_CONTROL_PLANE:
+            raise OwnershipError("event-date schedules require local ownership")
+        _validate_event_date_target(venue_id, year)
+        provider_name = _bounded_event_text(
+            provider_name, field="event-date provider name"
+        )
+        provider_model = _bounded_event_text(
+            provider_model, field="event-date provider model"
+        )
+        prompt_version = _bounded_event_text(
+            prompt_version, field="event-date prompt version", maximum=50
+        )
+        claimed = _timestamp(claimed_at, field="event-date claimed_at")
+        with self._write_transaction() as connection:
+            self._require_lease(connection, lease, self._now())
+            row = connection.execute(
+                "SELECT * FROM event_date_schedule WHERE venue_id = ? AND year = ?",
+                (venue_id, year),
+            ).fetchone()
+            if row is None:
+                raise EventDateScheduleError("event-date target is not registered")
+            record = self._event_date_schedule_from_row(row)
+            if record.status == "active":
+                raise EventDateScheduleError(
+                    "event-date attempt is active or ambiguously interrupted"
+                )
+            if record.status != "pending":
+                raise EventDateScheduleError("event-date target is already scheduled")
+            if _parse_timestamp(
+                record.next_check_at, field="stored event-date next_check_at"
+            ) > _parse_timestamp(claimed, field="event-date claimed_at"):
+                raise EventDateScheduleError("event-date target is not due")
+            attempt_number = record.attempt_count + 1
+            attempt_id = "event-date-attempt:" + artifact_fingerprint({
+                "venue_id": venue_id,
+                "year": year,
+                "attempt_number": attempt_number,
+            })
+            connection.execute(
+                """
+                INSERT INTO event_date_attempt (
+                    attempt_id, venue_id, year, attempt_number, started_at,
+                    completed_at, outcome, provider_name, provider_model,
+                    prompt_version, estimated_event_date, failure_category
+                ) VALUES (?, ?, ?, ?, ?, NULL, 'active', ?, ?, ?, NULL, NULL)
+                """,
+                (
+                    attempt_id, venue_id, year, attempt_number, claimed,
+                    provider_name, provider_model, prompt_version,
+                ),
+            )
+            connection.execute(
+                "UPDATE event_date_schedule SET status = 'active', "
+                "attempt_count = ?, active_attempt_id = ?, "
+                "last_failure_category = NULL, updated_at = ? "
+                "WHERE venue_id = ? AND year = ? AND status = 'pending'",
+                (attempt_number, attempt_id, claimed, venue_id, year),
+            )
+        return EventDateAttemptClaim(
+            attempt_id=attempt_id,
+            venue_id=venue_id,
+            year=year,
+            attempt_number=attempt_number,
+            started_at=claimed,
+            provider_name=provider_name,
+            provider_model=provider_model,
+            prompt_version=prompt_version,
+        )
+
+    def complete_event_date_success(
+        self,
+        claim: EventDateAttemptClaim,
+        *,
+        estimated_event_date: str,
+        estimated_at: datetime | str,
+        next_check_at: datetime | str,
+        lease: LeaseHandle,
+    ) -> EventDateScheduleRecord:
+        """Close one claimed lookup with a date and future agent-check time."""
+        event_date = _event_date(
+            estimated_event_date, field="estimated event date"
+        )
+        estimated = _timestamp(estimated_at, field="event-date estimated_at")
+        next_check = _timestamp(next_check_at, field="event-date next_check_at")
+        if _parse_timestamp(next_check, field="event-date next_check_at") < \
+                _parse_timestamp(estimated, field="event-date estimated_at"):
+            raise EventDateScheduleError(
+                "event-date next_check_at cannot precede estimation"
+            )
+        with self._write_transaction() as connection:
+            self._require_event_date_claim(connection, claim, lease)
+            connection.execute(
+                "UPDATE event_date_attempt SET completed_at = ?, "
+                "outcome = 'scheduled', estimated_event_date = ? "
+                "WHERE attempt_id = ? AND outcome = 'active'",
+                (estimated, event_date, claim.attempt_id),
+            )
+            connection.execute(
+                "UPDATE event_date_schedule SET status = 'scheduled', "
+                "next_check_at = ?, estimated_event_date = ?, estimated_at = ?, "
+                "provider_name = ?, provider_model = ?, prompt_version = ?, "
+                "active_attempt_id = NULL, last_failure_category = NULL, "
+                "updated_at = ? WHERE venue_id = ? AND year = ? "
+                "AND status = 'active' AND active_attempt_id = ?",
+                (
+                    next_check, event_date, estimated, claim.provider_name,
+                    claim.provider_model, claim.prompt_version, estimated,
+                    claim.venue_id, claim.year, claim.attempt_id,
+                ),
+            )
+            row = connection.execute(
+                "SELECT * FROM event_date_schedule WHERE venue_id = ? AND year = ?",
+                (claim.venue_id, claim.year),
+            ).fetchone()
+        return self._event_date_schedule_from_row(row)
+
+    def complete_event_date_retry(
+        self,
+        claim: EventDateAttemptClaim,
+        *,
+        failure_category: str,
+        completed_at: datetime | str,
+        retry_at: datetime | str,
+        lease: LeaseHandle,
+    ) -> EventDateScheduleRecord:
+        """Close one expected lookup failure with a bounded later retry."""
+        failure = _bounded_event_text(
+            failure_category, field="event-date failure category"
+        )
+        completed = _timestamp(completed_at, field="event-date completed_at")
+        retry = _timestamp(retry_at, field="event-date retry_at")
+        if _parse_timestamp(retry, field="event-date retry_at") <= \
+                _parse_timestamp(completed, field="event-date completed_at"):
+            raise EventDateScheduleError("event-date retry must be in the future")
+        with self._write_transaction() as connection:
+            self._require_event_date_claim(connection, claim, lease)
+            connection.execute(
+                "UPDATE event_date_attempt SET completed_at = ?, "
+                "outcome = 'retry', failure_category = ? "
+                "WHERE attempt_id = ? AND outcome = 'active'",
+                (completed, failure, claim.attempt_id),
+            )
+            connection.execute(
+                "UPDATE event_date_schedule SET status = 'pending', "
+                "next_check_at = ?, active_attempt_id = NULL, "
+                "last_failure_category = ?, updated_at = ? "
+                "WHERE venue_id = ? AND year = ? AND status = 'active' "
+                "AND active_attempt_id = ?",
+                (
+                    retry, failure, completed, claim.venue_id, claim.year,
+                    claim.attempt_id,
+                ),
+            )
+            row = connection.execute(
+                "SELECT * FROM event_date_schedule WHERE venue_id = ? AND year = ?",
+                (claim.venue_id, claim.year),
+            ).fetchone()
+        return self._event_date_schedule_from_row(row)
+
+    def _require_event_date_claim(
+        self,
+        connection: sqlite3.Connection,
+        claim: EventDateAttemptClaim,
+        lease: LeaseHandle,
+    ) -> None:
+        if not isinstance(claim, EventDateAttemptClaim):
+            raise EventDateScheduleError("event-date claim is invalid")
+        self._require_lease(connection, lease, self._now())
+        schedule = connection.execute(
+            "SELECT * FROM event_date_schedule WHERE venue_id = ? AND year = ?",
+            (claim.venue_id, claim.year),
+        ).fetchone()
+        attempt = connection.execute(
+            "SELECT * FROM event_date_attempt WHERE attempt_id = ?",
+            (claim.attempt_id,),
+        ).fetchone()
+        if schedule is None or attempt is None:
+            raise EventDateScheduleError("event-date claim is not retained")
+        record = self._event_date_schedule_from_row(schedule)
+        attempt_record = self._event_date_attempt_from_row(attempt)
+        if (
+            record.status != "active"
+            or record.active_attempt_id != claim.attempt_id
+            or record.attempt_count != claim.attempt_number
+            or attempt_record.outcome != "active"
+            or attempt_record.venue_id != claim.venue_id
+            or attempt_record.year != claim.year
+            or attempt_record.attempt_number != claim.attempt_number
+            or attempt_record.started_at != claim.started_at
+            or attempt_record.provider_name != claim.provider_name
+            or attempt_record.provider_model != claim.provider_model
+            or attempt_record.prompt_version != claim.prompt_version
+        ):
+            raise EventDateScheduleError(
+                "event-date claim is stale or already completed"
+            )
+
+    def get_event_date_schedule(
+        self, venue_id: str, year: int
+    ) -> EventDateScheduleRecord | None:
+        """Return one fully validated event-date schedule."""
+        _validate_event_date_target(venue_id, year)
+        row = self._connection.execute(
+            "SELECT * FROM event_date_schedule WHERE venue_id = ? AND year = ?",
+            (venue_id, year),
+        ).fetchone()
+        return None if row is None else self._event_date_schedule_from_row(row)
+
+    def list_event_date_schedules(self) -> tuple[EventDateScheduleRecord, ...]:
+        """Return all validated date schedules in stable target order."""
+        rows = self._connection.execute(
+            "SELECT * FROM event_date_schedule ORDER BY venue_id, year"
+        ).fetchall()
+        return tuple(self._event_date_schedule_from_row(row) for row in rows)
+
+    def event_date_attempt_history(
+        self, venue_id: str, year: int
+    ) -> tuple[EventDateAttemptRecord, ...]:
+        """Return immutable lookup attempts for one target."""
+        _validate_event_date_target(venue_id, year)
+        rows = self._connection.execute(
+            "SELECT * FROM event_date_attempt WHERE venue_id = ? AND year = ? "
+            "ORDER BY attempt_number",
+            (venue_id, year),
+        ).fetchall()
+        return tuple(self._event_date_attempt_from_row(row) for row in rows)
+
+    def _event_date_schedule_from_row(
+        self, row: sqlite3.Row
+    ) -> EventDateScheduleRecord:
+        venue_id = str(row["venue_id"])
+        year = int(row["year"])
+        _validate_event_date_target(venue_id, year)
+        status = str(row["status"])
+        if status not in {"pending", "active", "scheduled"}:
+            raise StoredDataError("stored event-date status is invalid")
+        next_check_at = _timestamp(
+            str(row["next_check_at"]), field="stored event-date next_check_at"
+        )
+        updated_at = _timestamp(
+            str(row["updated_at"]), field="stored event-date updated_at"
+        )
+        attempt_count = int(row["attempt_count"])
+        if attempt_count < 0:
+            raise StoredDataError("stored event-date attempt count is invalid")
+        optional = {
+            name: None if row[name] is None else str(row[name])
+            for name in (
+                "estimated_event_date", "estimated_at", "provider_name",
+                "provider_model", "prompt_version", "active_attempt_id",
+                "last_failure_category",
+            )
+        }
+        if optional["estimated_event_date"] is not None:
+            _event_date(
+                optional["estimated_event_date"], field="stored estimated event date"
+            )
+        if optional["estimated_at"] is not None:
+            optional["estimated_at"] = _timestamp(
+                optional["estimated_at"], field="stored event-date estimated_at"
+            )
+        attempts = int(self._connection.execute(
+            "SELECT COUNT(*) FROM event_date_attempt WHERE venue_id = ? AND year = ?",
+            (venue_id, year),
+        ).fetchone()[0])
+        if attempts != attempt_count:
+            raise StoredDataError("stored event-date attempt count does not match")
+        if status == "pending" and any(optional[name] is not None for name in (
+            "estimated_event_date", "estimated_at", "provider_name",
+            "provider_model", "prompt_version", "active_attempt_id",
+        )):
+            raise StoredDataError("stored pending event-date schedule is invalid")
+        if status == "active":
+            if optional["active_attempt_id"] is None:
+                raise StoredDataError("stored active event-date attempt is missing")
+            active = self._connection.execute(
+                "SELECT outcome FROM event_date_attempt WHERE attempt_id = ?",
+                (optional["active_attempt_id"],),
+            ).fetchone()
+            if active is None or active["outcome"] != "active":
+                raise StoredDataError("stored active event-date attempt is inconsistent")
+        if status == "scheduled" and (
+            optional["estimated_event_date"] is None
+            or optional["estimated_at"] is None
+            or optional["provider_name"] is None
+            or optional["provider_model"] is None
+            or optional["prompt_version"] is None
+            or optional["active_attempt_id"] is not None
+            or optional["last_failure_category"] is not None
+        ):
+            raise StoredDataError("stored scheduled event-date state is invalid")
+        return EventDateScheduleRecord(
+            venue_id=venue_id,
+            year=year,
+            status=status,
+            next_check_at=next_check_at,
+            estimated_event_date=optional["estimated_event_date"],
+            estimated_at=optional["estimated_at"],
+            provider_name=optional["provider_name"],
+            provider_model=optional["provider_model"],
+            prompt_version=optional["prompt_version"],
+            attempt_count=attempt_count,
+            active_attempt_id=optional["active_attempt_id"],
+            last_failure_category=optional["last_failure_category"],
+            updated_at=updated_at,
+        )
+
+    def _event_date_attempt_from_row(
+        self, row: sqlite3.Row
+    ) -> EventDateAttemptRecord:
+        venue_id = str(row["venue_id"])
+        year = int(row["year"])
+        _validate_event_date_target(venue_id, year)
+        attempt_number = int(row["attempt_number"])
+        attempt_id = str(row["attempt_id"])
+        expected_id = "event-date-attempt:" + artifact_fingerprint({
+            "venue_id": venue_id,
+            "year": year,
+            "attempt_number": attempt_number,
+        })
+        if attempt_number < 1 or attempt_id != expected_id:
+            raise StoredDataError("stored event-date attempt identity is invalid")
+        outcome = str(row["outcome"])
+        if outcome not in {"active", "scheduled", "retry"}:
+            raise StoredDataError("stored event-date attempt outcome is invalid")
+        started_at = _timestamp(
+            str(row["started_at"]), field="stored event-date attempt start"
+        )
+        completed_at = (
+            None if row["completed_at"] is None else _timestamp(
+                str(row["completed_at"]), field="stored event-date attempt completion"
+            )
+        )
+        estimated_event_date = (
+            None if row["estimated_event_date"] is None else _event_date(
+                str(row["estimated_event_date"]),
+                field="stored attempt estimated event date",
+            )
+        )
+        failure_category = (
+            None if row["failure_category"] is None
+            else str(row["failure_category"])
+        )
+        if completed_at is not None and _parse_timestamp(
+            completed_at, field="stored event-date attempt completion"
+        ) < _parse_timestamp(started_at, field="stored event-date attempt start"):
+            raise StoredDataError("stored event-date attempt time regresses")
+        if outcome == "active" and (
+            completed_at is not None or estimated_event_date is not None
+            or failure_category is not None
+        ):
+            raise StoredDataError("stored active event-date attempt is invalid")
+        if outcome == "scheduled" and (
+            completed_at is None or estimated_event_date is None
+            or failure_category is not None
+        ):
+            raise StoredDataError("stored successful event-date attempt is invalid")
+        if outcome == "retry" and (
+            completed_at is None or estimated_event_date is not None
+            or failure_category is None
+        ):
+            raise StoredDataError("stored retry event-date attempt is invalid")
+        return EventDateAttemptRecord(
+            attempt_id=attempt_id,
+            venue_id=venue_id,
+            year=year,
+            attempt_number=attempt_number,
+            started_at=started_at,
+            completed_at=completed_at,
+            outcome=outcome,
+            provider_name=str(row["provider_name"]),
+            provider_model=str(row["provider_model"]),
+            prompt_version=str(row["prompt_version"]),
+            estimated_event_date=estimated_event_date,
+            failure_category=failure_category,
         )
 
     def accept_verification(

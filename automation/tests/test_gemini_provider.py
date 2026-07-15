@@ -1,29 +1,22 @@
 import json
 import unittest
-from copy import deepcopy
+from datetime import date
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
 from automation.configuration import load_venue_catalog
 from automation.discovery import ProviderError, request_from_catalog
-from automation.providers.gemini import GeminiSearchGroundingProvider
+from automation.providers.gemini import (
+    GeminiEventDateProvider,
+    GeminiSearchGroundingProvider,
+)
 
 
 FIXTURE = (
     Path(__file__).with_name("fixtures")
     / "phase1"
     / "gemini-grounded-response.v1.json"
-)
-P2_9_FIXTURE = (
-    Path(__file__).with_name("fixtures")
-    / "phase2"
-    / "p2-9-colt-grounding-redirect.json"
-)
-P2_10_FIXTURE = (
-    Path(__file__).with_name("fixtures")
-    / "phase2"
-    / "p2-10-colt-official-page-only.json"
 )
 
 
@@ -75,48 +68,17 @@ def sdk_response(*, include_metadata=True, text=None, usage_metadata=None):
     )
 
 
-def p2_9_sdk_response():
-    fixture = json.loads(P2_9_FIXTURE.read_text(encoding="utf-8"))
-    metadata = SimpleNamespace(
-        grounding_chunks=[
-            SimpleNamespace(web=SimpleNamespace(**source))
-            for source in fixture["grounding_sources"]
-        ],
-        web_search_queries=fixture["search_queries"],
-        grounding_supports=[
-            SimpleNamespace(
-                segment=SimpleNamespace(text="Sanitized COLT fixture excerpt."),
-                grounding_chunk_indices=list(range(len(fixture["grounding_sources"]))),
-            )
-        ],
-    )
+def event_date_sdk_response(body=None):
+    payload = body or {
+        "venue_id": "icml",
+        "year": 2026,
+        "event_date": "2026-07-13",
+        "explanation": "Search results report the main conference start date.",
+    }
     return SimpleNamespace(
         parsed=None,
-        text=json.dumps(fixture["body"]),
-        candidates=[SimpleNamespace(grounding_metadata=metadata)],
-        usage_metadata=None,
-    )
-
-
-def p2_10_sdk_response(body=None):
-    fixture = json.loads(P2_10_FIXTURE.read_text(encoding="utf-8"))
-    metadata = SimpleNamespace(
-        grounding_chunks=[
-            SimpleNamespace(web=SimpleNamespace(**source))
-            for source in fixture["grounding_sources"]
-        ],
-        web_search_queries=fixture["search_queries"],
-        grounding_supports=[
-            SimpleNamespace(
-                segment=SimpleNamespace(text="Sanitized COLT fixture excerpt."),
-                grounding_chunk_indices=list(range(len(fixture["grounding_sources"]))),
-            )
-        ],
-    )
-    return SimpleNamespace(
-        parsed=None,
-        text=json.dumps(body if body is not None else fixture["body"]),
-        candidates=[SimpleNamespace(grounding_metadata=metadata)],
+        text=json.dumps(payload),
+        candidates=[SimpleNamespace(grounding_metadata=None)],
         usage_metadata=None,
     )
 
@@ -239,84 +201,6 @@ class GeminiProviderTests(unittest.TestCase):
             [redirect],
         )
 
-    def test_colt_redirect_only_sources_resolve_without_contacting_wrapper(self):
-        request = request_from_catalog(load_venue_catalog(), "colt", 2025)
-        fixture = json.loads(P2_9_FIXTURE.read_text(encoding="utf-8"))
-        response = GeminiSearchGroundingProvider(
-            FakeClient(p2_9_sdk_response())
-        ).discover(request)
-
-        self.assertEqual(
-            [source.uri for source in response.grounding_sources],
-            [
-                "https://learningtheory.org/colt2025/",
-                "https://proceedings.mlr.press/v291/",
-            ],
-        )
-        self.assertEqual(
-            [source.provider_uri for source in response.grounding_sources],
-            [source["uri"] for source in fixture["grounding_sources"][:2]],
-        )
-        cited = {
-            url
-            for collection in ("claims", "candidate_milestones")
-            for item in response.body[collection]
-            for url in item["evidence_urls"]
-        }
-        self.assertFalse(any("vertexaisearch.cloud.google.com" in url for url in cited))
-        pdf_claims = [
-            claim for claim in response.body["claims"]
-            if claim["claim_kind"] == "pdf"
-        ]
-        self.assertEqual(len(pdf_claims), 1)
-        self.assertEqual(
-            pdf_claims[0]["evidence_urls"],
-            ["https://proceedings.mlr.press/v291/"],
-        )
-        self.assertEqual(response.body["pdf_status"], "unknown")
-
-    def test_official_page_only_sources_add_a_pdf_candidate_for_that_page(self):
-        request = request_from_catalog(load_venue_catalog(), "colt", 2025)
-        response = GeminiSearchGroundingProvider(
-            FakeClient(p2_10_sdk_response())
-        ).discover(request)
-
-        cited = {
-            url
-            for collection in ("claims", "candidate_milestones")
-            for item in response.body[collection]
-            for url in item["evidence_urls"]
-        }
-        self.assertFalse(any("vertexaisearch.cloud.google.com" in url for url in cited))
-        self.assertFalse(any("proceedings.mlr.press" in url for url in cited))
-        pdf_claims = [
-            claim for claim in response.body["claims"]
-            if claim["claim_kind"] == "pdf"
-        ]
-        self.assertEqual(len(pdf_claims), 1)
-        self.assertEqual(
-            pdf_claims[0]["evidence_urls"],
-            ["https://learningtheory.org/colt2025/"],
-        )
-        self.assertEqual(pdf_claims[0]["source_type"], "official")
-        self.assertEqual(response.body["pdf_status"], "unknown")
-
-    def test_official_page_candidate_is_not_added_without_a_supporting_claim(self):
-        fixture = json.loads(P2_10_FIXTURE.read_text(encoding="utf-8"))
-        body = deepcopy(fixture["body"])
-        body["claims"] = [
-            claim for claim in body["claims"]
-            if claim["claim_kind"] not in {"paper_list", "proceedings"}
-        ]
-        request = request_from_catalog(load_venue_catalog(), "colt", 2025)
-        response = GeminiSearchGroundingProvider(
-            FakeClient(p2_10_sdk_response(body))
-        ).discover(request)
-
-        self.assertFalse(any(
-            claim["claim_kind"] == "pdf" for claim in response.body["claims"]
-        ))
-
     def test_short_source_ids_map_to_exact_grounding_uris(self):
         fixture = json.loads(FIXTURE.read_text(encoding="utf-8"))
         fixture["body"]["claims"][0]["evidence_urls"] = ["s1"]
@@ -400,6 +284,90 @@ class GeminiProviderTests(unittest.TestCase):
         client = FakeClient(sdk_response())
         GeminiSearchGroundingProvider(client).close()
         self.assertTrue(client.closed)
+
+
+class GeminiEventDateProviderTests(unittest.TestCase):
+    def setUp(self):
+        self.request = request_from_catalog(
+            load_venue_catalog(), "icml", 2026
+        )
+
+    def test_adapter_makes_one_loose_google_search_call(self):
+        client = FakeClient(event_date_sdk_response())
+        provider = GeminiEventDateProvider(client, "fixture-gemini")
+
+        estimate = provider.estimate(self.request)
+
+        self.assertEqual(estimate.event_date, date(2026, 7, 13))
+        self.assertIn("conference start", estimate.explanation)
+        self.assertEqual(len(client.models.calls), 1)
+        call = client.models.calls[0]
+        self.assertEqual(call["model"], "fixture-gemini")
+        self.assertIn("icml 2026 date", call["contents"])
+        self.assertIn("Do not assess paper or PDF readiness", call["contents"])
+        config = call["config"]
+        self.assertIsNone(config.response_mime_type)
+        self.assertIsNone(config.response_json_schema)
+        self.assertEqual(len(config.tools), 1)
+        self.assertIsNotNone(config.tools[0].google_search)
+
+    def test_adapter_accepts_bounded_no_date_result(self):
+        response = event_date_sdk_response({
+            "venue_id": "icml",
+            "year": 2026,
+            "event_date": None,
+            "explanation": "No credible date was visible.",
+        })
+
+        estimate = GeminiEventDateProvider(FakeClient(response)).estimate(
+            self.request
+        )
+
+        self.assertIsNone(estimate.event_date)
+
+    def test_adapter_does_not_require_nonessential_explanation(self):
+        response = event_date_sdk_response({
+            "venue_id": "icml",
+            "year": 2026,
+            "event_date": "2026-07-07",
+        })
+
+        estimate = GeminiEventDateProvider(FakeClient(response)).estimate(
+            self.request
+        )
+
+        self.assertEqual(estimate.event_date, date(2026, 7, 7))
+        self.assertEqual(
+            estimate.explanation,
+            "Approximate event date returned by Gemini search.",
+        )
+
+    def test_adapter_rejects_identity_and_date_contract_failures(self):
+        invalid_bodies = (
+            {
+                "venue_id": "aistats",
+                "year": 2026,
+                "event_date": "2026-07-13",
+                "explanation": "Wrong venue.",
+            },
+            {
+                "venue_id": "icml",
+                "year": 2026,
+                "event_date": "2025-07-13",
+                "explanation": "Wrong year.",
+            },
+            {
+                "venue_id": "icml",
+                "year": 2026,
+                "event_date": "not-a-date",
+                "explanation": "Malformed date.",
+            },
+        )
+        for body in invalid_bodies:
+            with self.subTest(body=body), self.assertRaises(ProviderError):
+                GeminiEventDateProvider(
+                    FakeClient(event_date_sdk_response(body))
+                ).estimate(self.request)
 
 
 if __name__ == "__main__":

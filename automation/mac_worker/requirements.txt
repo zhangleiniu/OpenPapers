@@ -1,3 +1,0 @@
-# Optional Mac execution-plane package; do not add to core requirements.
-jsonschema>=4.23,<5
-prefect>=3.7,<4

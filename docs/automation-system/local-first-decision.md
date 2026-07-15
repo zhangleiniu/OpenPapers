@@ -1,134 +1,77 @@
 # Local-first automation decision
 
-Status: accepted on 2026-07-14
+Status: accepted on 2026-07-14; still current
 
 ## Context
 
-P4.O attempted to preflight the Phase 4 Prefect topology on the maintainer's
-current Prefect Cloud plan. Inspection showed that no planned Phase 4 pool,
-queue, or deployment existed. The first create operation was rejected before
-resource creation because the plan does not support the required hybrid
-`process` work pool. Completing that design would require a recurring paid
-orchestration tier whose cost is not justified for this hobby project.
+The earlier design expected Prefect Cloud to coordinate a process worker on
+the maintainer's Mac. Its operator preflight found that the required hybrid
+process work pool was unavailable on the acceptable plan. Paying for a higher
+tier or self-hosting an orchestrator was disproportionate for a single-host
+hobby workload.
 
-The Mac mini is already an always-on host managed by system LaunchDaemons and
-is reached through SSH. It also hosts unrelated production services and uses
-an external data volume whose availability can lag a reboot. OpenPapers must
-therefore remain headless, low-impact, fail closed when storage is unavailable,
-and never manage or restart another project's services.
-
-No Prefect Phase 4 resource, GCS result bucket, IAM grant, OpenPapers daemon,
-fixture flow run, or live result object was created by the P4.O attempt. The
-existing deterministic Cloud Run monitor remains the production baseline.
+The Mac is already an always-on SSH-managed host. It also runs unrelated
+services and uses an external data volume whose availability may lag a reboot,
+so OpenPapers must remain headless, low-impact, and fail closed without
+managing another project's services or mounts.
 
 ## Decision
 
-The target control plane is local-first and single-host:
+The production control plane is local-first and single-writer:
 
-- one plain-Python scheduler reads durable local control state, derives due
-  work from `next_check_at`, and exits after a bounded run;
-- a system LaunchDaemon starts it at boot and on a coarse calendar interval;
-- the daemon runs as a dedicated non-administrator role account and requires
-  no GUI login, inbound port, Prefect profile, or orchestration subscription;
-- SQLite on the Mac's internal storage is the target mutable control store;
-- external storage is execution data, not scheduler state. OpenPapers observes
-  its availability and fails closed; it does not mount the volume;
-- existing typed jobs, stable identities, venue/year locks, disk gates,
-  timeout/cancellation rules, replay suppression, and immutable result
-  contracts remain reusable; and
-- Vertex AI discovery, notification delivery, optional GCS backup/export, and
-  later Codex calls remain bounded external effects, not scheduling or
-  coordination dependencies.
+- a bounded plain-Python process wakes from a system LaunchDaemon;
+- SQLite on internal storage owns scheduling state under an expiring lease;
+- the scheduler reads `next_check_at`, processes only due records, and exits;
+- external storage is scraper execution data, not scheduler coordination
+  state, and its absence closes execution safely;
+- no inbound service, Prefect work pool, GCS job queue, or multi-writer
+  protocol is part of the target design;
+- discovery, coding-agent invocation, and notification are bounded external
+  effects called by the local control plane;
+- the retained Cloud Run monitor is a paused rollback path, not a second
+  scheduler.
 
-The existing Cloud Run monitor stays active and remains the sole production
-writer until an explicit later cutover package. Local development and shadow
-runs must use isolated state. Cutover must first back up state, prove local
-health and rollback, disable the cloud schedule, and then establish the Mac as
-the only writer. Cloud and local schedulers must never concurrently mutate the
-same control state.
+An hourly LaunchDaemon wakeup is only a cheap local SQLite poll. It does not
+authorize hourly web searches or conference checks. A venue/year with a
+future `next_check_at` remains asleep until that time.
 
-## Why not the alternatives
+## Production state
 
-- Paying for Prefect Cloud preserves the prototype transport but adds a fixed
-  recurring cost disproportionate to the workload.
-- Self-hosting Prefect replaces subscription cost with a database, server,
-  upgrade, backup, and monitoring burden that this single-host workload does
-  not need.
-- A permanently running custom queue service adds failure modes without
-  improving the durable `next_check_at` model. A bounded scheduled process is
-  easier to inspect and recover.
-- Moving everything immediately from Cloud Run to the Mac would create an
-  unsafe, unmeasured writer cutover. Migration remains staged.
+An authorized no-overlap cutover completed on 2026-07-14:
 
-## Phase impact
+- the local LaunchDaemon became the sole production writer;
+- the existing deterministic monitor and TLS SMTP change/error notifications
+  moved to that local effect;
+- the Cloud Scheduler trigger was paused after local activation;
+- a timed rollback proved local could be stopped before cloud was resumed;
+- the cloud job, monitor state, and credentials were retained for rollback.
 
-- Phases 0-3 retain their current status and semantics.
-- P4.1-P4.4 remain accepted prototypes. Their transport-specific Prefect
-  topology and cloud-consumer ownership are historical; their identities,
-  policy gates, local safety, and result validation are reusable.
-- P4.O is paused, not complete. It records a failed feasibility gate rather
-  than an operational worker.
-- The P4.L package series replaces P4.O as the path to the Phase 4 gate.
-- Phases 5-8 keep their user-visible goals but will execute through the local
-  scheduler instead of a Prefect pull worker.
-- Phase 9 may publish a derived public-safe snapshot to GCS, but GCS is not
-  required for scheduler correctness.
+The installed service currently performs the daily baseline monitor and local
+due selection only. It does not call discovery, a coding agent, or a run-report
+notification path. Actual external state must be checked before relying on
+this recorded topology.
 
-## Migration and rollback invariants
+Host-specific cutover and rollback evidence lives in the maintainer's ignored
+`docs/local-p4lc-operations.md`. Earlier ignored `local-p4o` and `local-p4ls`
+records are historical audits. None is a tracked development specification.
 
-1. Build and test local scheduling with fake clocks and temporary SQLite only.
-2. Add a credential-free LaunchDaemon package without installing it.
-3. Run an explicitly authorized, isolated shadow installation while the cloud
-   baseline remains authoritative.
-4. Compare outcomes and exercise reboot, SSH-disconnect, missing-volume,
-   duplicate-wakeup, stale-claim, and recovery drills without touching
-   canonical data.
-5. Perform a separately authorized single-writer cutover with a state backup,
-   cloud-schedule disablement, local activation, health checks, and a timed
-   rollback procedure.
+## Current migration and rollback invariants
 
-Before and after any host mutation or reboot, record bounded health for the
-co-resident services. An OpenPapers rollback may stop or replace only the
-OpenPapers daemon and its isolated files; it must not reload unrelated launchd
-labels.
+1. The Mac and cloud monitor must never be active writers at the same time.
+2. Rollback stops and verifies the local OpenPapers label before resuming the
+   exact cloud schedule.
+3. Activation pauses and drains cloud before opening local production state.
+4. OpenPapers rollback may change only its own label, plist, runtime, and
+   isolated files; it must not reload or modify co-resident services.
+5. Internal SQLite state and external scraper data remain separate.
+6. New date/agent functionality is fake-tested against isolated state before
+   any separately authorized live invocation or service upgrade.
 
-## Current implementation boundary
+## Superseded parts of the earlier decision record
 
-P4.L1 has implemented local single-writer ownership and a clock-injected,
-bounded due-work planner/runner over temporary state. P4.L2 now composes the
-accepted discovery, verification, lifecycle, case, reminder, pending-shadow,
-and inert-action boundaries under that local lease using fake effects only. A
-selected wakeup remains active until every selected schedule advances or
-clears, and partial failure remains durable ambiguity. Neither package makes a
-network request, delivers a notification, submits or executes a job, installs a
-daemon, changes a production database, runs a scraper, or modifies the current
-cloud deployment. P4.L3 adds the credential-free system
-LaunchDaemon renderer, private internal state/record paths, a missing-volume
-gate before an injected effect, bounded secret-safe health/run artifacts, and
-an exact OpenPapers-only rollback scope. Its ordinary standalone command has no
-concrete effect and fails closed. P4.LS adds a separately marked scheduler-only
-mode and has installed it against isolated local state on the authorized Mac.
-Duplicate, SSH-disconnect, reboot, missing-volume, ambiguous-recovery,
-bounded-record, exact rollback/reinstall, and co-resident health drills passed
-without a live domain effect or production authority. At that boundary P4.LC
-remained next, retaining backup, cloud-schedule disablement, ownership
-transfer, live production wiring, health verification, and timed rollback.
-
-P4.LC subsequently completed those invariants on 2026-07-14. It preserved the
-existing deterministic six-source monitor and TLS SMTP notifications inside a
-strict local production boundary, kept legacy monitor and schema-v6 control
-state separate, and paused/drained cloud before local activation. Initial and
-final local health passed; a real rollback stopped local before cloud resume,
-recovered remote state, and completed in 96 seconds. The Mac is authoritative,
-the retained cloud schedule is paused, P5.1 has completed pure fixed command
-selection and P5.2 has completed the isolated fake-tested existing-scraper
-staging/process boundary. Neither has a runtime connection or has executed a
-scraper/validator. P5.3 subsequently completed a separate fixture-only
-staged-validation and manifest boundary without runtime wiring, actual
-execution, result routing, or canonical writes. P5.4 subsequently completed
-fixture-only guarded composition. P5.S then used a separate manual, sandboxed
-boundary for one COLT 2025 archival shadow with confirmed timeout recovery,
-181/181 independent validation, private create-only results, exact duplicate
-suppression, canonical invariance, and scoped rollback. It did not connect
-execution to the LaunchDaemon or automatic local control path. Phase 5 is
-therefore `Shadow`, not `Implemented`.
+The local-first topology remains accepted, but the old plan to reuse typed
+jobs, deterministic verification, a Prefect worker prototype, staged scraper
+execution, and GCS-compatible results has been abandoned. Those details and
+the original phased history are preserved under
+[`archive/`](./archive/README.md); they are not constraints on the current
+agent-driven roadmap.

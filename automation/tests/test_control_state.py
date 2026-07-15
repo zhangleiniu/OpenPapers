@@ -25,6 +25,8 @@ from automation.control_state import (
     _MIGRATION_3,
     _MIGRATION_4,
     _MIGRATION_5,
+    _MIGRATION_6,
+    _MIGRATION_7,
 )
 from automation.cases import CaseObservation, case_event_payload, observe_case
 from automation.contracts import artifact_fingerprint
@@ -117,7 +119,8 @@ class SchemaAndBoundaryTests(unittest.TestCase):
                     "SELECT version FROM schema_migrations"
                 ).fetchall()
                 self.assertEqual(
-                    [row[0] for row in versions], [1, 2, 3, 4, 5, 6, 7]
+                    [row[0] for row in versions],
+                    list(range(1, CONTROL_SCHEMA_VERSION + 1)),
                 )
 
             with ControlStateRepository(path) as reopened:
@@ -157,7 +160,7 @@ class SchemaAndBoundaryTests(unittest.TestCase):
             connection.close()
 
             with ControlStateRepository(path, clock=MutableClock()) as repository:
-                self.assertEqual(repository.schema_version, 7)
+                self.assertEqual(repository.schema_version, CONTROL_SCHEMA_VERSION)
                 self.assertEqual(
                     repository.get_conference_state("icml", 2026).state, state
                 )
@@ -166,7 +169,8 @@ class SchemaAndBoundaryTests(unittest.TestCase):
                     "SELECT version FROM schema_migrations ORDER BY version"
                 ).fetchall()
                 self.assertEqual(
-                    [row[0] for row in versions], [1, 2, 3, 4, 5, 6, 7]
+                    [row[0] for row in versions],
+                    list(range(1, CONTROL_SCHEMA_VERSION + 1)),
                 )
 
     def test_valid_version_two_database_migrates_without_losing_cases(self):
@@ -235,14 +239,15 @@ class SchemaAndBoundaryTests(unittest.TestCase):
             connection.close()
 
             with ControlStateRepository(path, clock=MutableClock()) as repository:
-                self.assertEqual(repository.schema_version, 7)
+                self.assertEqual(repository.schema_version, CONTROL_SCHEMA_VERSION)
                 self.assertEqual(repository.get_case(state["case_id"]).state, state)
                 self.assertEqual(repository.get_notification("missing"), None)
                 versions = repository._connection.execute(
                     "SELECT version FROM schema_migrations ORDER BY version"
                 ).fetchall()
                 self.assertEqual(
-                    [row[0] for row in versions], [1, 2, 3, 4, 5, 6, 7]
+                    [row[0] for row in versions],
+                    list(range(1, CONTROL_SCHEMA_VERSION + 1)),
                 )
 
     def test_valid_version_three_database_migrates_additive_result_ledger(self):
@@ -264,13 +269,14 @@ class SchemaAndBoundaryTests(unittest.TestCase):
             connection.close()
 
             with ControlStateRepository(path, clock=MutableClock()) as repository:
-                self.assertEqual(repository.schema_version, 7)
+                self.assertEqual(repository.schema_version, CONTROL_SCHEMA_VERSION)
                 self.assertEqual(repository.replay_job_result_consumptions(), ())
                 versions = repository._connection.execute(
                     "SELECT version FROM schema_migrations ORDER BY version"
                 ).fetchall()
                 self.assertEqual(
-                    [row[0] for row in versions], [1, 2, 3, 4, 5, 6, 7]
+                    [row[0] for row in versions],
+                    list(range(1, CONTROL_SCHEMA_VERSION + 1)),
                 )
 
     def test_unrecognized_and_future_databases_fail_without_mutation(self):
@@ -347,7 +353,7 @@ class SchemaAndBoundaryTests(unittest.TestCase):
             with ControlStateRepository(
                 path, writer=Writer.LOCAL_CONTROL_PLANE, clock=MutableClock()
             ) as reopened:
-                self.assertEqual(reopened.schema_version, 7)
+                self.assertEqual(reopened.schema_version, CONTROL_SCHEMA_VERSION)
 
     def test_valid_version_five_local_database_migrates_additive_plan_state(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -382,7 +388,7 @@ class SchemaAndBoundaryTests(unittest.TestCase):
                 writer=Writer.LOCAL_CONTROL_PLANE,
                 clock=MutableClock(),
             ) as repository:
-                self.assertEqual(repository.schema_version, 7)
+                self.assertEqual(repository.schema_version, CONTROL_SCHEMA_VERSION)
                 self.assertEqual(
                     repository.control_owner, Writer.LOCAL_CONTROL_PLANE
                 )
@@ -393,6 +399,61 @@ class SchemaAndBoundaryTests(unittest.TestCase):
                     )
                 }
                 self.assertIn("planned_at", columns)
+
+    def test_valid_version_seven_local_database_adds_event_dates_without_loss(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "local-v7.sqlite3"
+            connection = sqlite3.connect(path)
+            connection.execute("PRAGMA foreign_keys = ON")
+            for statement in (
+                *_MIGRATION_1,
+                *_MIGRATION_2,
+                *_MIGRATION_3,
+                *_MIGRATION_4,
+                *_MIGRATION_5,
+                *_MIGRATION_6,
+                *_MIGRATION_7,
+            ):
+                connection.execute(statement)
+            connection.executemany(
+                "INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)",
+                tuple(
+                    (version, f"2026-07-13T20:3{version}:00Z")
+                    for version in range(1, 8)
+                ),
+            )
+            connection.execute(
+                "INSERT INTO control_ownership VALUES (1, ?, ?)",
+                ("local_control_plane", "2026-07-13T20:35:00Z"),
+            )
+            state = conference_state()
+            state_json = canonical_json(state)
+            values = (
+                state["venue_id"], state["year"], 1,
+                artifact_fingerprint(state), "2026-07-13T20:30:00Z", state_json,
+            )
+            connection.execute(
+                "INSERT INTO conference_state_history VALUES (?, ?, ?, ?, ?, ?)",
+                values,
+            )
+            connection.execute(
+                "INSERT INTO conference_state_current VALUES (?, ?, ?, ?, ?, ?)",
+                values,
+            )
+            connection.execute("PRAGMA user_version = 7")
+            connection.commit()
+            connection.close()
+
+            with ControlStateRepository(
+                path,
+                writer=Writer.LOCAL_CONTROL_PLANE,
+                clock=MutableClock(),
+            ) as repository:
+                self.assertEqual(repository.schema_version, 8)
+                self.assertEqual(
+                    repository.get_conference_state("icml", 2026).state, state
+                )
+                self.assertEqual(repository.list_event_date_schedules(), ())
 
     def test_legacy_database_cannot_be_claimed_local_or_lose_cloud_owner(self):
         with tempfile.TemporaryDirectory() as directory:
