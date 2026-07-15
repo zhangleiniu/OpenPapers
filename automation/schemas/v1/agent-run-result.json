@@ -8,21 +8,5 @@
     "explanation": {"type": "string", "minLength": 1, "maxLength": 4000},
     "suggested_retry_at": {"type": ["string", "null"], "format": "date-time"},
     "failure_category": {"type": ["string", "null"], "minLength": 1, "maxLength": 200}
-  },
-  "allOf": [
-    {
-      "if": {"properties": {"disposition": {"const": "failed"}}},
-      "then": {
-        "properties": {
-          "failure_category": {"type": "string"},
-          "suggested_retry_at": {"type": "null"}
-        }
-      },
-      "else": {"properties": {"failure_category": {"type": "null"}}}
-    },
-    {
-      "if": {"properties": {"disposition": {"const": "not_ready"}}},
-      "else": {"properties": {"suggested_retry_at": {"type": "null"}}}
-    }
-  ]
+  }
 }
