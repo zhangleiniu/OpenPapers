@@ -22,7 +22,11 @@ from automation.production_verification import (
     load_production_crawl_policy,
 )
 from automation.providers.gemini import GeminiSearchGroundingProvider
-from automation.tests.test_gemini_provider import FakeClient, p2_9_sdk_response
+from automation.tests.test_gemini_provider import (
+    FakeClient,
+    p2_9_sdk_response,
+    p2_10_sdk_response,
+)
 from automation.tests.test_local_control_plane import (
     FakeDiscovery,
     due_state,
@@ -310,6 +314,98 @@ class ProductionVerificationTests(unittest.TestCase):
         self.assertFalse(any(
             "vertexaisearch.cloud.google.com" in url for url in requested_urls
         ))
+
+    def test_official_page_link_resolves_to_promotable_pdf_result(self):
+        official_url = "https://learningtheory.org/colt2025/"
+        volume_url = "https://proceedings.mlr.press/v291/"
+        source = discovery(
+            venue_id="colt", year=2025, kind="pdf", urls=(official_url,)
+        )
+        official_body = (
+            b"<html><title>COLT 2025</title><h1>Conference on Learning "
+            b"Theory 2025</h1>"
+            b"<a href='https://proceedings.mlr.press/v291/'>Proceedings</a>"
+            b"</html>"
+        )
+        responses = {
+            official_url: html_response(official_url, body=official_body),
+            volume_url: html_response(volume_url, body=colt_pmlr_listing()),
+        }
+        for index in range(181):
+            url = (
+                "https://proceedings.mlr.press/v291/"
+                f"paper{index}/paper{index}.pdf"
+            )
+            body = b"%PDF-1.7\n" + bytes(str(index), "ascii") + b"x" * 2048
+            responses[url] = FetchResponse(
+                requested_url=url,
+                status_code=200,
+                headers={
+                    "Content-Type": "application/pdf",
+                    "Content-Length": str(len(body)),
+                },
+                body=body,
+                fetched_at="2026-07-14T21:30:00Z",
+            )
+        fetcher = MappingFetcher(responses)
+
+        bundles = self.effect(fetcher).verify(source, observed_at=NOW)
+
+        self.assert_strict_bundles(bundles, source)
+        self.assertEqual(
+            bundles[0].result["verified_facets"]["pdf_status"]["value"],
+            "ready",
+        )
+        requested_urls = [item.url for item in fetcher.requests]
+        self.assertIn(official_url, requested_urls)
+        self.assertIn(volume_url, requested_urls)
+        self.assertEqual(sum(url.endswith(".pdf") for url in requested_urls), 3)
+        self.assertFalse(any(
+            "vertexaisearch.cloud.google.com" in url for url in requested_urls
+        ))
+
+    def test_official_page_derivation_closes_on_identity_link_or_ambiguity(self):
+        official_url = "https://learningtheory.org/colt2025/"
+        volume_url = "https://proceedings.mlr.press/v291/"
+        cases = {
+            "failed_identity": (
+                b"<html><title>COLT 2024</title>"
+                b"<h1>Conference on Learning Theory 2024</h1>"
+                b"<a href='https://proceedings.mlr.press/v291/'>Proceedings"
+                b"</a></html>"
+            ),
+            "missing_link": (
+                b"<html><title>COLT 2025</title>"
+                b"<h1>Conference on Learning Theory 2025</h1></html>"
+            ),
+            "ambiguous_links": (
+                b"<html><title>COLT 2025</title>"
+                b"<h1>Conference on Learning Theory 2025</h1>"
+                b"<a href='https://proceedings.mlr.press/v291/'>A</a>"
+                b"<a href='https://proceedings.mlr.press/v292/'>B</a>"
+                b"</html>"
+            ),
+        }
+        for name, official_body in cases.items():
+            with self.subTest(name=name):
+                source = discovery(
+                    venue_id="colt", year=2025, kind="pdf", urls=(official_url,)
+                )
+                fetcher = MappingFetcher({
+                    official_url: html_response(official_url, body=official_body),
+                    volume_url: html_response(volume_url, body=colt_pmlr_listing()),
+                })
+                bundles = self.effect(fetcher).verify(source, observed_at=NOW)
+                self.assert_strict_bundles(bundles, source)
+                self.assertIsNone(bundles[0].result["verified_facets"]["pdf_status"])
+                self.assertEqual(bundles[0].result["findings"][0]["status"],
+                                  "review_required")
+                requested_urls = [item.url for item in fetcher.requests]
+                self.assertNotIn(volume_url, requested_urls)
+                self.assertFalse(any(
+                    "vertexaisearch.cloud.google.com" in url
+                    for url in requested_urls
+                ))
 
     def test_redirect_hops_are_independently_gated_and_retained(self):
         initial = "https://icml.cc/openpapers-fixture/redirect"

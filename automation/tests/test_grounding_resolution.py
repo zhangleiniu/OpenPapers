@@ -2,7 +2,10 @@ import ast
 import unittest
 from pathlib import Path
 
-from automation.grounding_resolution import resolve_known_grounding_redirect
+from automation.grounding_resolution import (
+    is_known_colt_official_page,
+    resolve_known_grounding_redirect,
+)
 
 
 MODULE = Path(__file__).resolve().parents[1] / "grounding_resolution.py"
@@ -61,6 +64,23 @@ class GroundingResolutionTests(unittest.TestCase):
                     year=year,
                     provider_uri=uri,
                     source_domain=domain,
+                ))
+
+    def test_official_page_identity_is_exact_and_reviewed(self):
+        self.assertTrue(is_known_colt_official_page(
+            venue_id="colt", year=2025,
+            url="https://learningtheory.org/colt2025/",
+        ))
+        cases = (
+            ("icml", 2025, "https://learningtheory.org/colt2025/"),
+            ("colt", 2026, "https://learningtheory.org/colt2025/"),
+            ("colt", 2025, "https://proceedings.mlr.press/v291/"),
+            ("colt", 2025, "https://learningtheory.org/colt2025"),
+        )
+        for venue_id, year, url in cases:
+            with self.subTest(venue_id=venue_id, year=year, url=url):
+                self.assertFalse(is_known_colt_official_page(
+                    venue_id=venue_id, year=year, url=url,
                 ))
 
     def test_module_has_no_network_or_effect_dependency(self):

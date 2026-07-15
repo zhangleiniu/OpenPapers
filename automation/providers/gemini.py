@@ -17,6 +17,7 @@ from automation.discovery import (
     RetryableProviderError,
 )
 from automation.grounding_resolution import (
+    is_known_colt_official_page,
     is_known_colt_pmlr_volume,
     resolve_known_grounding_redirect,
 )
@@ -497,6 +498,55 @@ def _add_known_pmlr_pdf_candidate(
     return result
 
 
+def _add_known_official_page_pdf_candidate(
+    body: Mapping[str, Any],
+    request: DiscoveryRequest,
+) -> dict[str, Any]:
+    """Add one verification candidate for the reviewed official COLT page.
+
+    This fires only when no PMLR-labeled source resolved a listing candidate
+    (P2.9's ``_add_known_pmlr_pdf_candidate`` already covers that shape). The
+    P2.9S live canary showed a real response can omit any PMLR domain label
+    while still citing the reviewed official page. That retained page can
+    itself contain an exact PMLR volume link, but this function never reads
+    or guesses one: it only names the already-cited official page as a
+    candidate for P2.10's deterministic post-fetch extraction, and never
+    upgrades ``pdf_status`` itself.
+    """
+    result = deepcopy(dict(body))
+    claims = result.get("claims")
+    if not isinstance(claims, list) or any(
+        isinstance(claim, Mapping) and claim.get("claim_kind") == "pdf"
+        for claim in claims
+    ):
+        return result
+    supported_urls = sorted({
+        url
+        for claim in claims
+        if isinstance(claim, Mapping)
+        and claim.get("claim_kind") in {"paper_list", "proceedings"}
+        for url in claim.get("evidence_urls", [])
+        if is_known_colt_official_page(
+            venue_id=request.venue_id, year=request.year, url=url,
+        )
+    })
+    if not supported_urls:
+        return result
+    claims.append({
+        "venue_id": request.venue_id,
+        "year": request.year,
+        "claim_kind": "pdf",
+        "statement": (
+            "The reviewed official conference page is a candidate for "
+            "deterministic PMLR-link corroboration and PDF verification."
+        ),
+        "evidence_urls": supported_urls,
+        "source_type": "official",
+        "published_at": None,
+    })
+    return result
+
+
 class GeminiSearchGroundingProvider:
     """Use Vertex AI Gemini with Google Search and return allowlisted evidence."""
 
@@ -794,6 +844,7 @@ class GeminiSearchGroundingProvider:
         reconciled = _add_known_pmlr_pdf_candidate(
             reconciled, sources, request
         )
+        reconciled = _add_known_official_page_pdf_candidate(reconciled, request)
         return ProviderResponse(
             body=_downgrade_unsupported_statuses(reconciled),
             grounding_sources=tuple(sources),

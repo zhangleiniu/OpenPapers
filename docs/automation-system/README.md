@@ -215,9 +215,23 @@ fetched; exact replay made no new call. The sanitized record is
 [`p2-9s-live-canary-review-2026-07-14.md`](./p2-9s-live-canary-review-2026-07-14.md).
 Because the action criterion was not met, P2.9S is `Review fix required` and
 P5.5S remains blocked. The retained official page itself contained an exact
-PMLR link, so [`work-packages.md`](./work-packages.md) marks P2.10 `Ready` for
-a fixture-only identity-first official-page link derivation; P2.10S remains a
-separately authorized future live proof.
+PMLR link, and P2.10 has now completed the fixture-only identity-first
+official-page link derivation: `automation/grounding_resolution.py`'s
+`is_known_colt_official_page`, `automation/providers/gemini.py`'s
+`_add_known_official_page_pdf_candidate`, and
+`automation/html_verification.py`'s `extract_pmlr_volume_link` let
+`automation/production_verification.py` fetch the reviewed official page,
+confirm its own venue/year identity, extract an embedded unsigned PMLR
+volume-root link, and then reuse P2.9's unchanged PMLR identity/count/link
+extraction and P2.3's PDF signature sampling. A sanitized fixture reproducing
+the exact P2.9S source-label shape reaches a strict promotable
+`pdf_status=ready` result this way, while failed official identity, a
+missing/ambiguous link, or an unsafe (cross-host/signed/encoded/non-volume)
+candidate all leave the finding `review_required` with zero requests to
+`proceedings.mlr.press`; neither path ever contacts the grounding wrapper.
+The P2.7 crawl policy is unchanged.
+[`work-packages.md`](./work-packages.md) now marks P2.10S `Ready` for a third
+separately authorized live proof against the same `colt`/2025 venue/year.
 
 Phase 3.1 persistent unresolved cases, P3.2 reminder/digest policy, P3.3's
 fake-only notification delivery boundary, P3.4's persistent shadow-output

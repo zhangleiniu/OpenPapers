@@ -311,12 +311,36 @@ P2.9S ran the separately authorized second live canary against the same
 fetched only the official `learningtheory.org` page. There was no PDF target,
 `pdf_status` remained `unknown`, and no action was retained. The wrapper was
 never fetched and exact replay added no calls. The retained official HTML did
-contain one ordinary PMLR link, so `work-packages.md` defines P2.10 as the
+contain one ordinary PMLR link, so `work-packages.md` defined P2.10 as the
 fixture-only, identity-first extraction path: only an exact unsigned PMLR
 volume link found after verified official COLT/year identity may become a new
-independently gated target. P2.10S owns a later separately authorized live
-proof. Until it retains a genuine action, P2.8S/P2.9S findings and P5.5S's
-action-source prerequisite remain open.
+independently gated target.
+
+P2.10 is complete at the fixture/fake boundary. `automation/
+grounding_resolution.py` adds `is_known_colt_official_page`, the symmetric
+counterpart to P2.9's `is_known_colt_pmlr_volume`. `automation/
+providers/gemini.py`'s `_add_known_official_page_pdf_candidate` fires only
+when no PMLR-sourced candidate already exists and a `paper_list`/
+`proceedings` claim cites that reviewed official page, naming the
+already-cited page as a `pdf`-claim candidate for later inspection; it reads
+no page content and never upgrades `pdf_status` itself.
+`automation/html_verification.py`'s `extract_pmlr_volume_link` is a bounded
+parser step over an already-fetched page that returns the one exact unsigned
+`proceedings.mlr.press` volume-root link, or `None` when it is missing,
+ambiguous, cross-host, signed, percent-encoded, or not a volume root.
+`automation/production_verification.py` composes these deterministically:
+when a `pdf` target's sole cited URL is the reviewed official page, it
+fetches that page, requires its own venue/year identity to match, extracts
+the embedded link, then reuses P2.9's unchanged PMLR identity/count/link
+extraction and P2.3's PDF signature sampling on the derived URL. Any failure
+in that chain leaves the finding `review_required` with zero PDF fetch
+attempts and no request to `proceedings.mlr.press` or the grounding wrapper.
+A sanitized fixture reproducing the exact P2.9S source-label shape reaches a
+strict promotable `pdf_status=ready` result this way. The P2.7 crawl policy,
+`automation/production_wakeup.py`, `automation/production_wakeup_canary.py`,
+and `automation/local_control_plane.py` are unchanged. P2.10S owns a later
+separately authorized live proof. Until it retains a genuine action, P2.8S/
+P2.9S findings and P5.5S's action-source prerequisite remain open.
 
 P3.1 adds a local case domain and extends the same control repository, P3.2
 adds a separate pure reminder projection, P3.3 adds an injected delivery

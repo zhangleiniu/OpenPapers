@@ -42,10 +42,14 @@ from automation.html_verification import (
     RedirectChainError,
     analyze_html,
     extract_pmlr_pdf_urls,
+    extract_pmlr_volume_link,
     fetch_html_evidence,
     verify_html_evidence,
 )
-from automation.grounding_resolution import is_known_colt_pmlr_volume
+from automation.grounding_resolution import (
+    is_known_colt_official_page,
+    is_known_colt_pmlr_volume,
+)
 from automation.live_fetch import LiveHttpFetcher
 from automation.local_control_plane import VerificationBundle
 from automation.pdf_verification import (
@@ -62,6 +66,7 @@ from automation.verification import (
     FetchRequest,
     FetchResponse,
     FileSnapshotStore,
+    SnapshotStore,
     build_verification_request,
     validate_verification_result,
 )
@@ -832,6 +837,104 @@ def _discovery_with_target_urls(
     raise AutomaticVerificationError("PDF target is absent from discovery")
 
 
+def _resolve_pmlr_listing_pdf_urls(
+    *,
+    gate: CrawlPolicyGate,
+    fetcher: EvidenceFetcher,
+    snapshot_store: SnapshotStore,
+    catalog: Mapping[str, Any],
+    venue_id: str,
+    year: int,
+    discovery_id: str,
+    pmlr_url: str,
+) -> tuple[str, ...]:
+    """Fetch one PMLR volume listing and return its bounded PDF-link sample.
+
+    Raises on any identity, count, fetch, or policy failure so callers can
+    treat the listing as unresolved and fall back to closed behavior.
+    """
+    listing = fetch_html_evidence(
+        gate=gate,
+        fetcher=fetcher,
+        snapshot_store=snapshot_store,
+        catalog=catalog,
+        venue_id=venue_id,
+        year=year,
+        discovery_id=discovery_id,
+        initial_url=pmlr_url,
+    )
+    analysis = analyze_html(
+        listing.final_hop.response,
+        catalog=catalog,
+        venue_id=venue_id,
+        year=year,
+        profile=COLT_PMLR_VOLUME_PROFILE,
+    )
+    if (
+        not analysis.identity_matches
+        or analysis.paper_count is None
+        or not (
+            COLT_PMLR_VOLUME_PROFILE.minimum_paper_count
+            <= analysis.paper_count
+            <= (COLT_PMLR_VOLUME_PROFILE.maximum_paper_count or analysis.paper_count)
+        )
+    ):
+        raise AutomaticVerificationError(
+            "COLT/PMLR listing identity or count is unsupported"
+        )
+    return extract_pmlr_pdf_urls(
+        listing.final_hop.response,
+        minimum_count=COLT_PMLR_VOLUME_PROFILE.minimum_paper_count,
+        maximum_count=COLT_PMLR_VOLUME_PROFILE.maximum_paper_count or 500,
+    )
+
+
+def _resolve_official_page_pmlr_url(
+    *,
+    gate: CrawlPolicyGate,
+    fetcher: EvidenceFetcher,
+    snapshot_store: SnapshotStore,
+    catalog: Mapping[str, Any],
+    venue_id: str,
+    year: int,
+    discovery_id: str,
+    official_url: str,
+) -> str:
+    """Fetch one identity-verified official page and extract its PMLR link.
+
+    Raises when official identity fails or no exact unsigned PMLR
+    volume-root link can be derived; the grounding-redirect wrapper is never
+    contacted by this or any caller of it.
+    """
+    official = fetch_html_evidence(
+        gate=gate,
+        fetcher=fetcher,
+        snapshot_store=snapshot_store,
+        catalog=catalog,
+        venue_id=venue_id,
+        year=year,
+        discovery_id=discovery_id,
+        initial_url=official_url,
+    )
+    analysis = analyze_html(
+        official.final_hop.response,
+        catalog=catalog,
+        venue_id=venue_id,
+        year=year,
+        profile=HtmlVerificationProfile(),
+    )
+    if not analysis.identity_matches:
+        raise AutomaticVerificationError(
+            "official page identity is unsupported"
+        )
+    pmlr_url = extract_pmlr_volume_link(official.final_hop.response)
+    if pmlr_url is None:
+        raise AutomaticVerificationError(
+            "official page has no derivable PMLR volume link"
+        )
+    return pmlr_url
+
+
 def _bounded_pdf_listing_sample(
     request: Mapping[str, Any],
     target_id: str,
@@ -938,10 +1041,34 @@ class ProductionVerificationEffect:
                         url=target_urls[0],
                     )
                 )
-                listing_resolved = False
-                if listing_shape:
+                official_shape = (
+                    not listing_shape
+                    and len(target_urls) == 1
+                    and is_known_colt_official_page(
+                        venue_id=payload["venue_id"],
+                        year=payload["year"],
+                        url=target_urls[0],
+                    )
+                )
+                derived_shape = listing_shape or official_shape
+                derived_resolved = False
+                if derived_shape:
                     try:
-                        listing = fetch_html_evidence(
+                        pmlr_url = (
+                            target_urls[0]
+                            if listing_shape
+                            else _resolve_official_page_pmlr_url(
+                                gate=gate,
+                                fetcher=guarded,
+                                snapshot_store=store,
+                                catalog=self._catalog,
+                                venue_id=payload["venue_id"],
+                                year=payload["year"],
+                                discovery_id=payload["discovery_id"],
+                                official_url=target_urls[0],
+                            )
+                        )
+                        pdf_urls = _resolve_pmlr_listing_pdf_urls(
                             gate=gate,
                             fetcher=guarded,
                             snapshot_store=store,
@@ -949,39 +1076,7 @@ class ProductionVerificationEffect:
                             venue_id=payload["venue_id"],
                             year=payload["year"],
                             discovery_id=payload["discovery_id"],
-                            initial_url=target_urls[0],
-                        )
-                        analysis = analyze_html(
-                            listing.final_hop.response,
-                            catalog=self._catalog,
-                            venue_id=payload["venue_id"],
-                            year=payload["year"],
-                            profile=COLT_PMLR_VOLUME_PROFILE,
-                        )
-                        if (
-                            not analysis.identity_matches
-                            or analysis.paper_count is None
-                            or not (
-                                COLT_PMLR_VOLUME_PROFILE.minimum_paper_count
-                                <= analysis.paper_count
-                                <= (
-                                    COLT_PMLR_VOLUME_PROFILE.maximum_paper_count
-                                    or analysis.paper_count
-                                )
-                            )
-                        ):
-                            raise AutomaticVerificationError(
-                                "COLT/PMLR listing identity or count is unsupported"
-                            )
-                        pdf_urls = extract_pmlr_pdf_urls(
-                            listing.final_hop.response,
-                            minimum_count=(
-                                COLT_PMLR_VOLUME_PROFILE.minimum_paper_count
-                            ),
-                            maximum_count=(
-                                COLT_PMLR_VOLUME_PROFILE.maximum_paper_count
-                                or 500
-                            ),
+                            pmlr_url=pmlr_url,
                         )
                         verification_discovery = _discovery_with_target_urls(
                             payload,
@@ -993,7 +1088,7 @@ class ProductionVerificationEffect:
                                 sample_size=guard_policy.pdf_sample_size,
                             ),
                         )
-                        listing_resolved = True
+                        derived_resolved = True
                     except (
                         AutomaticVerificationError,
                         CrawlPolicyError,
@@ -1008,7 +1103,7 @@ class ProductionVerificationEffect:
                     sample_size=guard_policy.pdf_sample_size,
                 )[0]
                 for url in (
-                    sample.urls if not listing_shape or listing_resolved else ()
+                    sample.urls if not derived_shape or derived_resolved else ()
                 ):
                     try:
                         evidence.append(fetch_pdf_evidence(

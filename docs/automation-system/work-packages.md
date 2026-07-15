@@ -88,10 +88,13 @@ fixture-only grounding-redirect fix without weakening verification or crawl
 policy. P2.9S then ran the separately authorized second live canary. It
 resolved and fetched only the official COLT page, because this provider
 response contained no `proceedings.mlr.press` domain label; no PDF target or
-action resulted. P2.9S is therefore also `Review fix required`. P2.10 is the
-sole `Ready` package: it fixture-tests deterministic extraction of the exact
-PMLR link already present in verified official COLT HTML. Phase 2 remains
-`Shadow`. See "Phase 2 packages" below.
+action resulted. P2.9S is therefore also `Review fix required`. P2.10 has
+completed the fixture-only deterministic extraction of the exact PMLR link
+already present in verified official COLT HTML, reaching a strict promotable
+`pdf_status=ready` result without contacting the grounding wrapper or
+weakening any existing check. P2.10S is now the sole `Ready` package: a third
+separately authorized live proof against the same `colt`/2025 venue/year.
+Phase 2 remains `Shadow`. See "Phase 2 packages" below.
 P3.1 has completed the persistent
 case slice, P3.2 has completed reminder aging and grouped digest data, P3.3 has
 completed the fake-only durable delivery boundary, and P3.4 has completed
@@ -770,7 +773,7 @@ wrapper. P2.10S owns any later separately authorized live proof.
 
 ### P2.10 — derive archival verification from a verified official-page link
 
-Status: `Ready`
+Status: `Complete`
 
 Depends on: P2.9S's review finding
 
@@ -803,9 +806,54 @@ Acceptance: the sanitized P2.9S shape reaches a strict promotable
 P2.9 and earlier suite remains green unchanged; and negative fixtures prove an
 unverified page or unsafe link cannot create a new fetch target or action.
 
+Completed boundary: `automation/grounding_resolution.py` adds
+`is_known_colt_official_page`, the symmetric counterpart to P2.9's
+`is_known_colt_pmlr_volume`, so the reviewed `colt`/2025 official-page mapping
+can be recognized without granting it any special authority. Because the
+existing P2.9S-shape provider response cites the official page but no
+PMLR-domain source, `automation/providers/gemini.py` adds
+`_add_known_official_page_pdf_candidate`: it fires only when no PMLR-sourced
+candidate already exists and a `paper_list`/`proceedings` claim cites the
+reviewed official page, naming that already-cited page as a `pdf`-claim
+candidate for later deterministic inspection. This never upgrades
+`pdf_status` and never reads page content itself.
+
+`automation/html_verification.py` adds `extract_pmlr_volume_link`, a bounded
+parser step over an already-fetched page that returns the one exact unsigned
+HTTPS `proceedings.mlr.press` volume-root link, or `None` when the link is
+missing, ambiguous (more than one distinct candidate), cross-host, signed,
+percent-encoded, or not a volume root. `automation/production_verification.py`
+composes this deterministically: when a `pdf` target's sole cited URL is the
+reviewed official page (and not already the reviewed PMLR volume P2.9
+handles), it fetches that page, requires its own venue/year identity to
+match, extracts the embedded PMLR link, then reuses P2.9's unchanged
+identity/count check and `extract_pmlr_pdf_urls` extraction on that derived
+URL before P2.3's existing bounded PDF signature sampling. Failed official
+identity, a missing or ambiguous link, and unsafe (cross-host/signed/encoded/
+non-volume) candidates all leave the `pdf` finding `review_required` with zero
+PDF fetch attempts and no request to `proceedings.mlr.press` or the grounding
+wrapper; only a resolved link proceeds to sampling.
+
+A new sanitized fixture,
+`automation/tests/fixtures/phase2/p2-10-colt-official-page-only.json`,
+reproduces the exact P2.9S source-label shape (one `learningtheory.org` label
+among unrelated labels, no `proceedings.mlr.press` label). Fixture/fake tests
+in `automation/tests/test_gemini_provider.py`,
+`automation/tests/test_html_verification.py`, and
+`automation/tests/test_production_verification.py` cover the added pdf-claim
+candidate (and its absence without a supporting claim), successful link
+extraction plus every closed shape (missing, ambiguous, cross-host, signed,
+encoded, non-volume), and an end-to-end sanitized official-page derivation
+reaching a strict promotable `pdf_status=ready` result with only official/PMLR
+fake requests and zero grounding-wrapper requests. Every existing P2.9 and
+earlier suite remains green unchanged. The P2.7 crawl policy,
+`automation/production_wakeup.py`, `automation/production_wakeup_canary.py`,
+`automation/local_control_plane.py`, P2.5 reduction, and P5.5 retention are
+unchanged; nothing is installed or connected to `automation/local_service/`.
+
 ### P2.10S — live proof of official-page archival-link derivation
 
-Status: `Blocked`
+Status: `Ready`
 
 Depends on: P2.10
 
@@ -837,8 +885,8 @@ isolated from production.
 | P2.8S | Review fix required | P2.8 | Separately authorized isolated live canary for the exact P2.8 composition. One real run made a live Gemini call, correctly refused to weaken verification, and retained no action because every citation was an unresolved grounding-redirect URL. P2.9 fixed the fixture shape, but P2.9S found a second real source-label shape. |
 | P2.9 | Complete | P2.8S | Fixture-only exact COLT/2025 grounding-domain resolution plus bounded PMLR identity/count/link extraction and existing P2.3 PDF sampling. The grounding wrapper remains denied and is never fetched. |
 | P2.9S | Review fix required | P2.9 | The second authorized canary resolved/fetched only official COLT evidence because the real response omitted the PMLR domain label. It retained no action; exact replay was free and the wrapper remained unfetched. |
-| P2.10 | Ready | P2.9S | Fixture-only derivation of an exact PMLR volume candidate from a retained, identity-verified official COLT page link, followed by the unchanged P2.9/P2.3 checks. |
-| P2.10S | Blocked | P2.10 | Separately authorized third fresh-root live proof against the same `colt`/2025 venue/year; no install or dispatch. |
+| P2.10 | Complete | P2.9S | Fixture-only derivation of an exact PMLR volume candidate from a retained, identity-verified official COLT page link, followed by the unchanged P2.9/P2.3 checks. |
+| P2.10S | Ready | P2.10 | Separately authorized third fresh-root live proof against the same `colt`/2025 venue/year; no install or dispatch. |
 
 Phase 2 has passed its shadow gate with the reviewed record in
 `phase2-live-review-2026-07-13.md`. It remains `Shadow`, not `Implemented`,
@@ -851,9 +899,12 @@ now `Complete`: fixture/fake evidence closes the specific deterministic
 grounding-redirect source-shape gap without touching crawl policy or weakening
 any existing verifier check. P2.9S's separately authorized review likewise
 did not retain an action because the real response contained no PMLR domain
-label; it is `Review fix required`. P2.10 is the sole `Ready` package and
-P2.10S remains blocked pending its fixture-first result. P5.5S's action-source
-prerequisite is still not satisfied.
+label; it is `Review fix required`. P2.10 is now `Complete`: fixture/fake
+evidence closes the distinct official-page-link source-shape gap the same
+way, reaching a strict promotable `pdf_status=ready` result without touching
+crawl policy or weakening any existing verifier check. P2.10S is the sole
+`Ready` package, and its live evidence is what would close P5.5S's
+action-source prerequisite, which is still not satisfied.
 
 ## Phase 3 packages — cases and notifications
 
@@ -1610,10 +1661,11 @@ because every citation was redirect-wrapped. P2.9 (`Complete`) fixed that
 exact fixture shape. P2.9S's second authorized run
 (`p2-9s-live-canary-review-2026-07-14.md`) also retained no action because the
 new real response omitted the PMLR domain label: only the official COLT page
-resolved, so no PDF target existed. P2.10 (`Ready`) and P2.10S (`Blocked`)
-define the fixture-first official-page-link path and its separately authorized
-live proof. P5.5S therefore remains `Blocked` until that chain genuinely
-retains `queue_existing_scraper`, not merely until a package status flips.
+resolved, so no PDF target existed. P2.10 (`Complete`) fixed that fixture
+shape too: a retained, identity-verified official page can itself carry the
+PMLR volume link. P2.10S (`Ready`) is its separately authorized live proof.
+P5.5S therefore remains `Blocked` until that chain genuinely retains
+`queue_existing_scraper`, not merely until a package status flips.
 
 When that prerequisite exists, P5.5S must receive separate authority for the
 installed-service change and live requests. It starts with the same

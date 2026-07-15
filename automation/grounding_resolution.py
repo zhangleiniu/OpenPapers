@@ -58,3 +58,15 @@ def is_known_colt_pmlr_volume(*, venue_id: str, year: int, url: str) -> bool:
     return url == _KNOWN_CATALOG_SOURCE_URLS.get(
         (venue_id, year, "proceedings.mlr.press")
     )
+
+
+def is_known_colt_official_page(*, venue_id: str, year: int, url: str) -> bool:
+    """Identify the one P2.10-reviewed COLT official conference page.
+
+    This is the retained page P2.10's deterministic verifier may inspect for
+    an embedded PMLR volume link once its own venue/year identity is
+    confirmed; it grants no PMLR authority by itself.
+    """
+    return url == _KNOWN_CATALOG_SOURCE_URLS.get(
+        (venue_id, year, "learningtheory.org")
+    )

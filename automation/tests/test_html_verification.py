@@ -16,6 +16,7 @@ from automation.html_verification import (
     RedirectChainError,
     analyze_html,
     extract_pmlr_pdf_urls,
+    extract_pmlr_volume_link,
     fetch_html_evidence,
     verify_html_evidence,
 )
@@ -351,6 +352,65 @@ class HtmlAnalysisTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(HtmlVerificationError, "unsafe PDF link"):
             extract_pmlr_pdf_urls(encoded_escape)
+
+    def test_pmlr_volume_link_extraction_requires_one_exact_unsigned_root(self):
+        official_url = "https://learningtheory.org/colt2025/"
+
+        def official_page(link_html=""):
+            return response(
+                official_url,
+                (
+                    "<html><title>COLT 2025</title>"
+                    "<h1>Conference on Learning Theory 2025</h1>"
+                    f"{link_html}</html>"
+                ).encode("utf-8"),
+            )
+
+        self.assertIsNone(extract_pmlr_volume_link(official_page()))
+
+        self.assertEqual(
+            extract_pmlr_volume_link(official_page(
+                "<a href='https://proceedings.mlr.press/v291/'>Proceedings</a>"
+            )),
+            "https://proceedings.mlr.press/v291/",
+        )
+
+        ambiguous = official_page(
+            "<a href='https://proceedings.mlr.press/v291/'>A</a>"
+            "<a href='https://proceedings.mlr.press/v292/'>B</a>"
+        )
+        self.assertIsNone(extract_pmlr_volume_link(ambiguous))
+
+        cross_host = official_page(
+            "<a href='https://example.test/v291/'>Elsewhere</a>"
+        )
+        self.assertIsNone(extract_pmlr_volume_link(cross_host))
+
+        signed = official_page(
+            "<a href='https://proceedings.mlr.press/v291/?token=abc'>Link</a>"
+        )
+        self.assertIsNone(extract_pmlr_volume_link(signed))
+
+        encoded = official_page(
+            "<a href='https://proceedings.mlr.press/%76291/'>Link</a>"
+        )
+        self.assertIsNone(extract_pmlr_volume_link(encoded))
+
+        non_volume = official_page(
+            "<a href='https://proceedings.mlr.press/v291/assets/paper1.pdf'>"
+            "Direct PDF</a>"
+        )
+        self.assertIsNone(extract_pmlr_volume_link(non_volume))
+
+        one_safe_among_unsafe = official_page(
+            "<a href='https://proceedings.mlr.press/v291/'>Good</a>"
+            "<a href='https://example.test/v291/'>Bad host</a>"
+            "<a href='https://proceedings.mlr.press/v291/?x=1'>Bad query</a>"
+        )
+        self.assertEqual(
+            extract_pmlr_volume_link(one_safe_among_unsafe),
+            "https://proceedings.mlr.press/v291/",
+        )
 
     def test_ijcai_fixture_has_exact_identity_date_distinct_list_and_metadata(self):
         analysis = analyze_html(

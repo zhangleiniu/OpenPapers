@@ -355,11 +355,41 @@ checks. The production crawl-policy artifact is unchanged and its
 P2.9S's separately authorized live run is complete and recorded in
 `p2-9s-live-canary-review-2026-07-14.md`. The real response omitted the PMLR
 domain label, so P2.9 correctly fetched only the official COLT page and
-retained no action. P2.10 is the next fixture-only package: it must prove that
-an exact PMLR volume link can be derived only from retained official HTML after
-COLT/year identity succeeds, then independently pass the existing crawl and
-PDF gates. P2.10 tests must use a sanitized P2.9S fixture and make no live
-request. P2.10S remains blocked and requires separate live authorization.
+retained no action.
+
+The P2.10 official-page-link derivation checks are:
+
+```bash
+.venv/bin/python -m unittest automation.tests.test_grounding_resolution -v
+.venv/bin/python -m unittest automation.tests.test_gemini_provider -v
+.venv/bin/python -m unittest automation.tests.test_html_verification -v
+.venv/bin/python -m unittest automation.tests.test_production_verification -v
+```
+
+These tests replay only a new sanitized fixture,
+`automation/tests/fixtures/phase2/p2-10-colt-official-page-only.json`,
+reproducing the exact P2.9S source-label shape (one `learningtheory.org`
+label, no `proceedings.mlr.press` label), plus fake HTML/PDF responses.
+`automation/grounding_resolution.py`'s `is_known_colt_official_page` and
+`automation/providers/gemini.py`'s `_add_known_official_page_pdf_candidate`
+add a `pdf`-claim candidate citing the already-cited official page only when
+no PMLR-sourced candidate exists. `automation/html_verification.py`'s
+`extract_pmlr_volume_link` derives an exact unsigned PMLR volume-root link
+from an already-fetched, already identity-verified page, returning `None` for
+a missing, ambiguous, cross-host, signed, percent-encoded, or non-volume
+candidate. `automation/production_verification.py` fetches the official page,
+confirms its own venue/year identity, extracts that link, and only then
+reuses P2.9's unchanged PMLR identity/count/link extraction and P2.3's PDF
+signature sampling; every closed shape leaves the finding `review_required`
+with zero PDF fetch attempts and no request to `proceedings.mlr.press` or the
+grounding wrapper. Do not run P2.10S or any live command as part of these
+checks. The production crawl-policy artifact, `automation/
+production_wakeup.py`, `automation/production_wakeup_canary.py`, and
+`automation/local_control_plane.py` are unchanged.
+
+P2.10S is now the sole `Ready` package: a third separately authorized
+fresh-root live proof of the unchanged P2.8S canary boundary against the same
+`colt`/2025 venue/year, requiring separate live authorization.
 
 The generalized live fetch adapter retains its transport-level DNS/SSRF and
 operational crawl controls. The existence of that injected interface or the

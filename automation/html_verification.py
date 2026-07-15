@@ -653,6 +653,47 @@ def extract_pmlr_pdf_urls(
     return tuple(sorted(urls))
 
 
+_PMLR_VOLUME_ROOT_PATTERN = re.compile(r"/v[1-9][0-9]*/")
+
+
+def extract_pmlr_volume_link(response: FetchResponse) -> str | None:
+    """Return the one exact unsigned PMLR volume-root link, or ``None``.
+
+    This inspects an already-fetched, already identity-verified page (an
+    official conference page, not a PMLR listing) for an embedded link to a
+    PMLR proceedings volume root. Cross-host, signed, percent-encoded, and
+    non-root-shaped links are never counted as candidates; a missing or
+    ambiguous (more than one distinct) candidate returns ``None`` rather than
+    guessing. This function never fetches or follows any link itself.
+    """
+    root = _parse_html(response)
+    candidates: set[str] = set()
+    for node in _walk(root):
+        if node.tag != "a":
+            continue
+        raw = node.attributes.get("href")
+        if not raw:
+            continue
+        resolved = urljoin(response.requested_url, raw)
+        parsed = urlparse(resolved)
+        if (
+            parsed.scheme != "https"
+            or parsed.username is not None
+            or parsed.password is not None
+            or (parsed.hostname or "").lower().rstrip(".")
+            != "proceedings.mlr.press"
+            or _PMLR_VOLUME_ROOT_PATTERN.fullmatch(parsed.path) is None
+            or "%" in parsed.path
+            or parsed.query
+            or parsed.fragment
+        ):
+            continue
+        candidates.add(resolved)
+    if len(candidates) != 1:
+        return None
+    return next(iter(candidates))
+
+
 def fetch_html_evidence(
     *,
     gate: CrawlPolicyGate,

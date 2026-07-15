@@ -1,0 +1,109 @@
+{
+  "grounding_sources": [
+    {
+      "uri": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/colt-official-fixture",
+      "title": "COLT 2025",
+      "domain": "learningtheory.org"
+    },
+    {
+      "uri": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/unrelated-one",
+      "title": "Learning theory conferences",
+      "domain": "en.wikipedia.org"
+    },
+    {
+      "uri": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/unrelated-two",
+      "title": "COLT listing",
+      "domain": "dblp.org"
+    },
+    {
+      "uri": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/unrelated-three",
+      "title": "Conference on Learning Theory",
+      "domain": "scholar.google.com"
+    },
+    {
+      "uri": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/unrelated-four",
+      "title": "COLT 2025 announcement",
+      "domain": "x.com"
+    },
+    {
+      "uri": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/unrelated-five",
+      "title": "COLT preprints",
+      "domain": "arxiv.org"
+    },
+    {
+      "uri": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/unrelated-six",
+      "title": "COLT discussion",
+      "domain": "reddit.com"
+    }
+  ],
+  "search_queries": ["COLT 2025 proceedings PDFs"],
+  "body": {
+    "venue_id": "colt",
+    "year": 2025,
+    "conference_status": "ended",
+    "paper_list_status": "released",
+    "metadata_status": "unknown",
+    "pdf_status": "unknown",
+    "proceedings_status": "archival",
+    "claims": [
+      {
+        "venue_id": "colt",
+        "year": 2025,
+        "claim_kind": "conference",
+        "statement": "COLT 2025 was held in Lyon.",
+        "evidence_urls": ["s1"],
+        "source_type": "official",
+        "published_at": null
+      },
+      {
+        "venue_id": "colt",
+        "year": 2025,
+        "claim_kind": "paper_list",
+        "statement": "The official conference page lists the accepted papers.",
+        "evidence_urls": ["s1"],
+        "source_type": "official",
+        "published_at": null
+      },
+      {
+        "venue_id": "colt",
+        "year": 2025,
+        "claim_kind": "proceedings",
+        "statement": "The official conference page links to the archival proceedings.",
+        "evidence_urls": ["s1"],
+        "source_type": "official",
+        "published_at": null
+      }
+    ],
+    "candidate_milestones": [
+      {
+        "venue_id": "colt",
+        "year": 2025,
+        "milestone_type": "conference_start",
+        "scope": "conference",
+        "date": "2025-06-30",
+        "evidence_urls": ["s1"],
+        "source_type": "official"
+      },
+      {
+        "venue_id": "colt",
+        "year": 2025,
+        "milestone_type": "conference_end",
+        "scope": "conference",
+        "date": "2025-07-04",
+        "evidence_urls": ["s1"],
+        "source_type": "official"
+      },
+      {
+        "venue_id": "colt",
+        "year": 2025,
+        "milestone_type": "acceptance_notification",
+        "scope": "main_track",
+        "date": "2025-04-25",
+        "evidence_urls": ["s1"],
+        "source_type": "official"
+      }
+    ],
+    "confidence": 0.9,
+    "uncertainties": []
+  }
+}
