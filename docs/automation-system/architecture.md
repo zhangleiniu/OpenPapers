@@ -238,12 +238,42 @@ its published robots policy, and no entry grants redistribution. Read-only
 operator research of public robots and terms pages was distinct from live
 automated verification and granted no verifier request authority.
 
-P2.8 will be the uninstalled automatic composition: one bounded local wakeup
-uses P2.6 and P2.7, then the existing P2.5 reducer and P5.5 retention, with no
-caller-supplied action or job. P2.8S separately exercises that exact
-composition through an authorized manual live canary against isolated roots.
-Only P2.8 plus P2.8S together satisfy P5.5S's action-source prerequisite;
-neither installs the service or dispatches a scraper.
+P2.8 is the uninstalled automatic composition. `automation/production_wakeup.py`
+adds `ProductionControlPlaneConfig` (an explicit control-state path plus one
+private `automation_root` from which every discovery artifact/budget-ledger/
+health-ledger path and every verification snapshot-root/health-ledger path is
+derived) and `run_production_control_wakeup`, which always builds exactly one
+`ProductionDiscoveryEffect` and one `ProductionVerificationEffect` from that
+configuration and hands them, unmodified, to the existing
+`run_local_control_wakeup` boundary — the same one bounded local wakeup that
+already runs P2.5 reduction and P5.5 retention. A caller can configure private
+storage and Gemini identity but can never substitute a different effect,
+provider, fetcher, action, or job. One clock read produces a single frozen
+timestamp reused by both the discovery effect and the wakeup itself, so a real
+clock cannot make a discovery result appear observed after the wakeup's own
+`observed_at`.
+
+Fixture/fake tests drive the real production discovery/verification pair
+(through the same private provider-factory/fetcher seams P2.6/P2.7 already
+expose for their own tests) to a genuine authoritative `pdf_status=ready`
+facet — reachable because `automation/lifecycle.py` promotes `pdf_ready`
+directly from `unknown` whenever `pdf_status=ready` is supported in that
+reduction, without requiring paper-list/metadata/proceedings facets to also be
+ready — which P5.5 retention persists as exactly one execution job. Exact
+replay then makes zero provider/fetcher calls and creates no duplicate job.
+Invalid PDF evidence persists no action in an otherwise completed wakeup; an
+open discovery circuit and budget exhaustion both refuse before any
+provider/fetcher call and leave the wakeup durably `active`, the same
+non-expiring ambiguity barrier P4.L2/P5.5 already established rather than a
+new one. A two-venue scenario proves partial commit: an earlier venue's
+retained job survives even though a later venue's discovery raises and the
+whole wakeup is left `active`. Nothing here is imported by or connected to
+`automation/local_service/production.py`.
+
+P2.8S separately exercises that exact composition through an authorized
+manual live canary against isolated roots. Only P2.8 plus P2.8S together
+satisfy P5.5S's action-source prerequisite; neither installs the service or
+dispatches a scraper.
 
 P3.1 adds a local case domain and extends the same control repository, P3.2
 adds a separate pure reminder projection, P3.3 adds an injected delivery

@@ -294,20 +294,48 @@ Accepted P2.7 guarded automatic verification effect:
   state closure, and a real local-wakeup round trip without a live request or
   installed-service import.
 
-Phase 2 is `Shadow`, not `Implemented`. P2.1 through P2.7 and the P2.S manual
+Accepted P2.8 automatic verified-action composition:
+
+- `automation/production_wakeup.py` builds exactly one `ProductionDiscoveryEffect`
+  and one `ProductionVerificationEffect` from explicit private
+  control-state/automation-effect-root/Gemini-identity configuration and hands
+  that fixed pair, unmodified, to the accepted `run_local_control_wakeup`
+  boundary, so a caller can configure storage location and identity but never
+  substitute a different effect, action, or job;
+- one clock read produces a single frozen timestamp reused for both the
+  discovery effect's health-ledger bookkeeping and the wakeup's own
+  `observed_at`, so a real clock cannot make a discovery result appear
+  observed in the future relative to the wakeup itself;
+- fixture/fake tests drive the *real* `ProductionDiscoveryEffect`/
+  `ProductionVerificationEffect` pair (through the same private provider-
+  factory/fetcher construction seams P2.6/P2.7 already expose for their own
+  tests) to a genuine authoritative `pdf_status=ready` facet, which the
+  existing P2.5 reducer promotes to `pdf_ready` and which P5.5 retention
+  persists as exactly one execution job; exact replay then makes zero
+  provider/fetcher calls and creates no duplicate job;
+- an open discovery circuit and a budget-exhaustion refusal both occur before
+  any provider or fetcher call and leave the wakeup durably `active`, matching
+  the existing P4.L2 ambiguity barrier rather than adding a new one; and
+- a two-venue scenario proves partial commit: an earlier due venue's retained
+  job survives even though a later venue's discovery raises and the overall
+  wakeup is left `active`.
+
+P2.8 adds no import of `automation.execution_dispatch`, `execution_pipeline`,
+`mac_worker`, `staging_executor`, or `local_service`; it is not imported by or
+connected to `automation/local_service/production.py`, and no test makes a
+live provider or transport call.
+
+Phase 2 is `Shadow`, not `Implemented`. P2.1 through P2.8 and the P2.S manual
 runtime are not deployed or scheduled, and there is no installed or production
 action dispatcher.
 
-Two remaining packages in `work-packages.md` name the concrete path toward
-closing that gap without claiming it is closed. P2.8, now the sole `Ready`
-package, composes the accepted P2.6/P2.7 effects through the automatic local
-wakeup, P2.5, and P5.5 action retention using fakes and temporary state only.
-P2.8S is the separately authorized isolated live canary for that exact
-composition.
+P2.8S remains the concrete path toward closing that gap without claiming it
+is closed. It is the separately authorized isolated live canary that exercises
+the exact same P2.8 composition against real, crawl-policy-allowed evidence.
 
 P2.8 supplies the automatic verifier/action-source implementation prerequisite
-for P5.5S, while P2.8S supplies its real operational evidence; both must
-complete. Installation, production database use, and automatic scraper
+for P5.5S; P2.8S separately supplies its real operational evidence, and both
+must complete. Installation, production database use, and automatic scraper
 dispatch remain separately authorized P5.5S work.
 
 ## Phase 3: cases and notifications

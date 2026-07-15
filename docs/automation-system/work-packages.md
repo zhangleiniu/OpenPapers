@@ -77,11 +77,12 @@ production action. P2.6 has completed the fixture-only production-capable
 discovery effect plus durable per-venue cooldown and distinct-venue systemic
 circuit guardrails. P2.7 has completed the fixture-only production-capable
 verification effect, separate durable source cooldown, and dated per-domain
-production crawl-policy review. Phase 2 remains `Shadow`. P2.8 is the sole
-`Ready` package; P2.8S is the blocked,
-explicitly authorized live canary. P5.5S waits for both the accepted automatic
-composition and its live evidence. See "Phase 2 packages" below. P3.1 has
-completed the persistent
+production crawl-policy review. P2.8 has completed the fixture-only automatic
+discovery→verification→P2.5→P5.5 retention composition. Phase 2 remains
+`Shadow`. P2.8S is now the sole `Ready` package: the explicitly authorized
+live canary for the exact P2.8 composition. P5.5S waits for both the accepted
+automatic composition and its live evidence. See "Phase 2 packages" below.
+P3.1 has completed the persistent
 case slice, P3.2 has completed reminder aging and grouped digest data, P3.3 has
 completed the fake-only durable delivery boundary, and P3.4 has completed
 pending shadow-output integration. P3.S has completed one separately
@@ -446,7 +447,7 @@ unknown domains, corrupt/stale policy/ledger closure, and a real
 
 ### P2.8 — automatic verified-action composition
 
-Status: `Ready`
+Status: `Complete`
 
 Depends on: P2.7
 
@@ -489,9 +490,40 @@ Acceptance:
 - completion satisfies the implementation half of P5.5S's automatic
   verifier/action-source prerequisite, but not its live-evidence half.
 
+Completed boundary: `automation/production_wakeup.py` adds
+`ProductionControlPlaneConfig` (explicit control-state path plus one private
+`automation_root` from which every discovery artifact/budget-ledger/
+health-ledger path and every verification snapshot-root/health-ledger path is
+derived), `build_production_effects`, and `run_production_control_wakeup`.
+The function always constructs exactly one `ProductionDiscoveryEffect` and one
+`ProductionVerificationEffect` from that configuration and hands them,
+unmodified, to the accepted `run_local_control_wakeup` boundary; a caller
+configures storage and Gemini identity but can never substitute a different
+effect, provider, fetcher, action, or job. One `clock()` read produces a
+single frozen timestamp reused by both the discovery effect and the wakeup
+itself.
+
+Fixture/fake tests in `automation/tests/test_production_wakeup.py` drive the
+real production discovery/verification pair (through the same private
+provider-factory/fetcher test seams P2.6/P2.7 already expose) to a genuine
+authoritative `pdf_status=ready` facet — reachable because
+`automation/lifecycle.py` promotes `pdf_ready` directly from `unknown` once
+`pdf_status=ready` is supported, without requiring paper-list/metadata/
+proceedings facets to also be ready — which P5.5 retention persists as
+exactly one execution job. Exact replay then makes zero provider/fetcher
+calls and creates no duplicate job. Invalid PDF evidence, an open discovery
+circuit, and budget exhaustion all persist no action; the latter two refuse
+before any provider/fetcher call and leave the wakeup durably `active`. A
+two-venue scenario proves partial commit: an earlier venue's retained job
+survives even though a later venue's discovery raises and the whole wakeup is
+left `active`. Static scope tests prove no import of
+`automation.execution_dispatch`, `execution_pipeline`, `mac_worker`,
+`staging_executor`, or `local_service`. Nothing is installed or connected to
+`automation/local_service/production.py`; no test makes a live call.
+
 ### P2.8S — authorized live discovery and verification canary
 
-Status: `Blocked`
+Status: `Ready`
 
 Depends on: P2.8
 
@@ -532,15 +564,15 @@ occur only in P2.S and remain isolated from production.
 | P2.S | Complete | P2.5 | Opt-in DNS/SSRF-safe live adapter and explicitly authorized 15-venue shadow review using reviewed crawl policy and isolated state/artifact roots. The record contains 28 targets, rejects the known readiness false positives, returns no queue intent, and performs no job, scraper, notification, or production-state write. |
 | P2.6 | Complete | Phase 2 gate | Fixture-only production-capable `DiscoveryEffect` with required budget/artifact ledgers plus durable per-venue cooldown and distinct-venue systemic circuit state. No live LLM call, installed caller, or production wiring. |
 | P2.7 | Complete | P2.6 | Fixture-only production-capable `VerificationEffect` plus fully reviewed per-domain production crawl policy and durable fetch-failure guardrails. Only bounded read-only robots/terms research was live; no live verifier request or production wiring. |
-| P2.8 | Ready | P2.7 | Fixture-only automatic discovery→verification→P2.5→P5.5 retention composition with exact replay and failure closure. Uninstalled; no live call, dispatch, or production state. |
-| P2.8S | Blocked | P2.8 | Separately authorized isolated live canary for the exact P2.8 composition. It may retain a genuine action/job but never dispatch it or touch production/canonical state. |
+| P2.8 | Complete | P2.7 | Fixture-only automatic discovery→verification→P2.5→P5.5 retention composition with exact replay and failure closure. Uninstalled; no live call, dispatch, or production state. |
+| P2.8S | Ready | P2.8 | Separately authorized isolated live canary for the exact P2.8 composition. It may retain a genuine action/job but never dispatch it or touch production/canonical state. |
 
 Phase 2 has passed its shadow gate with the reviewed record in
 `phase2-live-review-2026-07-13.md`. It remains `Shadow`, not `Implemented`,
 because live observation has no production action authority and source-shape
-coverage remains conservative. P2.6 and P2.7 are accepted; P2.8 is the sole
-next package, and P2.8S is its separately authorized live evidence. P5.5S
-remains blocked until both P2.8 and P2.8S are complete.
+coverage remains conservative. P2.6, P2.7, and P2.8 are accepted; P2.8S is the
+sole next package and supplies P2.8's separately authorized live evidence.
+P5.5S remains blocked until both P2.8 and P2.8S are complete.
 
 ## Phase 3 packages — cases and notifications
 

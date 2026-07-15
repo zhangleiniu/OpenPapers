@@ -169,10 +169,19 @@ non-shadow review of all 23 catalog/redirect domains, strict stale/missing
 review closure, bounded deterministic P2.2/P2.3 composition, and durable
 venue/year/source fetch cooldown. `ecva.net` remains review-required, the
 grounding redirect is denied by robots, and no redistribution is granted.
-P2.8 is now the sole next package and owns the uninstalled automatic
-composition through P5.5 retention; P2.8S owns its separately authorized
-isolated live evidence.
-P5.5S remains blocked until P2.8 and P2.8S complete.
+P2.8 has completed the uninstalled automatic composition
+(`automation/production_wakeup.py`): it always builds exactly one
+`ProductionDiscoveryEffect` and one `ProductionVerificationEffect` from
+explicit private configuration and hands them, unmodified, to the existing
+`run_local_control_wakeup` boundary, so a caller can configure storage and
+Gemini identity but never substitute a different effect, action, or job.
+Fixture/fake tests drive the real production pair to a genuine authoritative
+`pdf_status=ready` facet that P5.5 retention persists as exactly one
+execution job, prove exact zero-call replay, and prove that invalid evidence,
+an open discovery circuit, and budget exhaustion all persist no action.
+Nothing is installed or connected to the deployed monitor. P2.8S is now the
+sole next package and owns its separately authorized isolated live evidence.
+P5.5S remains blocked until P2.8S also completes.
 
 Phase 3.1 persistent unresolved cases, P3.2 reminder/digest policy, P3.3's
 fake-only notification delivery boundary, P3.4's persistent shadow-output
