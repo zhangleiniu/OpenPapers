@@ -189,7 +189,7 @@ Once the run and notification records above are stable, migrate
 reminder, typed-job, and old notification tables/imports. Do this once rather
 than repeatedly reshaping persisted state during earlier phases.
 
-Acceptance: a future cleanup migration opens representative schema-version-8
+Acceptance: a future cleanup migration opens representative schema-version-9
 state, preserves approximate-date and still-needed scheduler ownership data,
 creates the simplified records deterministically, and rejects corrupt or
 ambiguous state.

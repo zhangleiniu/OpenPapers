@@ -63,10 +63,12 @@ one approximate event date and sleep on replay until that date. An isolated
 ICML 2026 live canary passed on 2026-07-15, but this boundary is not called by
 the service or connected to the automatic budget ledger. An uninstalled,
 effect-free due-state boundary now applies post-date retry/stop outcomes and
-enforces agent concurrency, monthly usage, and systemic-failure gates, but it
-does not start an agent. Target-cohort creation, installed wiring, agent
-execution, and run-report email remain future work. See the
-[`roadmap`](./automation-system/roadmap.md).
+enforces agent concurrency, monthly usage, and systemic-failure gates. An
+uninstalled Codex-only runner can consume one claimed run in an isolated
+worktree and has one accepted ICML 2026 `not_ready` canary, but the local
+service does not call it. Target-cohort creation, installed wiring, durable
+execution artifacts, retention, and run-report email remain future work. See
+the [`roadmap`](./automation-system/roadmap.md).
 
 Schema version 9 adds event-date and agent schedule/attempt tables.
 `automation/control_state.py` still also contains tables and interfaces for the

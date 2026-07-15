@@ -126,8 +126,8 @@ claim; repository files only describe the expected topology.
   LaunchDaemon wiring for the implemented date initializer.
 - Production policy configuration and LaunchDaemon wiring for the implemented
   but uninstalled due-state boundary.
-- Durable execution-artifact persistence, bounded worktree retention, and an
-  authorized live canary for the partially implemented Codex runner.
+- Durable execution-artifact persistence and bounded worktree retention for
+  the canary-tested but uninstalled Codex runner.
 - One-shot email reporting for each agent run.
 - Migration of `control_state.py` from its vestigial old schema to the small
   date/dispatch/run model.

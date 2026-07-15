@@ -132,6 +132,8 @@ Currently reusable:
   `initialize_event_dates()` composition boundary;
 - additive schema-v9 agent schedules/run history and the uninstalled,
   effect-free `due_policy.py` transition boundary;
+- the uninstalled Codex-only isolated-worktree runner, with fake tests and one
+  accepted ICML 2026 `not_ready` canary;
 - lease-protected SQLite repository and local due selector;
 - marker-gated LaunchDaemon service and bounded local records;
 - paused Cloud Run monitor as a rollback mechanism;
