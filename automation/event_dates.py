@@ -66,6 +66,7 @@ class EventDateInitializationOutcome:
     attempted_count: int
     scheduled_count: int
     retry_count: int
+    deferred_count: int
 
 
 def _utc(value: datetime, *, field: str) -> datetime:
@@ -112,6 +113,7 @@ def initialize_event_dates(
     clock: Callable[[], datetime],
     selection_limit: int = 1,
     retry_delay: timedelta = DEFAULT_DATE_RETRY_DELAY,
+    monthly_lookup_limit: int = 10,
     lease_ttl_seconds: int = DEFAULT_LEASE_TTL_SECONDS,
 ) -> EventDateInitializationOutcome:
     """Register targets and initialize only bounded due, still-pending dates."""
@@ -123,6 +125,10 @@ def initialize_event_dates(
         raise ValueError("selection_limit must be a positive integer")
     if not isinstance(retry_delay, timedelta) or retry_delay <= timedelta(0):
         raise ValueError("retry_delay must be positive")
+    if not isinstance(monthly_lookup_limit, int) or isinstance(
+        monthly_lookup_limit, bool
+    ) or monthly_lookup_limit < 1:
+        raise ValueError("monthly_lookup_limit must be a positive integer")
     now = _utc(clock(), field="event-date clock")
     if any(not isinstance(target, EventDateTarget) for target in targets):
         raise ValueError("event-date targets are invalid")
@@ -143,6 +149,7 @@ def initialize_event_dates(
     attempted_count = 0
     scheduled_count = 0
     retry_count = 0
+    deferred_count = 0
     frozen_clock = lambda: now
     with ControlStateRepository(
         Path(state_path),
@@ -186,7 +193,30 @@ def initialize_event_dates(
                     record.next_check_at, record.venue_id, record.year
                 ),
             )[:selection_limit]
+            month_start = now.replace(
+                day=1, hour=0, minute=0, second=0, microsecond=0
+            )
+            next_month = (
+                month_start.replace(year=month_start.year + 1, month=1)
+                if month_start.month == 12
+                else month_start.replace(month=month_start.month + 1)
+            )
+            monthly_count = repository.event_date_attempt_count(
+                started_at_or_after=month_start,
+                started_before=next_month,
+            )
             for record in due:
+                if monthly_count >= monthly_lookup_limit:
+                    repository.defer_event_date_schedule(
+                        record.venue_id,
+                        record.year,
+                        retry_at=next_month,
+                        deferred_at=now,
+                        failure_category="monthly_budget",
+                        lease=lease,
+                    )
+                    deferred_count += 1
+                    continue
                 request = requests[EventDateTarget(record.venue_id, record.year)]
                 claim = repository.claim_event_date_attempt(
                     record.venue_id,
@@ -198,6 +228,7 @@ def initialize_event_dates(
                     lease=lease,
                 )
                 attempted_count += 1
+                monthly_count += 1
                 try:
                     estimate = provider.estimate(request)
                 except DiscoveryError as exc:
@@ -245,4 +276,5 @@ def initialize_event_dates(
         attempted_count=attempted_count,
         scheduled_count=scheduled_count,
         retry_count=retry_count,
+        deferred_count=deferred_count,
     )

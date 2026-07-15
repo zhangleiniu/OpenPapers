@@ -157,14 +157,13 @@ The target local-first control plane estimates each venue/year's event date
 once, sleeps until that date, and then gives the venue/year to Codex or Claude
 Code in an isolated worktree. The agent decides readiness, investigates
 sources, and may repair and run the scraper; the maintainer reviews and commits
-manually. The one-time date initializer and effect-free due-state policy now
-exist as uninstalled library boundaries, with fake tests and one isolated ICML
-2026 date canary. A Codex-only isolated-worktree runner is fake-tested and has
-one accepted isolated ICML 2026 `not_ready` canary, but no installed caller.
-Target-cohort wiring, durable execution artifacts, and the run-report path
-remain planned in the
-[automation system development guide](./docs/automation-system/README.md) and
-are not deployed.
+manually. The local LaunchDaemon now has schema-10 state, private configuration
+v2, a clean no-remote agent source, bounded production composition, durable
+artifacts, worktree retention, and replay-safe Resend report wiring. All new
+external effects remain explicitly disabled: no automatic Gemini lookup,
+Codex run, or Resend email occurs until its separate live canary and activation
+are authorized. The baseline deterministic monitor remains active. See the
+[automation system development guide](./docs/automation-system/README.md).
 
 
 ## Data Structure

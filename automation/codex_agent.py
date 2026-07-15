@@ -10,7 +10,12 @@ from datetime import datetime
 from pathlib import Path
 from typing import Callable, Protocol
 
-from automation.control_state import AgentRunClaim
+from automation.control_state import (
+    DEFAULT_LEASE_TTL_SECONDS,
+    AgentRunClaim,
+    ControlStateRepository,
+)
+from automation.domain import Writer
 from automation.due_policy import AgentRunResult, DuePolicy, complete_agent_run
 
 
@@ -22,6 +27,16 @@ class CodexRunConfig:
     codex_binary: str = "codex"
     timeout_seconds: int = 3600
     max_output_bytes: int = 64_000
+    max_changed_files: int = 500
+
+    def __post_init__(self) -> None:
+        for value, field in (
+            (self.timeout_seconds, "timeout_seconds"),
+            (self.max_output_bytes, "max_output_bytes"),
+            (self.max_changed_files, "max_changed_files"),
+        ):
+            if not isinstance(value, int) or isinstance(value, bool) or value < 1:
+                raise ValueError(f"{field} must be a positive integer")
 
 
 @dataclass(frozen=True)
@@ -147,6 +162,26 @@ def run_claimed_codex_agent(
     if worktree.exists():
         raise RuntimeError("agent worktree path already exists")
     _git(repository_root, "worktree", "add", "-b", branch, str(worktree), primary_head)
+    artifact_started = clock()
+    with ControlStateRepository(
+        Path(state_path), writer=Writer.LOCAL_CONTROL_PLANE,
+        clock=lambda: artifact_started,
+    ) as repository:
+        lease = repository.acquire_lease(
+            "agent-execution", ttl_seconds=DEFAULT_LEASE_TTL_SECONDS
+        )
+        try:
+            repository.begin_agent_execution_artifact(
+                claim,
+                runs_root=runs_root,
+                worktree_path=worktree,
+                branch_name=branch,
+                base_commit=primary_head,
+                started_at=artifact_started,
+                lease=lease,
+            )
+        finally:
+            repository.release_lease(lease)
     invocation = CodexInvocation(
         (
             config.codex_binary, "--ask-for-approval", "never", "exec",
@@ -163,7 +198,8 @@ def run_claimed_codex_agent(
     try:
         process = invoker.invoke(invocation)
         returncode = process.returncode
-        if len(process.stdout.encode()) > config.max_output_bytes:
+        if len(process.stdout.encode()) + len(process.stderr.encode()) \
+                > config.max_output_bytes:
             result = AgentRunResult("failed", "Codex output exceeded the limit.", failure_category="output_limit")
         elif process.returncode != 0:
             result = AgentRunResult("failed", "Codex exited unsuccessfully.", failure_category="process_exit")
@@ -181,8 +217,17 @@ def run_claimed_codex_agent(
         repository_root, "status", "--porcelain=v1", "--untracked-files=all"
     ) != primary_status:
         raise RuntimeError("primary checkout changed during agent execution")
-    changed = tuple(filter(None, _git(
+    all_changed = tuple(filter(None, _git(
         worktree, "status", "--porcelain=v1", "--untracked-files=all"
     ).splitlines()))
-    complete_agent_run(state_path, claim, result, clock=clock, policy=policy)
+    changed = all_changed[:config.max_changed_files]
+    if len(all_changed) > config.max_changed_files:
+        result = AgentRunResult(
+            "failed", "Changed-file inventory exceeded the retained limit.",
+            failure_category="inventory_limit",
+        )
+    complete_agent_run(
+        state_path, claim, result, clock=clock, policy=policy,
+        changed_files=changed, returncode=returncode, timed_out=timed_out,
+    )
     return CodexExecutionOutcome(result, worktree, branch, primary_head, changed, returncode, timed_out)

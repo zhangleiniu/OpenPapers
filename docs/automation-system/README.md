@@ -74,20 +74,22 @@ The following exists and runs today:
   deterministic source monitor. It checks registered OpenReview, official
   HTML, and PMLR sources for hash/count changes and stores immutable
   snapshots.
-- `automation/local_service/production.py`: the installed Mac LaunchDaemon
-  production effect. The service wakes hourly; once daily at or after 08:00
+- `automation/local_service/production.py` and
+  `automation/local_service/agent_control.py`: the installed Mac LaunchDaemon
+  production composition. The service wakes hourly; once daily at or after 08:00
   America/Chicago it runs the baseline monitor and emails change/error events
-  over TLS SMTP. Every wakeup also performs bounded SQLite due-work selection.
-  No selected item is dispatched to an agent today.
+  over TLS SMTP. The agent-control v2 boundary validates installed state and
+  returns before every new external adapter while its gate is disabled.
 - `automation/local_scheduler.py` and `automation/control_state.py`: local,
   lease-protected due-work selection and versioned SQLite storage. The schema
-  is now version 9 and adds approximate-date plus coding-agent schedules and
-  immutable attempts, while still
+  is now version 10 and adds approximate-date and coding-agent schedules,
+  immutable attempts, execution artifacts, and run-report delivery state,
+  while still
   containing case, verification, notification, and execution-job tables
   inherited from the abandoned design. They are not evidence that those old
   workflows are active.
 - `automation/event_dates.py` and
-  `automation/providers/gemini.py::GeminiEventDateProvider`: an uninstalled,
+  `automation/providers/gemini.py::GeminiEventDateProvider`: an installed-disabled,
   fake-tested one-time date initializer. Given explicit venue/year targets, it
   calls the provider only when a pending target is due, stores an 08:00
   America/Chicago check time, sleeps on replay, and schedules a 30-day retry
@@ -95,24 +97,42 @@ The following exists and runs today:
   2026-07-15 returned the correct main-conference start date after the adapter
   was adjusted for the provider's optional explanation field; it did not
   retain state or change the installed service.
-- `automation/due_policy.py`: an uninstalled, effect-free agent-run policy.
+- `automation/due_policy.py`: an installed-disabled, effect-free agent-run policy.
   It claims at most one due schedule, durably applies `success`, `not_ready`,
   `needs_human`, and `failed`, and enforces default/suggested retries, bounded
   failure backoff, a global active slot, a monthly ceiling, and a recent
   distinct-venue systemic-failure circuit. It does not start an agent.
-- `automation/codex_agent.py`: an uninstalled, fake-tested Codex-only runner.
+- `automation/codex_agent.py`: an installed-disabled, fake-tested Codex-only runner.
   It uses real isolated Git worktrees in tests, pins Codex's workspace sandbox
-  and structured result schema, preserves worktrees, and verifies the primary
-  checkout did not change. Four authorized ICML 2026 canary starts verified
+  and structured result schema, durably records bounded review artifacts, and
+  verifies the primary checkout did not change. Four authorized ICML 2026
+  canary starts verified
   isolation and exposed CLI flag placement, portable-schema, and overly strict
   optional-field handling; none modified either checkout. The final call was
-  cleanly accepted as `not_ready`. No installed caller exists.
+  cleanly accepted as `not_ready`. Its installed caller is disabled.
+- `automation/agent_worktree_retention.py`: an explicit, installed-disabled retention
+  effect that removes only terminal schema-10 worktrees beneath the exact
+  configured runs root, using age and count bounds. Unregistered worktrees,
+  including the retained ICML 2026 canary, are never candidates.
+- `automation/agent_run_notifications.py`: an installed-disabled run-report composer
+  and delivery coordinator. Terminal runner completion creates one pending
+  report atomically; Resend supplies the selected provider idempotency key,
+  and transient/permanent delivery state never changes the run outcome.
+- `automation/agent_production.py` and
+  `automation/config/agent_targets.v1.json`: an installed-disabled, fake-tested
+  production composition and explicit AISTATS/ICML/IJCAI 2026 cohort. A date
+  lookup, agent run, report attempt, and retention cleanup are separately
+  bounded; its installed caller returns before adapters are constructed.
+- `automation/control_state_migration.py`: a safe-summary read-only audit,
+  new-file SQLite backup, and isolated-copy schema rehearsal command. Fixture
+  rehearsal passed; the dedicated-role production database was migrated from
+  schema 6 to schema 10 with a retained private backup.
 - `automation/discovery.py` and `automation/providers/gemini.py`: a budgeted,
   cached Gemini Search Grounding adapter with an explicit manual `--live`
   command. Its current output is stricter than the approximate-date signal the
   target scheduler needs; that scheduling use is not wired.
-- `automation/resend_notifications.py`: an unconnected low-level Resend HTTPS
-  email adapter.
+- `automation/resend_notifications.py`: the selected low-level Resend HTTPS
+  adapter for agent-run reports. No production configuration or caller exists.
 - `automation/prefect_flows.py`, `automation/run_monitor_flow.py`, and
   `automation/deployment/`: the paused Cloud Run monitor retained solely as a
   rollback path. It is not the target scheduler.
@@ -122,13 +142,9 @@ claim; repository files only describe the expected topology.
 
 ## Not yet built
 
-- Target-cohort/year creation, automatic budget-ledger integration, and
-  LaunchDaemon wiring for the implemented date initializer.
-- Production policy configuration and LaunchDaemon wiring for the implemented
-  but uninstalled due-state boundary.
-- Durable execution-artifact persistence and bounded worktree retention for
-  the canary-tested but uninstalled Codex runner.
-- One-shot email reporting for each agent run.
+- Automatic future-year cohort creation.
+- Dedicated-role ADC and Resend secret provisioning, separately authorized
+  Gemini/Codex/Resend live canaries, and final external-effect activation.
 - Migration of `control_state.py` from its vestigial old schema to the small
   date/dispatch/run model.
 
@@ -140,6 +156,8 @@ contract, fixture, or archived document exists.
 - [`architecture.md`](./architecture.md): target components and invariants.
 - [`roadmap.md`](./roadmap.md): current phase status and acceptance criteria.
 - [`development.md`](./development.md): development and validation workflow.
+- [`installation-readiness.md`](./installation-readiness.md): read-only audit,
+  isolated rehearsal, and separately authorized installation gates.
 - [`local-first-decision.md`](./local-first-decision.md): why the production
   scheduler is a single local Mac service rather than Prefect orchestration.
 - [`../automation.md`](../automation.md): current deployed monitor behavior and

@@ -134,6 +134,9 @@ def complete_agent_run(
     clock: Callable[[], datetime],
     policy: DuePolicy = DuePolicy(),
     lease_ttl_seconds: int = DEFAULT_LEASE_TTL_SECONDS,
+    changed_files: tuple[str, ...] | None = None,
+    returncode: int | None = None,
+    timed_out: bool = False,
 ) -> AgentScheduleRecord:
     """Apply one future coding-agent result to its durable schedule."""
     if not isinstance(policy, DuePolicy):
@@ -192,6 +195,9 @@ def complete_agent_run(
                 failure_category=result.failure_category,
                 pause_after_failure=pause_after_failure,
                 lease=lease,
+                changed_files=changed_files,
+                returncode=returncode,
+                timed_out=timed_out,
             )
         finally:
             repository.release_lease(lease)

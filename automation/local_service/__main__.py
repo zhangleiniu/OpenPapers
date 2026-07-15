@@ -17,7 +17,7 @@ from automation.local_service.service import (
     run_local_service_once,
 )
 from automation.local_service.shadow import IsolatedSchedulerShadowEffect
-from automation.local_service.production import ProductionMonitorEffect
+from automation.local_service.agent_control import InstalledAgentProductionEffect
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -69,7 +69,7 @@ def main(
     if args.isolated_shadow:
         resolved_effect = IsolatedSchedulerShadowEffect()
     elif args.production_control:
-        resolved_effect = ProductionMonitorEffect(
+        resolved_effect = InstalledAgentProductionEffect(
             repository_root=args.repository_root
         )
     else:

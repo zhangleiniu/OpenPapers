@@ -14,6 +14,8 @@ from unittest.mock import patch
 from automation.local_service import (
     LOCAL_SERVICE_LABEL,
     HealthCheckCode,
+    HealthCheckName,
+    HealthCheckStatus,
     ISOLATED_SHADOW_MARKER,
     LocalEffectOutcome,
     LocalEffectStatus,
@@ -100,11 +102,11 @@ class LocalServiceFixture(unittest.TestCase):
         self.python = root / "python3"
         self.internal = root / "internal"
         self.external = root / "external-volume"
-        (self.repository / "automation").mkdir(parents=True)
+        (self.repository / "automation" / "local_service").mkdir(parents=True)
         for marker in (
             self.repository / "main.py",
-            self.repository / "automation" / "local_scheduler.py",
-            self.repository / "automation" / "local_control_plane.py",
+            self.repository / "automation" / "control_state.py",
+            self.repository / "automation" / "local_service" / "__main__.py",
         ):
             marker.touch()
         self.python.touch()
@@ -173,6 +175,24 @@ class LocalServiceConfigurationTests(LocalServiceFixture):
 
 
 class LocalServiceHealthAndRunTests(LocalServiceFixture):
+    def test_repository_health_uses_current_control_entrypoints(self):
+        probe = FakeVolumeProbe()
+        ready = collect_local_service_health(
+            self.config, probe, platform_name="Darwin"
+        )
+        self.assertTrue(ready.ready)
+
+        (self.repository / "automation" / "local_service" / "__main__.py").unlink()
+        blocked = collect_local_service_health(
+            self.config, probe, platform_name="Darwin"
+        )
+        repository = next(
+            item for item in blocked.checks
+            if item.name is HealthCheckName.REPOSITORY
+        )
+        self.assertEqual(repository.status, HealthCheckStatus.FAIL)
+        self.assertEqual(repository.code, HealthCheckCode.INVALID_REPOSITORY)
+
     def test_concrete_probe_accepts_private_directory_on_non_root_mount(self):
         probe = LocalMountProbe()
         mount_root = self.external.parent

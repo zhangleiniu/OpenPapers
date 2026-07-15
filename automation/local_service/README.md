@@ -59,10 +59,13 @@ selector against a separate control database. Exact replay does not repeat the
 daily monitor or its emails; an interrupted active claim remains ambiguous and
 blocks work.
 
-The due selector currently dispatches nothing. The fake-tested date initializer
-and effect-free due-state policy are separate uninstalled callables;
-coding-agent execution and agent-run emails are planned in
-[`docs/automation-system/roadmap.md`](../../docs/automation-system/roadmap.md).
+The production command now validates the retained baseline v1 boundary plus an
+agent-control v2 marker/config, schema-10 state, a pinned clean no-remote
+`agent-source`, and the installed Codex executable. The installed v2 config has
+`external_effects_enabled=false`, so date discovery, Codex agent execution,
+retention, and Resend delivery are wired but inactive. Hourly replay therefore
+preserves the baseline monitor and returns without a new external effect until
+activation and each live canary are separately authorized.
 
 ## Focused verification
 

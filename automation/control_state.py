@@ -56,7 +56,7 @@ from automation.notifications import (
 from automation.verification import validate_verification_result
 
 
-CONTROL_SCHEMA_VERSION = 9
+CONTROL_SCHEMA_VERSION = 10
 DEFAULT_LEASE_TTL_SECONDS = 300
 MAX_LEASE_TTL_SECONDS = 86_400
 DEFAULT_SCHEDULER_SELECTION_LIMIT = 100
@@ -118,6 +118,14 @@ class EventDateScheduleError(ControlStateError):
 
 class AgentScheduleError(ControlStateError):
     """Raised when an agent schedule or run transition is unsafe."""
+
+
+class AgentArtifactError(ControlStateError):
+    """Raised when an agent execution artifact transition is unsafe."""
+
+
+class AgentRunReportError(ControlStateError):
+    """Raised when an agent-run report delivery transition is unsafe."""
 
 
 class StoredDataError(ControlStateError):
@@ -336,6 +344,56 @@ class AgentRunClaimOutcome:
     claim: AgentRunClaim | None
     schedule: AgentScheduleRecord | None
     reason: str
+
+
+@dataclass(frozen=True)
+class AgentExecutionArtifactRecord:
+    """Durable review and retention state for one managed agent worktree."""
+
+    run_id: str
+    lifecycle: str
+    runs_root: str
+    worktree_path: str
+    branch_name: str
+    base_commit: str
+    started_at: str
+    completed_at: str | None
+    changed_files: tuple[str, ...]
+    returncode: int | None
+    timed_out: bool
+    retention_status: str
+    removed_at: str | None
+    removal_failure: str | None
+
+
+@dataclass(frozen=True)
+class AgentRunReportRecord:
+    """One replay-safe email report derived from a terminal agent run."""
+
+    report_id: str
+    run_id: str
+    status: str
+    schedule_status: str
+    next_check_at: str | None
+    attempt_count: int
+    created_at: str
+    updated_at: str
+    delivered_at: str | None
+    last_failure_category: str | None
+    receipt_id: str | None
+
+
+@dataclass(frozen=True)
+class AgentRunReportAttemptRecord:
+    """One numbered delivery attempt for an agent-run report."""
+
+    report_id: str
+    attempt_number: int
+    started_at: str
+    completed_at: str | None
+    outcome: str
+    failure_category: str | None
+    receipt_id: str | None
 
 
 @dataclass(frozen=True)
@@ -1018,6 +1076,121 @@ _MIGRATION_9 = (
     """,
 )
 
+_MIGRATION_10 = (
+    """
+    CREATE TABLE agent_execution_artifact (
+        run_id TEXT PRIMARY KEY,
+        lifecycle TEXT NOT NULL CHECK (lifecycle IN ('active', 'terminal')),
+        runs_root TEXT NOT NULL,
+        worktree_path TEXT NOT NULL UNIQUE,
+        branch_name TEXT NOT NULL UNIQUE,
+        base_commit TEXT NOT NULL,
+        started_at TEXT NOT NULL,
+        completed_at TEXT,
+        changed_files_json TEXT,
+        returncode INTEGER,
+        timed_out INTEGER NOT NULL CHECK (timed_out IN (0, 1)),
+        retention_status TEXT NOT NULL CHECK (retention_status IN (
+            'retained', 'removed', 'removal_failed'
+        )),
+        removed_at TEXT,
+        removal_failure TEXT,
+        FOREIGN KEY (run_id) REFERENCES agent_run_attempt (run_id),
+        CHECK (
+            (lifecycle = 'active' AND completed_at IS NULL
+                AND changed_files_json IS NULL AND returncode IS NULL
+                AND timed_out = 0 AND retention_status = 'retained'
+                AND removed_at IS NULL AND removal_failure IS NULL)
+            OR
+            (lifecycle = 'terminal' AND completed_at IS NOT NULL
+                AND changed_files_json IS NOT NULL)
+        ),
+        CHECK (
+            (retention_status = 'retained' AND removed_at IS NULL
+                AND removal_failure IS NULL)
+            OR
+            (retention_status = 'removed' AND removed_at IS NOT NULL
+                AND removal_failure IS NULL)
+            OR
+            (retention_status = 'removal_failed' AND removed_at IS NULL
+                AND removal_failure IS NOT NULL)
+        )
+    )
+    """,
+    """
+    CREATE INDEX agent_execution_retention
+    ON agent_execution_artifact (
+        lifecycle, retention_status, completed_at, run_id
+    )
+    """,
+    """
+    CREATE TABLE agent_run_report (
+        report_id TEXT PRIMARY KEY,
+        run_id TEXT NOT NULL UNIQUE,
+        status TEXT NOT NULL CHECK (status IN (
+            'pending', 'in_flight', 'retryable', 'delivered',
+            'permanent_failure'
+        )),
+        schedule_status TEXT NOT NULL CHECK (schedule_status IN (
+            'scheduled', 'completed', 'needs_human', 'paused'
+        )),
+        next_check_at TEXT,
+        attempt_count INTEGER NOT NULL CHECK (attempt_count >= 0),
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        delivered_at TEXT,
+        last_failure_category TEXT,
+        receipt_id TEXT,
+        FOREIGN KEY (run_id) REFERENCES agent_run_attempt (run_id),
+        CHECK (
+            (schedule_status = 'scheduled' AND next_check_at IS NOT NULL)
+            OR
+            (schedule_status IN ('completed', 'needs_human', 'paused')
+                AND next_check_at IS NULL)
+        ),
+        CHECK (
+            (status IN ('pending', 'in_flight') AND delivered_at IS NULL
+                AND last_failure_category IS NULL AND receipt_id IS NULL)
+            OR
+            (status = 'retryable' AND delivered_at IS NULL
+                AND last_failure_category IS NOT NULL AND receipt_id IS NULL)
+            OR
+            (status = 'permanent_failure' AND delivered_at IS NULL
+                AND last_failure_category IS NOT NULL AND receipt_id IS NULL)
+            OR
+            (status = 'delivered' AND delivered_at IS NOT NULL
+                AND last_failure_category IS NULL AND receipt_id IS NOT NULL)
+        )
+    )
+    """,
+    """
+    CREATE TABLE agent_run_report_attempt (
+        report_id TEXT NOT NULL,
+        attempt_number INTEGER NOT NULL CHECK (attempt_number >= 1),
+        started_at TEXT NOT NULL,
+        completed_at TEXT,
+        outcome TEXT NOT NULL CHECK (outcome IN (
+            'active', 'retryable', 'delivered', 'permanent_failure'
+        )),
+        failure_category TEXT,
+        receipt_id TEXT,
+        PRIMARY KEY (report_id, attempt_number),
+        FOREIGN KEY (report_id) REFERENCES agent_run_report (report_id),
+        CHECK (
+            (outcome = 'active' AND completed_at IS NULL
+                AND failure_category IS NULL AND receipt_id IS NULL)
+            OR
+            (outcome IN ('retryable', 'permanent_failure')
+                AND completed_at IS NOT NULL AND failure_category IS NOT NULL
+                AND receipt_id IS NULL)
+            OR
+            (outcome = 'delivered' AND completed_at IS NOT NULL
+                AND failure_category IS NULL AND receipt_id IS NOT NULL)
+        )
+    )
+    """,
+)
+
 _MIGRATIONS = {
     1: _MIGRATION_1,
     2: _MIGRATION_2,
@@ -1028,6 +1201,7 @@ _MIGRATIONS = {
     7: _MIGRATION_7,
     8: _MIGRATION_8,
     9: _MIGRATION_9,
+    10: _MIGRATION_10,
 }
 
 _REQUIRED_COLUMNS_V1 = {
@@ -1152,6 +1326,24 @@ _REQUIRED_COLUMNS_V9 = {
     },
 }
 
+_REQUIRED_COLUMNS_V10 = {
+    "agent_execution_artifact": {
+        "run_id", "lifecycle", "runs_root", "worktree_path", "branch_name",
+        "base_commit", "started_at", "completed_at", "changed_files_json",
+        "returncode", "timed_out", "retention_status", "removed_at",
+        "removal_failure",
+    },
+    "agent_run_report": {
+        "report_id", "run_id", "status", "schedule_status", "next_check_at",
+        "attempt_count", "created_at", "updated_at", "delivered_at",
+        "last_failure_category", "receipt_id",
+    },
+    "agent_run_report_attempt": {
+        "report_id", "attempt_number", "started_at", "completed_at",
+        "outcome", "failure_category", "receipt_id",
+    },
+}
+
 _REQUIRED_COLUMNS_BY_VERSION = {
     1: _REQUIRED_COLUMNS_V1,
     2: _REQUIRED_COLUMNS_V2,
@@ -1162,6 +1354,7 @@ _REQUIRED_COLUMNS_BY_VERSION = {
     7: _REQUIRED_COLUMNS_V7,
     8: _REQUIRED_COLUMNS_V8,
     9: _REQUIRED_COLUMNS_V9,
+    10: _REQUIRED_COLUMNS_V10,
 }
 
 
@@ -2154,6 +2347,56 @@ class ControlStateRepository:
         ).fetchall()
         return tuple(self._event_date_schedule_from_row(row) for row in rows)
 
+    def event_date_attempt_count(
+        self, *, started_at_or_after: datetime | str, started_before: datetime | str
+    ) -> int:
+        """Count immutable date lookups in one validated half-open window."""
+        start = _timestamp(started_at_or_after, field="event-date count start")
+        end = _timestamp(started_before, field="event-date count end")
+        if _parse_timestamp(start, field="event-date count start") >= \
+                _parse_timestamp(end, field="event-date count end"):
+            raise EventDateScheduleError("event-date count window is invalid")
+        return int(self._connection.execute(
+            "SELECT COUNT(*) FROM event_date_attempt "
+            "WHERE started_at >= ? AND started_at < ?",
+            (start, end),
+        ).fetchone()[0])
+
+    def defer_event_date_schedule(
+        self,
+        venue_id: str,
+        year: int,
+        *,
+        retry_at: datetime | str,
+        deferred_at: datetime | str,
+        failure_category: str,
+        lease: LeaseHandle,
+    ) -> EventDateScheduleRecord:
+        """Move one pending lookup forward without creating an attempt."""
+        _validate_event_date_target(venue_id, year)
+        retry = _timestamp(retry_at, field="event-date deferred retry_at")
+        deferred = _timestamp(deferred_at, field="event-date deferred_at")
+        failure = _bounded_event_text(
+            failure_category, field="event-date deferral category", maximum=200
+        )
+        if _parse_timestamp(retry, field="event-date deferred retry_at") <= \
+                _parse_timestamp(deferred, field="event-date deferred_at"):
+            raise EventDateScheduleError("event-date deferral must be in the future")
+        with self._write_transaction() as connection:
+            self._require_lease(connection, lease, self._now())
+            cursor = connection.execute(
+                "UPDATE event_date_schedule SET next_check_at = ?, "
+                "last_failure_category = ?, updated_at = ? "
+                "WHERE venue_id = ? AND year = ? AND status = 'pending'",
+                (retry, failure, deferred, venue_id, year),
+            )
+            if cursor.rowcount != 1:
+                raise EventDateScheduleError("event-date schedule is not pending")
+        record = self.get_event_date_schedule(venue_id, year)
+        if record is None:
+            raise EventDateScheduleError("deferred event-date schedule disappeared")
+        return record
+
     def claim_event_date_attempt(
         self,
         venue_id: str,
@@ -2729,6 +2972,9 @@ class ControlStateRepository:
         failure_category: str | None,
         pause_after_failure: bool,
         lease: LeaseHandle,
+        changed_files: tuple[str, ...] | None = None,
+        returncode: int | None = None,
+        timed_out: bool = False,
     ) -> AgentScheduleRecord:
         """Complete one claimed run with an already-reduced policy result."""
         if disposition not in {"success", "not_ready", "needs_human", "failed"}:
@@ -2767,8 +3013,40 @@ class ControlStateRepository:
         ):
             if value is not None and _parse_timestamp(value, field=field) <= completed_dt:
                 raise AgentScheduleError(f"{field} must be in the future")
+        artifact_completion = changed_files is not None
+        if not isinstance(timed_out, bool):
+            raise AgentArtifactError("agent timed_out must be boolean")
+        if returncode is not None and (
+            not isinstance(returncode, int) or isinstance(returncode, bool)
+        ):
+            raise AgentArtifactError("agent returncode must be an integer")
+        changed_json = None
+        if artifact_completion:
+            if not isinstance(changed_files, tuple) or len(changed_files) > 1000:
+                raise AgentArtifactError("agent changed-file inventory is invalid")
+            normalized: list[str] = []
+            for item in changed_files:
+                text = _bounded_event_text(
+                    item, field="agent changed file", maximum=1000
+                )
+                if "\n" in text or "\r" in text:
+                    raise AgentArtifactError("agent changed file contains a newline")
+                normalized.append(text)
+            assert_secret_free({"changed_files": normalized})
+            changed_json = _canonical_json({"items": normalized})
+        elif returncode is not None or timed_out:
+            raise AgentArtifactError("agent process state lacks an artifact")
         with self._write_transaction() as connection:
             schedule = self._require_agent_run_claim(connection, claim, lease)
+            artifact = connection.execute(
+                "SELECT lifecycle FROM agent_execution_artifact WHERE run_id = ?",
+                (claim.run_id,),
+            ).fetchone()
+            if artifact_completion:
+                if artifact is None or artifact["lifecycle"] != "active":
+                    raise AgentArtifactError("active agent artifact is not retained")
+            elif artifact is not None:
+                raise AgentArtifactError("active agent artifact requires completion")
             failures = schedule.consecutive_failures + int(disposition == "failed")
             if disposition != "failed":
                 failures = 0
@@ -2789,6 +3067,27 @@ class ControlStateRepository:
                     claim.run_id,
                 ),
             )
+            if artifact_completion:
+                connection.execute(
+                    "UPDATE agent_execution_artifact SET lifecycle = 'terminal', "
+                    "completed_at = ?, changed_files_json = ?, returncode = ?, "
+                    "timed_out = ? WHERE run_id = ? AND lifecycle = 'active'",
+                    (completed, changed_json, returncode, int(timed_out), claim.run_id),
+                )
+                report_id = "agent-run-report:" + artifact_fingerprint({
+                    "run_id": claim.run_id,
+                })
+                connection.execute(
+                    "INSERT INTO agent_run_report (report_id, run_id, status, "
+                    "schedule_status, next_check_at, attempt_count, "
+                    "created_at, updated_at, delivered_at, "
+                    "last_failure_category, receipt_id) VALUES "
+                    "(?, ?, 'pending', ?, ?, 0, ?, ?, NULL, NULL, NULL)",
+                    (
+                        report_id, claim.run_id, status, next_check,
+                        completed, completed,
+                    ),
+                )
             connection.execute(
                 "UPDATE agent_schedule SET status = ?, next_check_at = ?, "
                 "active_run_id = NULL, consecutive_failures = ?, "
@@ -2807,6 +3106,251 @@ class ControlStateRepository:
                 (claim.venue_id, claim.year),
             ).fetchone()
         return self._agent_schedule_from_row(row)
+
+    def begin_agent_execution_artifact(
+        self,
+        claim: AgentRunClaim,
+        *,
+        runs_root: Path | str,
+        worktree_path: Path | str,
+        branch_name: str,
+        base_commit: str,
+        started_at: datetime | str,
+        lease: LeaseHandle,
+    ) -> AgentExecutionArtifactRecord:
+        """Register one managed worktree before invoking an external agent."""
+        root = Path(runs_root)
+        worktree = Path(worktree_path)
+        if not root.is_absolute() or not worktree.is_absolute():
+            raise AgentArtifactError("agent worktree paths must be absolute")
+        try:
+            worktree.relative_to(root)
+        except ValueError as exc:
+            raise AgentArtifactError("agent worktree is outside its runs root") from exc
+        if worktree.parent != root or worktree == root:
+            raise AgentArtifactError("agent worktree must be a direct child")
+        branch = _bounded_event_text(
+            branch_name, field="agent branch name", maximum=200
+        )
+        commit = _bounded_event_text(
+            base_commit, field="agent base commit", maximum=128
+        )
+        if not branch.startswith("automation/agent/") or len(commit) != 40 or any(
+            character not in "0123456789abcdef" for character in commit.lower()
+        ):
+            raise AgentArtifactError("agent Git identity is invalid")
+        started = _timestamp(started_at, field="agent artifact started_at")
+        if _parse_timestamp(started, field="agent artifact started_at") < \
+                _parse_timestamp(claim.started_at, field="agent run claimed_at"):
+            raise AgentArtifactError("agent artifact predates its run claim")
+        with self._write_transaction() as connection:
+            self._require_agent_run_claim(connection, claim, lease)
+            connection.execute(
+                "INSERT INTO agent_execution_artifact (run_id, lifecycle, "
+                "runs_root, worktree_path, branch_name, base_commit, started_at, "
+                "completed_at, changed_files_json, returncode, timed_out, "
+                "retention_status, removed_at, removal_failure) VALUES "
+                "(?, 'active', ?, ?, ?, ?, ?, NULL, NULL, NULL, 0, "
+                "'retained', NULL, NULL)",
+                (
+                    claim.run_id, str(root), str(worktree), branch, commit, started,
+                ),
+            )
+        record = self.get_agent_execution_artifact(claim.run_id)
+        if record is None:
+            raise AgentArtifactError("agent artifact registration disappeared")
+        return record
+
+    def get_agent_execution_artifact(
+        self, run_id: str
+    ) -> AgentExecutionArtifactRecord | None:
+        row = self._connection.execute(
+            "SELECT * FROM agent_execution_artifact WHERE run_id = ?", (run_id,)
+        ).fetchone()
+        return None if row is None else self._agent_execution_artifact_from_row(row)
+
+    def list_agent_execution_artifacts(
+        self,
+    ) -> tuple[AgentExecutionArtifactRecord, ...]:
+        rows = self._connection.execute(
+            "SELECT * FROM agent_execution_artifact "
+            "ORDER BY started_at, run_id"
+        ).fetchall()
+        return tuple(self._agent_execution_artifact_from_row(row) for row in rows)
+
+    def record_agent_worktree_retention(
+        self,
+        run_id: str,
+        *,
+        status: str,
+        recorded_at: datetime | str,
+        failure_category: str | None,
+        lease: LeaseHandle,
+    ) -> AgentExecutionArtifactRecord:
+        """Record the result of one controller-owned worktree removal."""
+        if status not in {"removed", "removal_failed"}:
+            raise AgentArtifactError("agent retention status is invalid")
+        recorded = _timestamp(recorded_at, field="agent retention recorded_at")
+        failure = None if failure_category is None else _bounded_event_text(
+            failure_category, field="agent retention failure", maximum=200
+        )
+        if (status == "removed") != (failure is None):
+            raise AgentArtifactError("agent retention outcome is inconsistent")
+        with self._write_transaction() as connection:
+            self._require_lease(connection, lease, self._now())
+            row = connection.execute(
+                "SELECT * FROM agent_execution_artifact WHERE run_id = ?",
+                (run_id,),
+            ).fetchone()
+            if row is None:
+                raise AgentArtifactError("agent artifact is not retained")
+            artifact = self._agent_execution_artifact_from_row(row)
+            if artifact.lifecycle != "terminal" or artifact.retention_status == "removed":
+                raise AgentArtifactError("agent artifact is not removable")
+            connection.execute(
+                "UPDATE agent_execution_artifact SET retention_status = ?, "
+                "removed_at = ?, removal_failure = ? WHERE run_id = ?",
+                (
+                    status,
+                    recorded if status == "removed" else None,
+                    failure,
+                    run_id,
+                ),
+            )
+        result = self.get_agent_execution_artifact(run_id)
+        if result is None:
+            raise AgentArtifactError("agent retention update disappeared")
+        return result
+
+    def get_agent_run_attempt(self, run_id: str) -> AgentRunAttemptRecord | None:
+        row = self._connection.execute(
+            "SELECT * FROM agent_run_attempt WHERE run_id = ?", (run_id,)
+        ).fetchone()
+        return None if row is None else self._agent_run_attempt_from_row(row)
+
+    def get_agent_run_report(self, run_id: str) -> AgentRunReportRecord | None:
+        row = self._connection.execute(
+            "SELECT * FROM agent_run_report WHERE run_id = ?", (run_id,)
+        ).fetchone()
+        return None if row is None else self._agent_run_report_from_row(row)
+
+    def pending_agent_run_reports(
+        self, *, limit: int = 1
+    ) -> tuple[AgentRunReportRecord, ...]:
+        """Return a bounded oldest-first set eligible for a delivery attempt."""
+        if not isinstance(limit, int) or isinstance(limit, bool) or not 1 <= limit <= 20:
+            raise AgentRunReportError("agent report selection limit is invalid")
+        rows = self._connection.execute(
+            "SELECT * FROM agent_run_report WHERE status IN "
+            "('pending', 'retryable') ORDER BY created_at, report_id LIMIT ?",
+            (limit,),
+        ).fetchall()
+        return tuple(self._agent_run_report_from_row(row) for row in rows)
+
+    def prepare_agent_run_report_delivery(
+        self,
+        run_id: str,
+        *,
+        started_at: datetime | str,
+        lease: LeaseHandle,
+    ) -> AgentRunReportAttemptRecord | None:
+        """Claim a pending or retryable run report for one external send."""
+        started = _timestamp(started_at, field="agent report started_at")
+        with self._write_transaction() as connection:
+            self._require_lease(connection, lease, self._now())
+            row = connection.execute(
+                "SELECT * FROM agent_run_report WHERE run_id = ?", (run_id,)
+            ).fetchone()
+            if row is None:
+                raise AgentRunReportError("agent run report is not retained")
+            report = self._agent_run_report_from_row(row)
+            if report.status in {"in_flight", "delivered", "permanent_failure"}:
+                return None
+            attempt_number = report.attempt_count + 1
+            connection.execute(
+                "INSERT INTO agent_run_report_attempt (report_id, "
+                "attempt_number, started_at, completed_at, outcome, "
+                "failure_category, receipt_id) VALUES "
+                "(?, ?, ?, NULL, 'active', NULL, NULL)",
+                (report.report_id, attempt_number, started),
+            )
+            connection.execute(
+                "UPDATE agent_run_report SET status = 'in_flight', "
+                "attempt_count = ?, updated_at = ?, "
+                "last_failure_category = NULL WHERE report_id = ?",
+                (attempt_number, started, report.report_id),
+            )
+        return AgentRunReportAttemptRecord(
+            report.report_id, attempt_number, started, None, "active", None, None
+        )
+
+    def complete_agent_run_report_delivery(
+        self,
+        report_id: str,
+        attempt_number: int,
+        *,
+        status: str,
+        completed_at: datetime | str,
+        failure_category: str | None = None,
+        receipt_id: str | None = None,
+        lease: LeaseHandle,
+    ) -> AgentRunReportRecord:
+        """Complete the current report attempt without changing the run result."""
+        if status not in {"retryable", "delivered", "permanent_failure"}:
+            raise AgentRunReportError("agent report completion status is invalid")
+        if not isinstance(attempt_number, int) or isinstance(attempt_number, bool) \
+                or attempt_number < 1:
+            raise AgentRunReportError("agent report attempt number is invalid")
+        completed = _timestamp(completed_at, field="agent report completed_at")
+        failure = None
+        if failure_category is not None:
+            try:
+                failure = FailureCategory(failure_category).value
+            except ValueError as exc:
+                raise AgentRunReportError("agent report failure is invalid") from exc
+        if status == "delivered":
+            if failure is not None or receipt_id is None:
+                raise AgentRunReportError("delivered agent report is inconsistent")
+            validate_receipt_id(receipt_id)
+        elif failure is None or receipt_id is not None:
+            raise AgentRunReportError("failed agent report is inconsistent")
+        with self._write_transaction() as connection:
+            self._require_lease(connection, lease, self._now())
+            row = connection.execute(
+                "SELECT * FROM agent_run_report WHERE report_id = ?", (report_id,)
+            ).fetchone()
+            if row is None:
+                raise AgentRunReportError("agent run report is not retained")
+            report = self._agent_run_report_from_row(row)
+            if report.status != "in_flight" or report.attempt_count != attempt_number:
+                raise AgentRunReportError("agent report attempt is stale")
+            attempt_row = connection.execute(
+                "SELECT outcome FROM agent_run_report_attempt "
+                "WHERE report_id = ? AND attempt_number = ?",
+                (report_id, attempt_number),
+            ).fetchone()
+            if attempt_row is None or attempt_row["outcome"] != "active":
+                raise AgentRunReportError("agent report attempt is inconsistent")
+            connection.execute(
+                "UPDATE agent_run_report_attempt SET completed_at = ?, "
+                "outcome = ?, failure_category = ?, receipt_id = ? "
+                "WHERE report_id = ? AND attempt_number = ? AND outcome = 'active'",
+                (completed, status, failure, receipt_id, report_id, attempt_number),
+            )
+            connection.execute(
+                "UPDATE agent_run_report SET status = ?, updated_at = ?, "
+                "delivered_at = ?, last_failure_category = ?, receipt_id = ? "
+                "WHERE report_id = ? AND status = 'in_flight'",
+                (
+                    status, completed,
+                    completed if status == "delivered" else None,
+                    failure, receipt_id, report_id,
+                ),
+            )
+        result_row = self._connection.execute(
+            "SELECT * FROM agent_run_report WHERE report_id = ?", (report_id,)
+        ).fetchone()
+        return self._agent_run_report_from_row(result_row)
 
     def resume_agent_schedule(
         self,
@@ -2908,6 +3452,124 @@ class ControlStateRepository:
         ):
             raise AgentScheduleError("agent run claim is stale or already completed")
         return schedule
+
+    def _agent_execution_artifact_from_row(
+        self, row: sqlite3.Row
+    ) -> AgentExecutionArtifactRecord:
+        lifecycle = str(row["lifecycle"])
+        retention = str(row["retention_status"])
+        if lifecycle not in {"active", "terminal"} or retention not in {
+            "retained", "removed", "removal_failed"
+        }:
+            raise StoredDataError("stored agent artifact state is invalid")
+        root = Path(str(row["runs_root"]))
+        worktree = Path(str(row["worktree_path"]))
+        if not root.is_absolute() or not worktree.is_absolute():
+            raise StoredDataError("stored agent artifact path is not absolute")
+        try:
+            worktree.relative_to(root)
+        except ValueError as exc:
+            raise StoredDataError("stored agent artifact escapes its root") from exc
+        if worktree.parent != root:
+            raise StoredDataError("stored agent artifact is not a direct child")
+        started = _timestamp(str(row["started_at"]), field="stored artifact start")
+        completed = None if row["completed_at"] is None else _timestamp(
+            str(row["completed_at"]), field="stored artifact completion"
+        )
+        removed = None if row["removed_at"] is None else _timestamp(
+            str(row["removed_at"]), field="stored artifact removal"
+        )
+        changed: tuple[str, ...] = ()
+        if row["changed_files_json"] is not None:
+            payload = _decode_json(row["changed_files_json"], label="changed files")
+            items = payload.get("items") if isinstance(payload, dict) else None
+            if not isinstance(items, list) or len(items) > 1000 or not all(
+                isinstance(item, str) and item and len(item) <= 1000
+                and "\n" not in item and "\r" not in item for item in items
+            ):
+                raise StoredDataError("stored changed-file inventory is invalid")
+            changed = tuple(items)
+        returncode = row["returncode"]
+        if returncode is not None:
+            returncode = int(returncode)
+        timed_out = int(row["timed_out"])
+        failure = None if row["removal_failure"] is None else str(
+            row["removal_failure"]
+        )
+        if lifecycle == "active" and any((completed, changed, returncode, timed_out)):
+            raise StoredDataError("stored active agent artifact is inconsistent")
+        if lifecycle == "terminal" and completed is None:
+            raise StoredDataError("stored terminal agent artifact is incomplete")
+        if retention == "retained" and (removed is not None or failure is not None):
+            raise StoredDataError("stored retained artifact is inconsistent")
+        if retention == "removed" and (removed is None or failure is not None):
+            raise StoredDataError("stored removed artifact is inconsistent")
+        if retention == "removal_failed" and (removed is not None or failure is None):
+            raise StoredDataError("stored failed retention is inconsistent")
+        return AgentExecutionArtifactRecord(
+            run_id=str(row["run_id"]), lifecycle=lifecycle,
+            runs_root=str(root), worktree_path=str(worktree),
+            branch_name=str(row["branch_name"]), base_commit=str(row["base_commit"]),
+            started_at=started, completed_at=completed, changed_files=changed,
+            returncode=returncode, timed_out=bool(timed_out),
+            retention_status=retention, removed_at=removed,
+            removal_failure=failure,
+        )
+
+    def _agent_run_report_from_row(self, row: sqlite3.Row) -> AgentRunReportRecord:
+        status = str(row["status"])
+        if status not in {
+            "pending", "in_flight", "retryable", "delivered",
+            "permanent_failure",
+        }:
+            raise StoredDataError("stored agent report status is invalid")
+        expected_id = "agent-run-report:" + artifact_fingerprint({
+            "run_id": str(row["run_id"]),
+        })
+        if str(row["report_id"]) != expected_id:
+            raise StoredDataError("stored agent report identity is invalid")
+        schedule_status = str(row["schedule_status"])
+        next_check = None if row["next_check_at"] is None else _timestamp(
+            str(row["next_check_at"]), field="stored report next check"
+        )
+        if schedule_status not in {"scheduled", "completed", "needs_human", "paused"}:
+            raise StoredDataError("stored agent report schedule state is invalid")
+        if (schedule_status == "scheduled") != (next_check is not None):
+            raise StoredDataError("stored agent report retry state is inconsistent")
+        created = _timestamp(str(row["created_at"]), field="stored report created")
+        updated = _timestamp(str(row["updated_at"]), field="stored report updated")
+        delivered = None if row["delivered_at"] is None else _timestamp(
+            str(row["delivered_at"]), field="stored report delivered"
+        )
+        failure = None if row["last_failure_category"] is None else str(
+            row["last_failure_category"]
+        )
+        receipt = None if row["receipt_id"] is None else str(row["receipt_id"])
+        attempts = int(row["attempt_count"])
+        actual = int(self._connection.execute(
+            "SELECT COUNT(*) FROM agent_run_report_attempt WHERE report_id = ?",
+            (row["report_id"],),
+        ).fetchone()[0])
+        if attempts != actual:
+            raise StoredDataError("stored agent report attempt count differs")
+        if status in {"pending", "in_flight"} and any((delivered, failure, receipt)):
+            raise StoredDataError("stored open agent report is inconsistent")
+        if status in {"retryable", "permanent_failure"} and (
+            delivered is not None or failure is None or receipt is not None
+        ):
+            raise StoredDataError("stored failed agent report is inconsistent")
+        if status == "delivered" and (
+            delivered is None or failure is not None or receipt is None
+        ):
+            raise StoredDataError("stored delivered agent report is inconsistent")
+        return AgentRunReportRecord(
+            report_id=str(row["report_id"]), run_id=str(row["run_id"]),
+            status=status, schedule_status=schedule_status,
+            next_check_at=next_check,
+            attempt_count=attempts, created_at=created,
+            updated_at=updated, delivered_at=delivered,
+            last_failure_category=failure, receipt_id=receipt,
+        )
 
     def _agent_schedule_from_row(self, row: sqlite3.Row) -> AgentScheduleRecord:
         venue_id = str(row["venue_id"])

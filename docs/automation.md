@@ -58,19 +58,17 @@ future coding agent might use.
 conference records whose persisted `next_check_at` is due. A frequent local
 wakeup therefore does not mean every conference is searched or checked.
 
-An uninstalled library boundary can now initialize an explicit venue/year with
-one approximate event date and sleep on replay until that date. An isolated
-ICML 2026 live canary passed on 2026-07-15, but this boundary is not called by
-the service or connected to the automatic budget ledger. An uninstalled,
-effect-free due-state boundary now applies post-date retry/stop outcomes and
-enforces agent concurrency, monthly usage, and systemic-failure gates. An
-uninstalled Codex-only runner can consume one claimed run in an isolated
-worktree and has one accepted ICML 2026 `not_ready` canary, but the local
-service does not call it. Target-cohort creation, installed wiring, durable
-execution artifacts, retention, and run-report email remain future work. See
-the [`roadmap`](./automation-system/roadmap.md).
+The installed service now validates schema-10 state, private agent-control v2
+configuration, the explicit 2026 cohort, a pinned no-remote agent source, the
+Codex executable, durable execution/report state, and bounded retention policy.
+Its installed `external_effects_enabled=false` gate prevents automatic Gemini,
+Codex, Resend, scraper, or retention calls. The authorized installation wake
+returned `no_due_work` with zero target rows and unchanged baseline monitor
+state. Each live adapter and final activation still requires separate operator
+authorization. See the [`roadmap`](./automation-system/roadmap.md).
 
-Schema version 9 adds event-date and agent schedule/attempt tables.
+Schema version 10 adds event-date and agent schedule/attempt tables plus the
+new execution-artifact and agent-run-report records.
 `automation/control_state.py` still also contains tables and interfaces for the
 abandoned verification, case/reminder, notification, and typed-job design.
 They are vestigial compatibility surface and are not wired into production.
@@ -88,7 +86,8 @@ The ordinary command uses fixtures/development behavior. `--live` requires
 explicit authorization, Application Default Credentials, and makes a real
 provider call. The original adapter still produces strict citation-backed
 evidence. The new `GeminiEventDateProvider` has a separate loose date-only
-prompt plus fake and isolated-live coverage, but no installed caller.
+prompt plus fake and isolated-live coverage; its installed caller is disabled
+and the dedicated role does not yet have ADC.
 
 This automation discovery use is separate from Gemini track classification in
 some core scrapers, documented in

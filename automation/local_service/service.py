@@ -302,8 +302,8 @@ def _python_signal(path: Path) -> HealthSignal:
 def _repository_signal(root: Path) -> HealthSignal:
     markers = (
         root / "main.py",
-        root / "automation" / "local_scheduler.py",
-        root / "automation" / "local_control_plane.py",
+        root / "automation" / "control_state.py",
+        root / "automation" / "local_service" / "__main__.py",
     )
     available = root.is_dir() and not root.is_symlink() and all(
         item.is_file() for item in markers

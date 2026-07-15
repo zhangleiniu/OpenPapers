@@ -144,6 +144,36 @@ class EventDateInitializationTests(unittest.TestCase):
             self.assertEqual(provider.calls,
                              [("aistats", 2026), ("icml", 2026)])
 
+    def test_monthly_lookup_budget_defers_without_provider_call(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "state.sqlite3"
+            provider = FakeProvider()
+            targets = (
+                EventDateTarget("aistats", 2026),
+                EventDateTarget("icml", 2026),
+            )
+
+            first = initialize_event_dates(
+                path, targets, provider, clock=MutableClock(),
+                selection_limit=1, monthly_lookup_limit=1,
+            )
+            second = initialize_event_dates(
+                path, targets, provider, clock=MutableClock(),
+                selection_limit=1, monthly_lookup_limit=1,
+            )
+
+            self.assertEqual(first.attempted_count, 1)
+            self.assertEqual(first.deferred_count, 0)
+            self.assertEqual(second.attempted_count, 0)
+            self.assertEqual(second.deferred_count, 1)
+            self.assertEqual(provider.calls, [("aistats", 2026)])
+            pending = next(
+                record for record in second.records
+                if record.venue_id == "icml"
+            )
+            self.assertEqual(pending.last_failure_category, "monthly_budget")
+            self.assertEqual(pending.next_check_at, "2026-02-01T00:00:00Z")
+
     def test_unexpected_interruption_remains_active_and_blocks_replay(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "state.sqlite3"

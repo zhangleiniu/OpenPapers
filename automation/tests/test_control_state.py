@@ -28,6 +28,7 @@ from automation.control_state import (
     _MIGRATION_6,
     _MIGRATION_7,
     _MIGRATION_8,
+    _MIGRATION_9,
 )
 from automation.cases import CaseObservation, case_event_payload, observe_case
 from automation.contracts import artifact_fingerprint
@@ -524,6 +525,40 @@ class SchemaAndBoundaryTests(unittest.TestCase):
                 self.assertEqual(agent_record.next_check_at,
                                  "2026-07-15T14:00:00Z")
                 self.assertEqual(agent_record.attempt_count, 0)
+
+    def test_valid_version_nine_adds_empty_agent_review_state(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "local-v9.sqlite3"
+            connection = sqlite3.connect(path)
+            for statement in (
+                *_MIGRATION_1, *_MIGRATION_2, *_MIGRATION_3, *_MIGRATION_4,
+                *_MIGRATION_5, *_MIGRATION_6, *_MIGRATION_7, *_MIGRATION_8,
+                *_MIGRATION_9,
+            ):
+                connection.execute(statement)
+            connection.executemany(
+                "INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)",
+                tuple(
+                    (version, f"2026-07-13T20:3{version}:00Z")
+                    for version in range(1, 10)
+                ),
+            )
+            connection.execute(
+                "INSERT INTO control_ownership VALUES (1, ?, ?)",
+                ("local_control_plane", "2026-07-13T20:35:00Z"),
+            )
+            connection.execute("PRAGMA user_version = 9")
+            connection.commit()
+            connection.close()
+
+            with ControlStateRepository(
+                path, writer=Writer.LOCAL_CONTROL_PLANE, clock=MutableClock()
+            ) as repository:
+                self.assertEqual(repository.schema_version, CONTROL_SCHEMA_VERSION)
+                self.assertEqual(repository.list_agent_execution_artifacts(), ())
+                tables = repository._user_tables()
+                self.assertIn("agent_run_report", tables)
+                self.assertIn("agent_run_report_attempt", tables)
 
     def test_legacy_database_cannot_be_claimed_local_or_lose_cloud_owner(self):
         with tempfile.TemporaryDirectory() as directory:

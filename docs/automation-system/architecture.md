@@ -128,17 +128,21 @@ Currently reusable:
 - deterministic baseline monitor and immutable snapshots;
 - venue catalog/configuration and discovery request plumbing;
 - Gemini adapter, after simplifying its target use to approximate dates;
-- additive schema-v8 approximate-date schedules and the uninstalled
+- additive schema-v8 approximate-date schedules and the installed-disabled
   `initialize_event_dates()` composition boundary;
-- additive schema-v9 agent schedules/run history and the uninstalled,
+- additive schema-v9 agent schedules/run history and the installed-disabled,
   effect-free `due_policy.py` transition boundary;
-- the uninstalled Codex-only isolated-worktree runner, with fake tests and one
-  accepted ICML 2026 `not_ready` canary;
+- additive schema-v10 execution artifacts, managed-worktree retention, and
+  dedicated run-report delivery state;
+- the installed-disabled Codex-only isolated-worktree runner and retention effect,
+  with fake tests and one accepted ICML 2026 `not_ready` canary;
+- the installed-disabled run-report composer/coordinator, with Resend selected as its
+  sole provider-idempotent transport; baseline monitor SMTP remains separate;
+- the installed-disabled explicit target cohort and bounded production composition;
+- read-only control-state audit and isolated-copy migration rehearsal tooling;
 - lease-protected SQLite repository and local due selector;
 - marker-gated LaunchDaemon service and bounded local records;
 - paused Cloud Run monitor as a rollback mechanism;
-- SMTP and Resend transport implementations, until one is selected for the
-  run-report path.
 
 Retired from the target design:
 

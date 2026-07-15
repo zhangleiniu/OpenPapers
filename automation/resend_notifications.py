@@ -1,4 +1,4 @@
-"""Bounded Resend transport used only by the explicit P3.S canary."""
+"""Bounded Resend transport for provider-idempotent plain-text email."""
 
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ DEFAULT_TIMEOUT_SECONDS = 15.0
 
 
 class ResendNotificationError(ValueError):
-    """Raised when canary transport configuration is unsafe."""
+    """Raised when Resend transport configuration is unsafe."""
 
 
 class _Response(Protocol):
@@ -58,34 +58,34 @@ def _connection_factory(host: str, timeout: float) -> http.client.HTTPSConnectio
 
 def _plain_recipient(value: str) -> str:
     if not isinstance(value, str):
-        raise ResendNotificationError("canary recipient must be text")
+        raise ResendNotificationError("recipient must be text")
     candidate = value.strip()
     if not candidate or any(c in value for c in "\r\n"):
-        raise ResendNotificationError("canary recipient is invalid")
+        raise ResendNotificationError("recipient is invalid")
     addresses = getaddresses([candidate])
     if len(addresses) != 1 or addresses[0][0] or addresses[0][1] != candidate:
-        raise ResendNotificationError("canary recipient must be one plain address")
+        raise ResendNotificationError("recipient must be one plain address")
     if candidate.count("@") != 1 or any(c in candidate for c in ",;"):
-        raise ResendNotificationError("canary recipient is invalid")
+        raise ResendNotificationError("recipient is invalid")
     local, domain = candidate.rsplit("@", 1)
     if not local or "." not in domain or domain.startswith(".") or domain.endswith("."):
-        raise ResendNotificationError("canary recipient is invalid")
+        raise ResendNotificationError("recipient is invalid")
     return candidate
 
 
 def _sender(value: str) -> str:
     if not isinstance(value, str) or not value.strip() or any(c in value for c in "\r\n"):
-        raise ResendNotificationError("canary sender is invalid")
+        raise ResendNotificationError("sender is invalid")
     candidate = value.strip()
     addresses = getaddresses([candidate])
     display, address = parseaddr(candidate)
     if len(addresses) != 1 or addresses[0] != (display, address):
-        raise ResendNotificationError("canary sender must contain one address")
+        raise ResendNotificationError("sender must contain one address")
     if address.count("@") != 1 or any(c in address for c in ",;"):
-        raise ResendNotificationError("canary sender is invalid")
+        raise ResendNotificationError("sender is invalid")
     local, domain = address.rsplit("@", 1)
     if not local or "." not in domain or domain.startswith(".") or domain.endswith("."):
-        raise ResendNotificationError("canary sender is invalid")
+        raise ResendNotificationError("sender is invalid")
     return candidate
 
 
@@ -133,7 +133,7 @@ class ResendNotificationTransport:
             or isinstance(timeout_seconds, bool)
             or not 1 <= timeout_seconds <= 30
         ):
-            raise ResendNotificationError("canary timeout must be 1-30 seconds")
+            raise ResendNotificationError("timeout must be 1-30 seconds")
         self._api_key = api_key
         self._email_from = _sender(email_from)
         self._email_to = _plain_recipient(email_to)
@@ -172,7 +172,7 @@ class ResendNotificationTransport:
             "Content-Length": str(len(payload)),
             "Content-Type": "application/json",
             "Idempotency-Key": idempotency_key,
-            "User-Agent": "OpenPapers-P3S-Canary/1.0",
+            "User-Agent": "OpenPapers-Agent-Run/1.0",
         }
 
         connection: _Connection | None = None

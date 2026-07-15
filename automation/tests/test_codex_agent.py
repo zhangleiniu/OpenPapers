@@ -6,7 +6,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from automation.codex_agent import CodexProcessResult, run_claimed_codex_agent
+from automation.control_state import ControlStateRepository
 from automation.due_policy import claim_due_agent_run
+from automation.domain import Writer
 from automation.event_dates import EventDateEstimate, EventDateTarget, initialize_event_dates
 
 
@@ -87,6 +89,16 @@ class CodexAgentTests(unittest.TestCase):
         self.assertIn('mcp_servers={}', argv)
         self.assertLess(argv.index("--ask-for-approval"), argv.index("exec"))
         self.assertEqual(outcome.result.disposition, "success")
+        with ControlStateRepository(
+            self.state, writer=Writer.LOCAL_CONTROL_PLANE, clock=lambda: NOW
+        ) as repository:
+            artifact = repository.get_agent_execution_artifact(self.claim.run_id)
+            report = repository.get_agent_run_report(self.claim.run_id)
+        self.assertEqual(artifact.lifecycle, "terminal")
+        self.assertEqual(artifact.changed_files, ("?? agent-change.txt",))
+        self.assertEqual(artifact.retention_status, "retained")
+        self.assertEqual(report.status, "pending")
+        self.assertEqual(report.schedule_status, "completed")
 
     def test_timeout_and_malformed_output_fail_closed_and_preserve_worktree(self):
         for invoker, category, disposition, venue, suffix in (

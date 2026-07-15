@@ -86,7 +86,7 @@ class ResendTransportTests(unittest.TestCase):
         self.assertEqual((method, path), ("POST", "/emails"))
         self.assertEqual(headers["Idempotency-Key"], notification.notification_id)
         self.assertEqual(headers["Authorization"], "Bearer ignored-test-key")
-        self.assertEqual(headers["User-Agent"], "OpenPapers-P3S-Canary/1.0")
+        self.assertEqual(headers["User-Agent"], "OpenPapers-Agent-Run/1.0")
         payload = json.loads(body)
         self.assertEqual(payload["to"], ["approved@example.org"])
         self.assertEqual(payload["text"], notification.body)

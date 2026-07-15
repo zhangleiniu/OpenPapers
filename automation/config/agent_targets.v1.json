@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "targets": [
+    {
+      "venue_id": "aistats",
+      "year": 2026
+    },
+    {
+      "venue_id": "icml",
+      "year": 2026
+    },
+    {
+      "venue_id": "ijcai",
+      "year": 2026
+    }
+  ]
+}
