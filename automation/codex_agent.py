@@ -104,8 +104,9 @@ def _parse_result(raw: str) -> AgentRunResult:
         or not isinstance(explanation, str)
         or not explanation.strip()
         or len(explanation) > 4000
-        or (disposition == "failed") != isinstance(failure, str)
+        or (failure is not None and not isinstance(failure, str))
         or (isinstance(failure, str) and (not failure.strip() or len(failure) > 200))
+        or (disposition == "failed" and not isinstance(failure, str))
     ):
         raise ValueError("Codex result values are invalid")
     suggested = body["suggested_retry_at"]
@@ -116,6 +117,8 @@ def _parse_result(raw: str) -> AgentRunResult:
             raise ValueError("Codex retry time is invalid") from exc
     if disposition != "not_ready" and suggested is not None:
         raise ValueError("Codex retry suggestion is inconsistent")
+    if disposition != "failed":
+        failure = None
     return AgentRunResult(disposition, explanation, suggested, failure)
 
 

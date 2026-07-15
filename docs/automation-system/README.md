@@ -103,7 +103,10 @@ The following exists and runs today:
 - `automation/codex_agent.py`: an uninstalled, fake-tested Codex-only runner.
   It uses real isolated Git worktrees in tests, pins Codex's workspace sandbox
   and structured result schema, preserves worktrees, and verifies the primary
-  checkout did not change. No real Codex canary or installed caller exists.
+  checkout did not change. Three authorized ICML 2026 diagnostic canary starts
+  verified isolation and exposed CLI flag placement, portable-schema, and
+  overly strict optional-field handling; none modified either checkout. A
+  cleanly accepted live result and installed caller do not yet exist.
 - `automation/discovery.py` and `automation/providers/gemini.py`: a budgeted,
   cached Gemini Search Grounding adapter with an explicit manual `--live`
   command. Its current output is stricter than the approximate-date signal the

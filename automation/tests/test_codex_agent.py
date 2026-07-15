@@ -89,10 +89,10 @@ class CodexAgentTests(unittest.TestCase):
         self.assertEqual(outcome.result.disposition, "success")
 
     def test_timeout_and_malformed_output_fail_closed_and_preserve_worktree(self):
-        for invoker, category, venue, suffix in (
-            (FakeInvoker(timeout=True), "timeout", "icml", "runs"),
-            (FakeInvoker(malformed=True), "invalid_result", "aistats", "runs2"),
-            (FakeInvoker(inconsistent=True), "invalid_result", "ijcai", "runs3"),
+        for invoker, category, disposition, venue, suffix in (
+            (FakeInvoker(timeout=True), "timeout", "failed", "icml", "runs"),
+            (FakeInvoker(malformed=True), "invalid_result", "failed", "aistats", "runs2"),
+            (FakeInvoker(inconsistent=True), None, "not_ready", "ijcai", "runs3"),
         ):
             with self.subTest(category=category, venue=venue):
                 if category != "timeout":
@@ -106,7 +106,7 @@ class CodexAgentTests(unittest.TestCase):
                 outcome = run_claimed_codex_agent(
                     state, self.repo, runs, claim, clock=lambda: NOW, invoker=invoker
                 )
-                self.assertEqual(outcome.result.disposition, "failed")
+                self.assertEqual(outcome.result.disposition, disposition)
                 self.assertEqual(outcome.result.failure_category, category)
                 self.assertTrue(outcome.worktree_path.exists())
 

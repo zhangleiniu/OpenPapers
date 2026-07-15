@@ -132,8 +132,16 @@ schema. Temporary-repository tests use real Git plus a fake Codex invoker.
 
 The worktree inventory is currently returned to the caller and the worktree is
 preserved; a dedicated durable execution-artifact row, bounded retention,
-notification composition, and an authorized real Codex canary remain before
+notification composition, and a cleanly accepted real Codex canary remain before
 this phase can be marked Implemented.
+
+An authorized ICML 2026 diagnostic canary on 2026-07-15 made three starts. It
+found and fixed global CLI flag placement and unsupported conditional JSON
+Schema keywords. The final Codex process exited successfully with no checkout
+changes, but its `not_ready` result included a nonessential reason category
+that the local parser rejected. The parser now safely ignores that optional
+field for non-failure dispositions. No fourth call has been made, so a cleanly
+accepted live result remains outstanding.
 
 Deliverables:
 
