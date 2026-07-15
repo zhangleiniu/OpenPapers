@@ -15,7 +15,7 @@ phase-level outcomes and status.
 | Existing baseline | Deterministic monitor, local LaunchDaemon/SQLite, email; paused Cloud Run rollback | Implemented |
 | 0 | Contracts, policies, ownership, and safety boundaries | Implemented |
 | 1 | LLM search discovery in shadow mode | Shadow (15-venue live review, 2026-07-13) |
-| 2 | Evidence verification and lifecycle state | Shadow (P2.S 15-venue live review, 2026-07-13) |
+| 2 | Evidence verification and lifecycle state | Shadow (P2.S 15-venue live review, 2026-07-13; P2.8S live canary, 2026-07-14) |
 | 3 | Cases and fatigue-resistant notifications | Shadow (P3.S one-delivery canary, 2026-07-13) |
 | 4 | Local Mac scheduler, execution safety, and immutable results | Implemented (single-writer cutover and timed rollback, 2026-07-14) |
 | 5 | Automatic execution of existing scrapers | Shadow (P5.S COLT 2025 real canary, 2026-07-14) |
@@ -325,18 +325,33 @@ P2.8 adds no import of `automation.execution_dispatch`, `execution_pipeline`,
 connected to `automation/local_service/production.py`, and no test makes a
 live provider or transport call.
 
-Phase 2 is `Shadow`, not `Implemented`. P2.1 through P2.8 and the P2.S manual
+Phase 2 is `Shadow`, not `Implemented`. P2.1 through P2.8S and the P2.S manual
 runtime are not deployed or scheduled, and there is no installed or production
 action dispatcher.
 
-P2.8S remains the concrete path toward closing that gap without claiming it
-is closed. It is the separately authorized isolated live canary that exercises
-the exact same P2.8 composition against real, crawl-policy-allowed evidence.
+P2.8S has completed the separately authorized isolated live canary that
+exercises the exact same P2.8 composition against real, crawl-policy-allowed
+evidence: `automation/production_wakeup_canary.py` builds a private marked
+root and one preselected `colt`/2025 seed around the unmodified P2.8 boundary,
+and `automation/run_production_wakeup_canary.py` is its explicit `--live`
+wrapper. The one authorized 2026-07-14 run made a real Gemini Search
+Grounding call and retained real verification evidence, but every citation
+Vertex AI returned was an unresolved grounding-redirect wrapper rather than
+an already-resolved catalog URL, so the deterministic verifier correctly left
+all nine targets `review_required` and no action was retained — reconfirming,
+on the real production-capable pair, the same COLT source-shape gap the
+earlier P2.S 15-venue review already recorded. A second live invocation
+against the same marked root replayed with zero further provider or fetch
+calls. The sanitized record is
+[`p2-8s-live-canary-review-2026-07-14.md`](./p2-8s-live-canary-review-2026-07-14.md).
 
 P2.8 supplies the automatic verifier/action-source implementation prerequisite
-for P5.5S; P2.8S separately supplies its real operational evidence, and both
-must complete. Installation, production database use, and automatic scraper
-dispatch remain separately authorized P5.5S work.
+for P5.5S; P2.8S separately supplies its real operational evidence. Both
+packages are complete, but because P2.8S's live evidence did not include a
+genuine retained action, P5.5S's action-source prerequisite is not yet
+end-to-end proven; a future live run reaching a genuine authoritative
+`pdf_status=ready` facet remains necessary. Installation, production database
+use, and automatic scraper dispatch remain separately authorized P5.5S work.
 
 ## Phase 3: cases and notifications
 
@@ -803,10 +818,11 @@ P5.5 uses only temporary local-owned SQLite, fake verified bundles, fake
 clocks, and injected fake execution effects. It changes no installed
 LaunchDaemon, production database, production marker/configuration, network
 policy, credential, P5.S command, canonical data, statistics, deployment, or
-Codex boundary. A later installed automatic shadow (P5.5S) remains blocked on
+Codex boundary. A later installed automatic shadow (P5.5S) remains blocked:
 P2.8's accepted automatic deterministic verifier/action-source composition and
-P2.8S's separately authorized live evidence; the current manual Phase 2 shadow
-cannot supply production execution authority.
+P2.8S's separately authorized live evidence are both complete, but P2.8S's one
+authorized run retained no action, so the current manual Phase 2 shadow still
+cannot supply proven production execution authority.
 
 ## Phase 6: Codex diagnosis and repair
 

@@ -271,9 +271,33 @@ whole wakeup is left `active`. Nothing here is imported by or connected to
 `automation/local_service/production.py`.
 
 P2.8S separately exercises that exact composition through an authorized
-manual live canary against isolated roots. Only P2.8 plus P2.8S together
-satisfy P5.5S's action-source prerequisite; neither installs the service or
-dispatches a scraper.
+manual live canary against isolated roots. It is complete:
+`automation/production_wakeup_canary.py` and `automation/
+run_production_wakeup_canary.py` add a private marked-root lifecycle and a
+one-time seed for the one preselected `colt`/2025 venue/year around the
+unmodified P2.8 boundary, always leaving both of `run_production_control_
+wakeup`'s private injection seams empty so the real `ProductionDiscoveryEffect`/
+`ProductionVerificationEffect` pair is built. The one 2026-07-14 authorized
+run made a real Gemini Search Grounding call and retained real verification
+evidence, but every grounded citation Vertex AI returned was an unresolved
+`vertexaisearch.cloud.google.com` redirect wrapper rather than an
+already-resolved catalog URL, so the existing deterministic verifier
+correctly left all nine targets `review_required` and retained no action — a
+real-world reconfirmation of the same COLT source-shape gap the earlier P2.S
+15-venue review already recorded, now with mechanism (redirect-wrapped
+grounding citations). A second `--live` invocation against the same marked
+root replayed with zero further provider or fetch calls, matching the
+existing P4.L2/P5.5 exact-replay guarantee. Neither installs the service or
+dispatches a scraper. The sanitized record is
+`p2-8s-live-canary-review-2026-07-14.md`.
+
+Only P2.8 plus P2.8S together satisfy P5.5S's action-source prerequisite, and
+that prerequisite is about proving the real composition runs correctly
+against real, crawl-policy-allowed, venue/year-bound evidence — not that
+every live attempt must retain an action. Because this run's real evidence
+did not reach a genuine authoritative `pdf_status=ready` facet, P5.5S still
+requires a future live run that does before its prerequisite is considered
+end-to-end proven.
 
 P3.1 adds a local case domain and extends the same control repository, P3.2
 adds a separate pure reminder projection, P3.3 adds an injected delivery
