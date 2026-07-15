@@ -352,10 +352,19 @@ internal-copy gates. Do not run P2.9S or any live command as part of these
 checks. The production crawl-policy artifact is unchanged and its
 `vertexaisearch.cloud.google.com` entry remains `denied`.
 
+P2.9S's separately authorized live run is complete and recorded in
+`p2-9s-live-canary-review-2026-07-14.md`. The real response omitted the PMLR
+domain label, so P2.9 correctly fetched only the official COLT page and
+retained no action. P2.10 is the next fixture-only package: it must prove that
+an exact PMLR volume link can be derived only from retained official HTML after
+COLT/year identity succeeds, then independently pass the existing crawl and
+PDF gates. P2.10 tests must use a sanitized P2.9S fixture and make no live
+request. P2.10S remains blocked and requires separate live authorization.
+
 The generalized live fetch adapter retains its transport-level DNS/SSRF and
 operational crawl controls. The existence of that injected interface or the
-P2.7 review artifact is not permission to make a live call; P2.8S owns any
-future authorized live exercise.
+P2.7 review artifact is not permission to make a live call; only an explicit
+Ready live package plus separate user authorization may exercise it.
 
 P2.S implements that adapter and its isolated manual composition. Focused
 checks and the mandatory non-live refusal are:

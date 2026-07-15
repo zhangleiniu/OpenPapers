@@ -296,17 +296,27 @@ P2.8S's own package text is explicit that a no-action outcome "fails the
 canary," so P5.5S's action-source prerequisite is not satisfied merely by
 the composition running correctly against real evidence — it requires that
 real evidence to include a genuine retained action. `work-packages.md`
-defines P2.9 and P2.9S as the path to that outcome. P2.9 is now complete at
+defined P2.9 and P2.9S as the first fix-and-proof attempt. P2.9 is complete at
 the fixture/fake boundary: the SDK exposes no alternate resolved URL, so an
 exact pure mapping turns only the reviewed COLT/2025 domain labels into
 repository-known official/PMLR URLs and retains the wrapper only as
 non-fetchable provenance. A narrow PMLR profile checks exact identity,
 plausible count, same-volume links, and bounded P2.3 PDF signatures through
 the existing per-request policy gates. The grounding domain remains denied
-and is never contacted. P2.9S is the separately authorized live run against
-the same `colt`/2025 venue/year; only when it reaches a genuine retained
-action are both P2.8S's finding and P5.5S's action-source prerequisite
-considered end-to-end proven.
+and is never contacted.
+
+P2.9S ran the separately authorized second live canary against the same
+`colt`/2025 venue/year. This provider response contained no
+`proceedings.mlr.press` domain label, so the closed P2.9 mapping resolved and
+fetched only the official `learningtheory.org` page. There was no PDF target,
+`pdf_status` remained `unknown`, and no action was retained. The wrapper was
+never fetched and exact replay added no calls. The retained official HTML did
+contain one ordinary PMLR link, so `work-packages.md` defines P2.10 as the
+fixture-only, identity-first extraction path: only an exact unsigned PMLR
+volume link found after verified official COLT/year identity may become a new
+independently gated target. P2.10S owns a later separately authorized live
+proof. Until it retains a genuine action, P2.8S/P2.9S findings and P5.5S's
+action-source prerequisite remain open.
 
 P3.1 adds a local case domain and extends the same control repository, P3.2
 adds a separate pure reminder projection, P3.3 adds an injected delivery

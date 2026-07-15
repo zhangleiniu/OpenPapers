@@ -126,8 +126,12 @@ P2.9 additionally closes the fixture-reproducible COLT/2025 grounding-wrapper
 source shape in the uninstalled automatic verifier. It uses only exact
 repository-known source URLs, a bounded PMLR listing/PDF profile, and the
 existing crawl gates; the Google wrapper remains denied and is never fetched.
-P2.9S is still a separate manual live package, so this change does not alter
-the installed LaunchDaemon or current deployed behavior.
+P2.9S ran as a separate manual isolated live package. Its real response lacked
+the PMLR domain label needed by P2.9's closed mapping, so it fetched only the
+official COLT page, produced no PDF target, and retained no action. Exact
+replay added no calls, and neither invocation altered the installed
+LaunchDaemon or current deployed behavior. P2.10/P2.10S remain unimplemented
+fixture/live follow-up packages; P5.5S is still blocked.
 
 Start at the [automation system development guide](./automation-system/README.md) for
 the implemented foundation, target architecture, roadmap, and zero-context

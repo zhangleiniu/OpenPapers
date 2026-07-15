@@ -15,7 +15,7 @@ phase-level outcomes and status.
 | Existing baseline | Deterministic monitor, local LaunchDaemon/SQLite, email; paused Cloud Run rollback | Implemented |
 | 0 | Contracts, policies, ownership, and safety boundaries | Implemented |
 | 1 | LLM search discovery in shadow mode | Shadow (15-venue live review, 2026-07-13) |
-| 2 | Evidence verification and lifecycle state | Shadow (P2.S 15-venue live review, 2026-07-13; P2.8S live canary retained no action, review fix required, 2026-07-14) |
+| 2 | Evidence verification and lifecycle state | Shadow (P2.S 15-venue review, 2026-07-13; P2.8S/P2.9S canaries retained no action, review fixes required, 2026-07-14) |
 | 3 | Cases and fatigue-resistant notifications | Shadow (P3.S one-delivery canary, 2026-07-13) |
 | 4 | Local Mac scheduler, execution safety, and immutable results | Implemented (single-writer cutover and timed rollback, 2026-07-14) |
 | 5 | Automatic execution of existing scrapers | Shadow (P5.S COLT 2025 real canary, 2026-07-14) |
@@ -325,7 +325,7 @@ P2.8 adds no import of `automation.execution_dispatch`, `execution_pipeline`,
 connected to `automation/local_service/production.py`, and no test makes a
 live provider or transport call.
 
-Phase 2 is `Shadow`, not `Implemented`. P2.1 through P2.9S and the P2.S manual
+Phase 2 is `Shadow`, not `Implemented`. P2.1 through P2.10S and the P2.S manual
 runtime are not deployed or scheduled, and there is no installed or production
 action dispatcher.
 
@@ -353,11 +353,23 @@ evidence, but that evidence did not include a genuine retained action. P2.9
 is now complete at the fixture/fake boundary: exact reviewed COLT/2025 domain
 labels resolve to repository-known URLs without contacting the denied wrapper,
 and bounded PMLR identity/count/link extraction plus existing P2.3 sampling
-produces a strict promotable PDF-ready result. P2.9S (`Ready`) is the second
-live run — against the same `colt`/2025 venue/year — that must reach a
-genuine retained action to close P2.8S's finding and prove P5.5S's
-action-source prerequisite end-to-end. Installation, production database
-use, and automatic scraper dispatch remain separately authorized P5.5S work.
+produces a strict promotable PDF-ready result.
+
+P2.9S then ran the separately authorized second fresh-root live canary against
+the same `colt`/2025 venue/year. This real response contained one
+`learningtheory.org` source label but no `proceedings.mlr.press` label, so
+P2.9 correctly resolved and fetched only the official page and did not invent
+a PMLR/PDF target. Ten bundles yielded four verified, five review-required,
+and one rejected result; `pdf_status` remained `unknown` and no action was
+retained. Six allowed requests all targeted `learningtheory.org`; the Google
+wrapper remained unfetched. Exact replay added no work. The record is
+[`p2-9s-live-canary-review-2026-07-14.md`](./p2-9s-live-canary-review-2026-07-14.md).
+P2.9S is therefore `Review fix required` and P5.5S's prerequisite remains
+unproven. P2.10 (`Ready`) will fixture-test deriving the exact PMLR volume link
+already present in retained, identity-verified official COLT HTML; P2.10S
+(`Blocked`) owns any separately authorized third live proof. Installation,
+production database use, and automatic scraper dispatch remain separately
+authorized P5.5S work.
 
 ## Phase 3: cases and notifications
 
@@ -826,10 +838,11 @@ LaunchDaemon, production database, production marker/configuration, network
 policy, credential, P5.S command, canonical data, statistics, deployment, or
 Codex boundary. A later installed automatic shadow (P5.5S) remains blocked:
 P2.8's accepted automatic deterministic verifier/action-source composition is
-complete, but P2.8S's separately authorized live evidence is `Review fix
-required` — its one authorized run retained no action — so the current manual
-Phase 2 shadow still cannot supply proven production execution authority
-until P2.9/P2.9S (`docs/automation-system/work-packages.md`) close that gap.
+complete, but the separately authorized P2.8S and P2.9S live canaries both
+retained no action. The current manual Phase 2 shadow therefore still cannot
+supply proven production execution authority until P2.10/P2.10S
+(`docs/automation-system/work-packages.md`) close the newly observed
+official-page/PMLR-link gap.
 
 ## Phase 6: Codex diagnosis and repair
 

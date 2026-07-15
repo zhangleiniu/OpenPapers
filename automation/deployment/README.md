@@ -64,9 +64,11 @@ local production label is loaded.
 
 P2.9's fixture-only grounding-redirect resolution and COLT/PMLR verification
 profile are not imported by this retained cloud job or the installed local
-service. The reviewed Google grounding domain remains denied and no live P2.9S
-run, deployment change, credential, schedule, or runtime migration is part of
-that package.
+service. The reviewed Google grounding domain remains denied. P2.9S's manual
+isolated live run fetched only the official COLT domain, retained no action,
+and made no deployment change, credential change, schedule change, or runtime
+migration. P2.10/P2.10S remain unimplemented and likewise have no authority in
+this topology.
 
 ## Build
 

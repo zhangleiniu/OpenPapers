@@ -204,10 +204,20 @@ non-fetchable provenance. A bounded PMLR profile verifies venue/year identity,
 signatures. The sanitized redirect-only fixture reaches a promotable
 `pdf_status=ready` result without any grounding-domain fetch. The P2.7 policy
 is unchanged and still denies `vertexaisearch.cloud.google.com`; no
-redistribution was granted. [`work-packages.md`](./work-packages.md) now marks
-P2.9S `Ready` for the separately authorized second live run against the same
-`colt`/2025 venue/year. P5.5S remains blocked until that run reaches a genuine
-authoritative `pdf_status=ready` facet.
+redistribution was granted.
+
+P2.9S ran the separately authorized second live canary against the same
+`colt`/2025 venue/year. Its new real response contained one official COLT
+domain label but no PMLR domain label. The closed P2.9 rule therefore resolved
+and fetched only `learningtheory.org`, produced no PDF target, left
+`pdf_status=unknown`, and retained no action. The denied wrapper was never
+fetched; exact replay made no new call. The sanitized record is
+[`p2-9s-live-canary-review-2026-07-14.md`](./p2-9s-live-canary-review-2026-07-14.md).
+Because the action criterion was not met, P2.9S is `Review fix required` and
+P5.5S remains blocked. The retained official page itself contained an exact
+PMLR link, so [`work-packages.md`](./work-packages.md) marks P2.10 `Ready` for
+a fixture-only identity-first official-page link derivation; P2.10S remains a
+separately authorized future live proof.
 
 Phase 3.1 persistent unresolved cases, P3.2 reminder/digest policy, P3.3's
 fake-only notification delivery boundary, P3.4's persistent shadow-output
