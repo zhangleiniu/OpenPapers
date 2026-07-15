@@ -230,8 +230,21 @@ missing/ambiguous link, or an unsafe (cross-host/signed/encoded/non-volume)
 candidate all leave the finding `review_required` with zero requests to
 `proceedings.mlr.press`; neither path ever contacts the grounding wrapper.
 The P2.7 crawl policy is unchanged.
-[`work-packages.md`](./work-packages.md) now marks P2.10S `Ready` for a third
-separately authorized live proof against the same `colt`/2025 venue/year.
+
+P2.10S ran that third separately authorized live proof against the same
+`colt`/2025 venue/year on 2026-07-15. The real response again retained no
+action: this time the provider's own `pdf` claim cited the reviewed official
+page alongside one unrelated, unresolved secondary citation, a two-URL shape
+that matches neither P2.9's grounding-domain-label path nor P2.10's
+sole-cited-URL derivation, so the deterministic verifier correctly sampled
+zero PDF URLs rather than guess between the two citations. The sanitized
+record is
+[`p2-10s-live-canary-review-2026-07-15.md`](./p2-10s-live-canary-review-2026-07-15.md).
+Because the action criterion was again not met, P2.10S is `Review fix
+required` and the P2.8S/P2.9S findings remain open.
+[`work-packages.md`](./work-packages.md) now marks P2.11 `Ready` for a
+fixture-only extension recognizing that exact two-citation shape, with P2.11S
+owning a later, separately authorized fourth live proof.
 
 Phase 3.1 persistent unresolved cases, P3.2 reminder/digest policy, P3.3's
 fake-only notification delivery boundary, P3.4's persistent shadow-output

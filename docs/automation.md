@@ -130,7 +130,13 @@ P2.9S ran as a separate manual isolated live package. Its real response lacked
 the PMLR domain label needed by P2.9's closed mapping, so it fetched only the
 official COLT page, produced no PDF target, and retained no action. Exact
 replay added no calls, and neither invocation altered the installed
-LaunchDaemon or current deployed behavior. P2.10/P2.10S remain unimplemented
+LaunchDaemon or current deployed behavior. P2.10 closes the fixture-reproducible
+official-page-link shape the same way, deriving a PMLR volume link from a
+retained, identity-verified official COLT page. P2.10S then ran the same live
+package a third time; its real response's own `pdf` claim cited the official
+page alongside one unrelated secondary citation, a shape P2.10's
+sole-cited-URL derivation does not recognize, so it also retained no action
+and altered no deployed behavior. P2.11/P2.11S remain unimplemented
 fixture/live follow-up packages; P5.5S is still blocked.
 
 Start at the [automation system development guide](./automation-system/README.md) for

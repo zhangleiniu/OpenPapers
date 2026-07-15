@@ -338,9 +338,25 @@ attempts and no request to `proceedings.mlr.press` or the grounding wrapper.
 A sanitized fixture reproducing the exact P2.9S source-label shape reaches a
 strict promotable `pdf_status=ready` result this way. The P2.7 crawl policy,
 `automation/production_wakeup.py`, `automation/production_wakeup_canary.py`,
-and `automation/local_control_plane.py` are unchanged. P2.10S owns a later
-separately authorized live proof. Until it retains a genuine action, P2.8S/
-P2.9S findings and P5.5S's action-source prerequisite remain open.
+and `automation/local_control_plane.py` are unchanged.
+
+P2.10S ran that separately authorized live proof against the same `colt`/2025
+venue/year on 2026-07-15. It again retained no genuine action: the real
+response's own `pdf` claim cited the reviewed official page alongside one
+unrelated, unresolved secondary citation, a two-URL shape that matches
+neither P2.9's grounding-domain-label path nor P2.10's sole-cited-URL
+derivation — both of which intentionally defer to a provider-declared `pdf`
+claim rather than synthesize a competing candidate. The deterministic PDF
+sampler correctly selected zero fetchable URLs from that claim rather than
+guess between the official page and the unresolved secondary citation, so
+`pdf_status` remained `unknown` and no action was retained; exact replay added
+no calls. `work-packages.md` defines P2.11 as the next fixture-only step: a
+bounded rule recognizing a `pdf` claim's cited-URL set as the known
+official-page shape only when the reviewed official page is present and every
+other cited URL independently fails catalog/domain resolution, reusing P2.10's
+unchanged fetch-first, identity-then-extract derivation once that shape is
+recognized. Until P2.11/P2.11S retain a genuine action, the P2.8S/P2.9S/P2.10S
+findings and P5.5S's action-source prerequisite remain open.
 
 P3.1 adds a local case domain and extends the same control repository, P3.2
 adds a separate pure reminder projection, P3.3 adds an injected delivery

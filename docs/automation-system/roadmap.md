@@ -15,7 +15,7 @@ phase-level outcomes and status.
 | Existing baseline | Deterministic monitor, local LaunchDaemon/SQLite, email; paused Cloud Run rollback | Implemented |
 | 0 | Contracts, policies, ownership, and safety boundaries | Implemented |
 | 1 | LLM search discovery in shadow mode | Shadow (15-venue live review, 2026-07-13) |
-| 2 | Evidence verification and lifecycle state | Shadow (P2.S 15-venue review, 2026-07-13; P2.8S/P2.9S canaries retained no action, review fixes required, 2026-07-14) |
+| 2 | Evidence verification and lifecycle state | Shadow (P2.S 15-venue review, 2026-07-13; P2.8S/P2.9S/P2.10S canaries retained no action, review fixes required, 2026-07-14/2026-07-15) |
 | 3 | Cases and fatigue-resistant notifications | Shadow (P3.S one-delivery canary, 2026-07-13) |
 | 4 | Local Mac scheduler, execution safety, and immutable results | Implemented (single-writer cutover and timed rollback, 2026-07-14) |
 | 5 | Automatic execution of existing scrapers | Shadow (P5.S COLT 2025 real canary, 2026-07-14) |
@@ -325,7 +325,7 @@ P2.8 adds no import of `automation.execution_dispatch`, `execution_pipeline`,
 connected to `automation/local_service/production.py`, and no test makes a
 live provider or transport call.
 
-Phase 2 is `Shadow`, not `Implemented`. P2.1 through P2.10S and the P2.S manual
+Phase 2 is `Shadow`, not `Implemented`. P2.1 through P2.11S and the P2.S manual
 runtime are not deployed or scheduled, and there is no installed or production
 action dispatcher.
 
@@ -365,11 +365,30 @@ retained. Six allowed requests all targeted `learningtheory.org`; the Google
 wrapper remained unfetched. Exact replay added no work. The record is
 [`p2-9s-live-canary-review-2026-07-14.md`](./p2-9s-live-canary-review-2026-07-14.md).
 P2.9S is therefore `Review fix required` and P5.5S's prerequisite remains
-unproven. P2.10 (`Ready`) will fixture-test deriving the exact PMLR volume link
-already present in retained, identity-verified official COLT HTML; P2.10S
-(`Blocked`) owns any separately authorized third live proof. Installation,
-production database use, and automatic scraper dispatch remain separately
-authorized P5.5S work.
+unproven. P2.10 is now complete: it fixture-tests deriving the exact PMLR
+volume link already present in retained, identity-verified official COLT
+HTML, reaching a strict promotable `pdf_status=ready` result without touching
+crawl policy or weakening any existing check.
+
+P2.10S then ran the separately authorized third fresh-root live canary
+against the same `colt`/2025 venue/year on 2026-07-15. The real response again
+retained no action: the provider's own `pdf` claim this time cited the
+reviewed official page alongside one unrelated, unresolved secondary
+citation, a two-URL shape neither P2.9's grounding-domain-label path nor
+P2.10's sole-cited-URL derivation recognizes, so the deterministic verifier
+correctly sampled zero PDF URLs rather than guess between the two citations.
+Ten bundles yielded three verified, six review-required, and one rejected
+result; `pdf_status` remained `unknown` and no action was retained. Six
+allowed requests all targeted `learningtheory.org`; the Google wrapper and
+`proceedings.mlr.press` remained unfetched. Exact replay added no work. The
+record is
+[`p2-10s-live-canary-review-2026-07-15.md`](./p2-10s-live-canary-review-2026-07-15.md).
+P2.10S is therefore `Review fix required`, and the P2.8S/P2.9S findings
+remain open alongside it. P2.11 (`Ready`) will fixture-test generalizing the
+official-page derivation to a `pdf` claim citing the official page alongside
+only non-authoritative secondary citations; P2.11S (`Blocked`) owns any
+separately authorized fourth live proof. Installation, production database
+use, and automatic scraper dispatch remain separately authorized P5.5S work.
 
 ## Phase 3: cases and notifications
 
@@ -838,11 +857,11 @@ LaunchDaemon, production database, production marker/configuration, network
 policy, credential, P5.S command, canonical data, statistics, deployment, or
 Codex boundary. A later installed automatic shadow (P5.5S) remains blocked:
 P2.8's accepted automatic deterministic verifier/action-source composition is
-complete, but the separately authorized P2.8S and P2.9S live canaries both
-retained no action. The current manual Phase 2 shadow therefore still cannot
-supply proven production execution authority until P2.10/P2.10S
-(`docs/automation-system/work-packages.md`) close the newly observed
-official-page/PMLR-link gap.
+complete, but the separately authorized P2.8S, P2.9S, and P2.10S live
+canaries have all retained no action. The current manual Phase 2 shadow
+therefore still cannot supply proven production execution authority until
+P2.11/P2.11S (`docs/automation-system/work-packages.md`) close the newly
+observed official-page-plus-secondary-citation gap.
 
 ## Phase 6: Codex diagnosis and repair
 

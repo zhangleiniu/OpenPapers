@@ -67,8 +67,11 @@ profile are not imported by this retained cloud job or the installed local
 service. The reviewed Google grounding domain remains denied. P2.9S's manual
 isolated live run fetched only the official COLT domain, retained no action,
 and made no deployment change, credential change, schedule change, or runtime
-migration. P2.10/P2.10S remain unimplemented and likewise have no authority in
-this topology.
+migration. P2.10's fixture-only official-page-link derivation is likewise
+unconnected to this topology. P2.10S's manual isolated live run also retained
+no action and made no deployment, credential, schedule, or runtime change.
+P2.11/P2.11S remain unimplemented and likewise have no authority in this
+topology.
 
 ## Build
 

@@ -387,9 +387,21 @@ checks. The production crawl-policy artifact, `automation/
 production_wakeup.py`, `automation/production_wakeup_canary.py`, and
 `automation/local_control_plane.py` are unchanged.
 
-P2.10S is now the sole `Ready` package: a third separately authorized
-fresh-root live proof of the unchanged P2.8S canary boundary against the same
-`colt`/2025 venue/year, requiring separate live authorization.
+P2.10S ran that third separately authorized fresh-root live proof of the
+unchanged P2.8S canary boundary against the same `colt`/2025 venue/year on
+2026-07-15 and is recorded in
+`p2-10s-live-canary-review-2026-07-15.md`. The real response's own `pdf`
+claim cited the reviewed official page alongside one unrelated, unresolved
+secondary citation — a two-URL shape neither P2.9's grounding-domain-label
+path nor P2.10's sole-cited-URL derivation recognizes — so the deterministic
+verifier correctly sampled zero PDF URLs and retained no action.
+
+P2.11 is now the sole `Ready` package: a fixture-only extension recognizing a
+`pdf` claim citing the reviewed official page alongside only
+non-authoritative secondary citations, followed by the unchanged P2.9/P2.10/
+P2.3 checks. Do not run P2.11S or any live command as part of ordinary
+development checks; it requires separate live authorization and is `Blocked`
+until P2.11 is complete.
 
 The generalized live fetch adapter retains its transport-level DNS/SSRF and
 operational crawl controls. The existence of that injected interface or the
