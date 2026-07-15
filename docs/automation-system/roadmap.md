@@ -14,7 +14,7 @@ graph.
 | Local due selection | Lease-protected selection from persisted `next_check_at`; no external effect | Implemented |
 | Date initialization | One approximate event-date lookup for an explicitly registered venue/year | Implemented |
 | Due-state policy | Sleep before the estimate; agent retry/backoff/stop transitions afterward | Implemented |
-| Agent execution | Coding agent in an isolated worktree, with broad scraper judgment and narrow authority | Planned |
+| Agent execution | Coding agent in an isolated worktree, with broad scraper judgment and narrow authority | In progress |
 | Run notification | One replay-safe email per agent run | Planned |
 | State simplification | Migrate away from vestigial verification/case/job/notification schema | Planned after target run state is fixed |
 
@@ -120,7 +120,20 @@ explicit recovery, active-run exclusion, UTC-month budget deferral, and a
 state without losing date history. No installed caller or external effect
 exists.
 
-## Agent execution (Planned)
+## Agent execution (In progress, uninstalled)
+
+`automation/codex_agent.py` now creates a dedicated branch/worktree, invokes a
+replaceable Codex boundary, validates the four-field result, inventories
+worktree changes, verifies primary HEAD/status invariance, and closes timeout,
+nonzero, oversized, or malformed output as `failed`. The real invoker fixes
+Codex to `workspace-write`, approval `never`, ephemeral state, ignored user
+config/rules, disabled MCP servers, cached web search, and the tracked output
+schema. Temporary-repository tests use real Git plus a fake Codex invoker.
+
+The worktree inventory is currently returned to the caller and the worktree is
+preserved; a dedicated durable execution-artifact row, bounded retention,
+notification composition, and an authorized real Codex canary remain before
+this phase can be marked Implemented.
 
 Deliverables:
 

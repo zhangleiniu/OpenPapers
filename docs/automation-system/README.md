@@ -100,6 +100,10 @@ The following exists and runs today:
   `needs_human`, and `failed`, and enforces default/suggested retries, bounded
   failure backoff, a global active slot, a monthly ceiling, and a recent
   distinct-venue systemic-failure circuit. It does not start an agent.
+- `automation/codex_agent.py`: an uninstalled, fake-tested Codex-only runner.
+  It uses real isolated Git worktrees in tests, pins Codex's workspace sandbox
+  and structured result schema, preserves worktrees, and verifies the primary
+  checkout did not change. No real Codex canary or installed caller exists.
 - `automation/discovery.py` and `automation/providers/gemini.py`: a budgeted,
   cached Gemini Search Grounding adapter with an explicit manual `--live`
   command. Its current output is stricter than the approximate-date signal the
@@ -119,8 +123,8 @@ claim; repository files only describe the expected topology.
   LaunchDaemon wiring for the implemented date initializer.
 - Production policy configuration and LaunchDaemon wiring for the implemented
   but uninstalled due-state boundary.
-- Coding-agent execution in an isolated worktree: prompt, subprocess timeout,
-  result capture, and enforced no-commit/no-push/no-merge/no-deploy boundary.
+- Durable execution-artifact persistence, bounded worktree retention, and an
+  authorized live canary for the partially implemented Codex runner.
 - One-shot email reporting for each agent run.
 - Migration of `control_state.py` from its vestigial old schema to the small
   date/dispatch/run model.

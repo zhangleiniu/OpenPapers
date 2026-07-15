@@ -43,6 +43,7 @@ The target date-only path is currently an uninstalled Python interface,
 ```bash
 python -m unittest automation.tests.test_event_dates -v
 python -m unittest automation.tests.test_due_policy -v
+python -m unittest automation.tests.test_codex_agent -v
 ```
 
 ## Checks

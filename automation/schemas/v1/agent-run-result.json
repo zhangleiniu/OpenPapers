@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["disposition", "explanation", "suggested_retry_at", "failure_category"],
+  "properties": {
+    "disposition": {"enum": ["success", "not_ready", "needs_human", "failed"]},
+    "explanation": {"type": "string", "minLength": 1, "maxLength": 4000},
+    "suggested_retry_at": {"type": ["string", "null"], "format": "date-time"},
+    "failure_category": {"type": ["string", "null"], "minLength": 1, "maxLength": 200}
+  }
+}
