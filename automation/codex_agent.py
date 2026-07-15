@@ -96,15 +96,27 @@ def _parse_result(raw: str) -> AgentRunResult:
     required = {"disposition", "explanation", "suggested_retry_at", "failure_category"}
     if not isinstance(body, dict) or set(body) != required:
         raise ValueError("Codex result fields are invalid")
+    disposition = body["disposition"]
+    explanation = body["explanation"]
+    failure = body["failure_category"]
+    if (
+        disposition not in {"success", "not_ready", "needs_human", "failed"}
+        or not isinstance(explanation, str)
+        or not explanation.strip()
+        or len(explanation) > 4000
+        or (disposition == "failed") != isinstance(failure, str)
+        or (isinstance(failure, str) and (not failure.strip() or len(failure) > 200))
+    ):
+        raise ValueError("Codex result values are invalid")
     suggested = body["suggested_retry_at"]
     if suggested is not None:
         try:
             suggested = datetime.fromisoformat(suggested.replace("Z", "+00:00"))
         except (AttributeError, ValueError) as exc:
             raise ValueError("Codex retry time is invalid") from exc
-    return AgentRunResult(
-        body["disposition"], body["explanation"], suggested, body["failure_category"]
-    )
+    if disposition != "not_ready" and suggested is not None:
+        raise ValueError("Codex retry suggestion is inconsistent")
+    return AgentRunResult(disposition, explanation, suggested, failure)
 
 
 def run_claimed_codex_agent(

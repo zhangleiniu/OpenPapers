@@ -20,9 +20,10 @@ class Provider:
 
 
 class FakeInvoker:
-    def __init__(self, *, timeout=False, malformed=False):
+    def __init__(self, *, timeout=False, malformed=False, inconsistent=False):
         self.timeout = timeout
         self.malformed = malformed
+        self.inconsistent = inconsistent
         self.invocation = None
 
     def invoke(self, invocation):
@@ -34,6 +35,11 @@ class FakeInvoker:
             "disposition": "success", "explanation": "fixture success",
             "suggested_retry_at": None, "failure_category": None,
         })
+        if self.inconsistent:
+            output = json.dumps({
+                "disposition": "not_ready", "explanation": "not ready",
+                "suggested_retry_at": None, "failure_category": "not_ready",
+            })
         return CodexProcessResult(0, output, "")
 
 
@@ -83,17 +89,18 @@ class CodexAgentTests(unittest.TestCase):
         self.assertEqual(outcome.result.disposition, "success")
 
     def test_timeout_and_malformed_output_fail_closed_and_preserve_worktree(self):
-        for invoker, category in (
-            (FakeInvoker(timeout=True), "timeout"),
-            (FakeInvoker(malformed=True), "invalid_result"),
+        for invoker, category, venue, suffix in (
+            (FakeInvoker(timeout=True), "timeout", "icml", "runs"),
+            (FakeInvoker(malformed=True), "invalid_result", "aistats", "runs2"),
+            (FakeInvoker(inconsistent=True), "invalid_result", "ijcai", "runs3"),
         ):
-            with self.subTest(category=category):
-                if category == "invalid_result":
-                    state = self.root / "second.sqlite3"
-                    initialize_event_dates(state, (EventDateTarget("aistats", 2026),),
+            with self.subTest(category=category, venue=venue):
+                if category != "timeout":
+                    state = self.root / f"{venue}.sqlite3"
+                    initialize_event_dates(state, (EventDateTarget(venue, 2026),),
                                            Provider(), clock=lambda: NOW)
                     claim = claim_due_agent_run(state, clock=lambda: NOW).claim
-                    runs = self.root / "runs2"
+                    runs = self.root / suffix
                 else:
                     state, claim, runs = self.state, self.claim, self.root / "runs"
                 outcome = run_claimed_codex_agent(
