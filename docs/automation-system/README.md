@@ -128,7 +128,9 @@ The following exists and runs today:
   canaries. Codex receives an explicit private `CODEX_HOME`, Gemini loads an
   explicit private ADC file, and Resend secrets are marker-bound without
   activation. Each canary requires its own live authorization flag; installed
-  Gemini and Codex canaries have completed, while Resend has not sent.
+  Gemini, Codex, and Resend canaries have completed. The Resend canary used one
+  provider request addressed to the two approved recipients, and the operator
+  confirmed delivery to both.
 - `automation/local_service/agent_control.py`: disabled-only marker-last
   replacement primitives for runtime/source refresh and Resend secret
   provisioning. Either an enabled current configuration or an enabled
@@ -143,7 +145,9 @@ The following exists and runs today:
   command. Its current output is stricter than the approximate-date signal the
   target scheduler needs; that scheduling use is not wired.
 - `automation/resend_notifications.py`: the selected low-level Resend HTTPS
-  adapter for agent-run reports. No production configuration or caller exists.
+  adapter for agent-run reports. Its rotated private credential and approved
+  two-recipient allowlist are installed, while its automatic caller remains
+  disabled by the global external-effects gate.
 - `automation/prefect_flows.py`, `automation/run_monitor_flow.py`, and
   `automation/deployment/`: the paused Cloud Run monitor retained solely as a
   rollback path. It is not the target scheduler.
@@ -154,9 +158,7 @@ claim; repository files only describe the expected topology.
 ## Not yet built
 
 - Automatic future-year cohort creation.
-- Dedicated-role rotated Resend key plus approved recipient-allowlist
-  provisioning, its separately authorized live canary, and final
-  external-effect activation.
+- Final external-effect activation.
 - Migration of `control_state.py` from its vestigial old schema to the small
   date/dispatch/run model.
 

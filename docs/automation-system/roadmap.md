@@ -277,9 +277,11 @@ cover successful replacement, activation rejection, Resend-only secret
 provisioning, and partial replacement.
 
 Acceptance met in repository tests. Dedicated-role Codex device authentication
-and impersonated Google ADC have now passed the private-file status gate;
-Resend reconfiguration with a rotated key and approved recipient allowlist, its
-live canary, and activation remain separate operator actions. The first
+and impersonated Google ADC have now passed the private-file status gate. A
+rotated Resend key and schema-3 two-recipient allowlist were installed while
+disabled; one separately authorized live canary used a single provider request,
+and the operator confirmed delivery to both recipients. Activation remains a
+separate operator action. The first
 authorized installed Gemini canary attempt
 failed at the SDK import before any provider request, which exposed the need
 for an explicit installed-automation-dependency gate. After the fixed service
