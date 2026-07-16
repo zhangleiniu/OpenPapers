@@ -347,6 +347,15 @@ class AgentRunClaimOutcome:
 
 
 @dataclass(frozen=True)
+class AgentScheduleHintOutcome:
+    """Result of applying one non-authoritative scheduling hint."""
+
+    schedule: AgentScheduleRecord | None
+    applied: bool
+    reason: str
+
+
+@dataclass(frozen=True)
 class AgentExecutionArtifactRecord:
     """Durable review and retention state for one managed agent worktree."""
 
@@ -3388,6 +3397,61 @@ class ControlStateRepository:
                 (venue_id, year),
             ).fetchone()
         return self._agent_schedule_from_row(updated)
+
+    def advance_agent_schedule_from_hint(
+        self,
+        venue_id: str,
+        year: int,
+        *,
+        hint_observed_at: datetime | str,
+        next_check_at: datetime | str,
+        applied_at: datetime | str,
+        lease: LeaseHandle,
+    ) -> AgentScheduleHintOutcome:
+        """Advance one future check without claiming or reactivating work."""
+        _validate_event_date_target(venue_id, year)
+        observed = _timestamp(
+            hint_observed_at, field="agent schedule hint observed_at"
+        )
+        next_check = _timestamp(
+            next_check_at, field="agent schedule hint next_check_at"
+        )
+        applied_time = _timestamp(applied_at, field="agent schedule hint applied_at")
+        if _parse_timestamp(next_check, field="agent schedule hint next_check_at") < \
+                _parse_timestamp(observed, field="agent schedule hint observed_at"):
+            raise AgentScheduleError("agent schedule hint cannot target the past")
+        with self._write_transaction() as connection:
+            self._require_lease(connection, lease, self._now())
+            row = connection.execute(
+                "SELECT * FROM agent_schedule WHERE venue_id = ? AND year = ?",
+                (venue_id, year),
+            ).fetchone()
+            if row is None:
+                return AgentScheduleHintOutcome(None, False, "schedule_missing")
+            schedule = self._agent_schedule_from_row(row)
+            if schedule.status != "scheduled":
+                return AgentScheduleHintOutcome(schedule, False, "not_scheduled")
+            if schedule.last_run_at is not None and _parse_timestamp(
+                schedule.last_run_at, field="agent last run"
+            ) >= _parse_timestamp(observed, field="agent schedule hint observed_at"):
+                return AgentScheduleHintOutcome(schedule, False, "superseded_by_run")
+            if _parse_timestamp(
+                schedule.next_check_at, field="agent current next_check_at"
+            ) <= _parse_timestamp(next_check, field="agent schedule hint next_check_at"):
+                return AgentScheduleHintOutcome(schedule, False, "already_earlier")
+            connection.execute(
+                "UPDATE agent_schedule SET next_check_at = ?, "
+                "last_gate_reason = NULL, updated_at = ? "
+                "WHERE venue_id = ? AND year = ? AND status = 'scheduled'",
+                (next_check, applied_time, venue_id, year),
+            )
+            updated = connection.execute(
+                "SELECT * FROM agent_schedule WHERE venue_id = ? AND year = ?",
+                (venue_id, year),
+            ).fetchone()
+        return AgentScheduleHintOutcome(
+            self._agent_schedule_from_row(updated), True, "advanced"
+        )
 
     def get_agent_schedule(
         self, venue_id: str, year: int

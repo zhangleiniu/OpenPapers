@@ -98,6 +98,14 @@ baseline, so a reviewed dirty canary remains healthy until its status digest,
 branch, HEAD, or remote count changes. This repository capability is not proof
 that the installed runtime has been refreshed to include it.
 
+`automation.source_change_hints` is the scheduling-only bridge from a validated
+baseline monitor change to an existing configured agent schedule. The baseline
+stores a de-identified pending hint in its existing wakeup journal; enabled
+composition applies it only after this wake's ordinary agent work, so a later
+wake must still pass all due gates. It never calls an adapter or creates a
+target. The repository implementation is not evidence that the installed
+runtime contains the bridge.
+
 ## Focused verification
 
 ```bash

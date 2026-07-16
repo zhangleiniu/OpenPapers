@@ -160,6 +160,15 @@ The following exists and runs today:
   credentials. Canary comparison uses a private expected branch/HEAD/status
   digest, so an intentionally dirty retained canary is not a false alarm. This
   module has not yet been refreshed into the installed runtime.
+- `automation/source_change_hints.py`: a repository-implemented, durable
+  scheduling-only bridge from the trusted deterministic monitor. A changed,
+  available source records only venue/year/time in the bounded production
+  wakeup journal. After the wake's ordinary agent/report/retention work, the
+  enabled composition may advance one existing future check to the configured
+  cooldown boundary. It never creates a target, claims an agent, reactivates a
+  terminal schedule, treats the change as readiness, or bypasses later budget,
+  concurrency, and circuit gates. This bridge has not yet been refreshed into
+  the installed runtime.
 - `automation/control_state_migration.py`: a safe-summary read-only audit,
   new-file SQLite backup, and isolated-copy schema rehearsal command. Fixture
   rehearsal passed; the dedicated-role production database was migrated from
@@ -182,8 +191,6 @@ claim; repository files only describe the expected topology.
 ## Not yet active or built
 
 - Automatic future-year cohort creation.
-- Using deterministic monitor changes as an earlier scheduling hint; monitor
-  changes currently remain email-only and never alter agent due state.
 - Migration of `control_state.py` from its vestigial old schema to the small
   date/dispatch/run model.
 

@@ -38,6 +38,10 @@ from automation.local_service.service import (
     LocalEffectOutcome,
     LocalEffectStatus,
 )
+from automation.source_change_hints import (
+    SourceChangeHintApplyOutcome,
+    apply_pending_source_change_hints,
+)
 
 
 AGENT_PRODUCTION_MARKER = ".agent-production-control.v2.json"
@@ -569,12 +573,19 @@ class InstalledAgentProductionEffect:
         live_builder: Callable[..., AgentProductionEffect] = (
             build_live_agent_production_effect
         ),
+        hint_applier: Callable[..., SourceChangeHintApplyOutcome] | None = None,
     ) -> None:
         self._repository_root = Path(repository_root)
+        default_baseline = baseline is None
         self._baseline = baseline or ProductionMonitorEffect(
             repository_root=self._repository_root
         )
         self._live_builder = live_builder
+        self._hint_applier = (
+            apply_pending_source_change_hints
+            if default_baseline and hint_applier is None
+            else hint_applier
+        )
 
     def run(self, *, state_path: Path, execution_root: Path,
             scheduled_for, observed_at) -> LocalEffectOutcome:
@@ -612,7 +623,19 @@ class InstalledAgentProductionEffect:
             scheduled_for=scheduled_for,
             observed_at=observed_at,
         )
-        selection_count = baseline.selection_count + outcome.selection_count
+        hint_count = 0
+        if self._hint_applier is not None:
+            hint = self._hint_applier(
+                internal_root / "monitor" / "production-wakeups.sqlite3",
+                state,
+                configuration.agent.targets,
+                observed_at=observed_at,
+                minimum_delay=configuration.agent.due_policy.minimum_retry_delay,
+            )
+            hint_count = hint.applied_count
+        selection_count = (
+            baseline.selection_count + outcome.selection_count + hint_count
+        )
         return LocalEffectOutcome(
             LocalEffectStatus.COMPLETED
             if selection_count else LocalEffectStatus.NO_DUE_WORK,

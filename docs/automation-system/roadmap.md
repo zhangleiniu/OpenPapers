@@ -248,6 +248,21 @@ idempotency key, idle replay, primary-checkout isolation, and the hard
 retention bound. The separate monthly date ceiling defers a due lookup to the
 next UTC month without calling the provider.
 
+The repository composition now also contains a scheduling-only bridge for the
+trusted baseline monitor. Changed available events are deduplicated to
+venue/year/time in a bounded table inside the existing production wakeup
+journal; URLs, details, hashes, counts, and snapshot paths are not copied. At
+the end of an enabled wake, one configured existing future agent schedule may
+move forward to the minimum cooldown. Missing schedules remain pending until
+date initialization, unconfigured or terminal targets are ignored, and an
+agent run at or after the observation supersedes the hint. Application occurs
+after ordinary agent work, so only a later wake can claim; that claim still
+passes monthly budget, global concurrency, venue cooldown, and systemic circuit
+checks. Cross-database replay is idempotent and closed journal rows are bounded.
+Fake monitor/composition/state tests cover these properties. The currently
+installed runtime predates this bridge and still sends monitor change email
+without altering agent schedules.
+
 The installed filesystem layout keeps the validated no-remote source at
 `<external>/agent-source` and managed worktrees at the sibling
 `<external>/agent-runs`. Isolation checks allow that safe shape while

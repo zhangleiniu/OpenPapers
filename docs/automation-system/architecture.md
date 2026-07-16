@@ -37,6 +37,13 @@ The scheduler waking hourly does not mean conferences are checked hourly.
 Before a persisted `next_check_at`, a venue/year causes no discovery request,
 web fetch, or agent invocation.
 
+The trusted baseline monitor may persist a changed-and-available venue/year as
+a scheduling hint. The hint contains no source URL, content, snapshot path, or
+readiness assertion. After all ordinary work in that wake, it may only move an
+existing configured future `next_check_at` forward to the cooldown boundary;
+therefore no agent is claimed from the hint until a later wake re-applies every
+normal budget, concurrency, cooldown, and systemic-failure gate.
+
 The Mac is the sole production writer. The paused Cloud Run/Prefect monitor is
 only a rollback path and must never be resumed while the local production
 LaunchDaemon is active.
@@ -107,6 +114,11 @@ forward or require intervention; they must not create a tight retry loop.
 - **Discovery schedules; it does not authorize.** An approximate date may
   cause a future agent run only after the local due and budget gates. It is
   not treated as proof that papers or PDFs are available.
+- **Monitor changes schedule; they do not authorize.** Only changed available
+  events from the validated deterministic registry may advance an existing
+  configured future check. They cannot create a cohort, reactivate terminal
+  work, claim an agent in the same wake, or override a run completed after the
+  observation.
 - **The coding agent owns readiness and scraper decisions.** There is no
   deterministic HTML/PDF verification layer between discovery and the agent.
 - **The agent runs in an isolated worktree/branch.** It has no write path to
@@ -182,6 +194,8 @@ Currently reusable:
   exact disabled rollback, and effects-disabled rehearsal tooling;
 - repository read-only enabled-production status and private two-canary proof
   validation (not yet refreshed into the installed runtime);
+- repository durable monitor-change scheduling hints with later-wake due-gate
+  enforcement (not yet refreshed into the installed runtime);
 - lease-protected SQLite repository and local due selector;
 - marker-gated LaunchDaemon service and bounded local records;
 - paused Cloud Run monitor as a rollback mechanism;

@@ -753,6 +753,11 @@ class ProductionControlTests(LocalServiceFixture):
         self.assertEqual(os.environ.get("OPENREVIEW_USERNAME"), previous_username)
         journal = self.internal / "monitor" / "production-wakeups.sqlite3"
         self.assertEqual(journal.stat().st_mode & 0o777, 0o600)
+        with sqlite3.connect(journal) as connection:
+            hints = connection.execute(
+                "SELECT venue_id, year, status FROM production_source_hint"
+            ).fetchall()
+        self.assertEqual(hints, [("icml", 2026, "pending")])
 
     def test_monitor_waits_for_daily_chicago_slot_while_scheduler_runs(self):
         monitor_calls = []

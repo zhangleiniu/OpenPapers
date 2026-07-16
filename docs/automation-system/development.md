@@ -50,6 +50,7 @@ python -m unittest automation.tests.test_agent_run_notifications -v
 python -m unittest automation.tests.test_agent_production -v
 python -m unittest automation.tests.test_control_state_migration -v
 python -m unittest automation.tests.test_agent_status -v
+python -m unittest automation.tests.test_source_change_hints -v
 ```
 
 The Codex standing prompt receives the due policy's accepted retry window. For
@@ -57,6 +58,13 @@ The Codex standing prompt receives the due policy's accepted retry window. For
 checks during active/partial publication and an announced revision/proceedings
 date used when appropriate. It may still return null; the controller then uses
 its configured fallback. Tests must not infer a retry from explanation text.
+
+Monitor-change hint tests use sanitized event mappings and temporary journal /
+schema-10 databases. A changed available event is de-identified to venue/year,
+advances at most one existing future schedule after the wake's ordinary work,
+and creates no attempt. Replay, missing schedules, unconfigured targets, and a
+newer agent run are deterministic; the next wake still owns every due-policy
+gate.
 
 The fake-tested production composition is selected by the installed service.
 It returns before constructing adapters whenever

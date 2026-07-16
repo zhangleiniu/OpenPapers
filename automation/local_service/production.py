@@ -19,6 +19,10 @@ from typing import Any, Callable, Mapping, Protocol, Sequence
 from zoneinfo import ZoneInfo
 
 from automation.local_scheduler import run_scheduler_wakeup
+from automation.source_change_hints import (
+    prepare_source_change_hint_journal,
+    record_source_change_hints,
+)
 from automation.local_service.service import (
     LOCAL_SERVICE_LABEL,
     LocalEffectOutcome,
@@ -490,6 +494,7 @@ class ProductionMonitorEffect:
                 "CHECK (status IN ('active', 'completed')), started_at TEXT NOT NULL, "
                 "completed_at TEXT)"
             )
+            prepare_source_change_hint_journal(journal)
             active = journal.execute(
                 "SELECT run_date FROM production_wakeup WHERE status = 'active'"
             ).fetchone()
@@ -528,6 +533,9 @@ class ProductionMonitorEffect:
                     )
             if any(event.get("status") == "error" for event in events):
                 raise ProductionControlError("production monitor reported source errors")
+            record_source_change_hints(
+                journal_path, events, observed_at=observed_at
+            )
 
         scheduler = self._scheduler(
             state,

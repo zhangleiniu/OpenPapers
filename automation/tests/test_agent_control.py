@@ -24,6 +24,7 @@ from automation.agent_credentials import prepare_agent_credential_context
 from automation.local_service.production import initialize_production_root
 from automation.local_service.service import LocalEffectOutcome, LocalEffectStatus
 from automation.resend_notifications import recipient_fingerprint
+from automation.source_change_hints import SourceChangeHintApplyOutcome
 
 
 NOW = datetime(2026, 7, 16, 1, 0, tzinfo=timezone.utc)
@@ -201,25 +202,33 @@ class AgentControlTests(unittest.TestCase):
         baseline = Baseline()
         agent = Agent()
         builds = []
+        hint_calls = []
 
         def build(**kwargs):
             builds.append(kwargs)
             return agent
 
+        def apply_hint(*args, **kwargs):
+            self.assertEqual(len(agent.calls), 1)
+            hint_calls.append((args, kwargs))
+            return SourceChangeHintApplyOutcome(1, 0, 0)
+
         effect = InstalledAgentProductionEffect(
             repository_root=self.repository,
             baseline=baseline,
             live_builder=build,
+            hint_applier=apply_hint,
         )
         result = effect.run(**self._run_kwargs())
         self.assertEqual(result.status, LocalEffectStatus.COMPLETED)
-        self.assertEqual(result.selection_count, 1)
+        self.assertEqual(result.selection_count, 2)
         self.assertEqual(len(baseline.calls), 1)
         self.assertEqual(len(builds), 1)
         self.assertEqual(
             Path(builds[0]["repository_root"]), self.agent_source.resolve()
         )
         self.assertEqual(len(agent.calls), 1)
+        self.assertEqual(len(hint_calls), 1)
         self.assertNotIn("placeholder-key", repr(builds[0]["secrets"]))
         self.assertIs(builds[0]["credentials"].__class__, credentials.__class__)
 

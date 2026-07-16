@@ -52,6 +52,14 @@ The monitor is retained as cheap operational coverage. It is not the target
 readiness authority and its registry does not need to recognize every source a
 future coding agent might use.
 
+The repository now implements a narrow monitor-change scheduling hint: a
+changed available registered source can advance an existing configured future
+agent check to its cooldown boundary, after all ordinary work in that wake.
+It copies only venue/year/time, cannot create or reactivate work, and a later
+wake still enforces every due-policy gate before Codex. The installed runtime
+predates this bridge, so its current deterministic monitor changes remain
+email-only until a separately authorized deployment.
+
 ## Local scheduling boundary
 
 `automation/local_scheduler.py` obtains the single-writer lease and selects
