@@ -27,7 +27,7 @@ delivery to both approved recipients. These observations do not authorize
 another canary or activation.
 
 The installed runtime now contains the source-layout repair and explicit
-activation/readiness/rollback boundary through commit `a17f9c5`. Its
+activation/readiness/rollback boundary through commit `eb0e762`. Its
 stopped-service disabled rehearsal and
 post-bootstrap read-only audit completed successfully. The audit proved schema
 10 healthy and idle, both credentials, two approved recipients, sufficient
@@ -36,6 +36,10 @@ active executions. A separately authorized activation repeated fresh evidence,
 retained an exact disabled backup, and passed its first bounded wake with one
 event-date attempt and no Codex or Resend attempt. The gate is enabled; future
 refresh through the disabled-only path first requires an explicit rollback.
+A later authorized enabled-runtime replacement retained exact state and code
+rollback packages, kept cloud paused/drained and effects enabled, registered
+all 14 annual venues, and passed a one-selection first wake. The same runtime
+supplies the installed read-only status and dashboard modules.
 
 ## Installed automation dependency gate
 

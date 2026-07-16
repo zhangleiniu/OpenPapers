@@ -161,10 +161,11 @@ forward or require intervention; they must not create a tight retry loop.
   private paths, agent explanations, changed filenames, and provider receipts.
   A canary is compared with its private expected Git state rather than assumed
   clean.
-- **The dashboard is a view, not a controller.** Its HTTP listener is numeric
-  loopback-only, rereads SQLite through the immutable safe-summary boundary,
-  and offers no mutation method. HTML is escaped and self-contained; remote
-  access uses SSH local port forwarding rather than a public bind.
+- **The dashboard is a view, not a controller.** Its application HTTP listener
+  is numeric loopback-only, rereads SQLite through the immutable safe-summary
+  boundary, and offers no mutation method. HTML is escaped and self-contained.
+  The installed remote endpoint is a separate authenticated HTTPS proxy bound
+  only to the host's fixed private address; it adds no control route.
 - **Canary authority is adapter-specific.** Gemini, Codex, and Resend live
   canaries are distinct commands and permissions. No canary permission enables
   the automatic production composition or another adapter.
@@ -207,12 +208,12 @@ Currently reusable:
   commands, and disabled-only marker-last refresh binding;
 - read-only external-effects readiness, explicit marker-last activation,
   exact disabled rollback, and effects-disabled rehearsal tooling;
-- repository read-only enabled-production status and private two-canary proof
-  validation (not yet refreshed into the installed runtime);
-- repository loopback-only, read-only all-catalog venue dashboard (not yet
-  refreshed into the installed runtime);
-- repository durable monitor-change scheduling hints with later-wake due-gate
-  enforcement (not yet refreshed into the installed runtime);
+- installed read-only enabled-production status and private two-canary proof
+  validation;
+- installed loopback-only, read-only all-catalog venue dashboard behind a
+  private-address HTTPS and Basic Auth proxy;
+- installed durable monitor-change scheduling hints with later-wake due-gate
+  enforcement;
 - lease-protected SQLite repository and local due selector;
 - marker-gated LaunchDaemon service and bounded local records;
 - paused Cloud Run monitor as a rollback mechanism;

@@ -268,11 +268,10 @@ agent run at or after the observation supersedes the hint. Application occurs
 after ordinary agent work, so only a later wake can claim; that claim still
 passes monthly budget, global concurrency, venue cooldown, and systemic circuit
 checks. Cross-database replay is idempotent and closed journal rows are bounded.
-Fake monitor/composition/state tests cover these properties. The currently
-installed runtime predates this bridge and still sends monitor change email
-without altering agent schedules.
+Fake monitor/composition/state tests cover these properties. The enabled
+production runtime now contains this bridge.
 
-Annual cohort expansion is likewise repository-implemented but not installed.
+Annual cohort expansion is installed in enabled production.
 Fake-date tests cover exact equality with the catalog's 14 annual venues,
 continuous-JMLR exclusion, the September/October/January boundary,
 registration of the full expanded cohort, and the one-date-attempt-per-wake
@@ -304,6 +303,9 @@ bytes unchanged, and kept cloud scheduling paused. The v2 gate was
 `external_effects_enabled=false` at installation. After credential canaries,
 an initial failed activation/rollback, the `a17f9c5` source-layout repair, and
 a disabled refresh, a newly authorized activation enabled the installed gate.
+An authorized marker-last enabled upgrade later installed commit `eb0e762`,
+registered all 14 annual venues in one transaction, and passed its bounded
+one-selection first wake while retaining exact rollback packages.
 
 ## Post-install operations (Implemented; credentials provisioned)
 
@@ -331,9 +333,8 @@ latest attempts/reports/artifacts, and canary drift. SQLite opens with
 `mode=ro&immutable=1`; output excludes explanations, changed filenames,
 private paths, addresses, receipts, and credentials. Fake Git/SQLite tests
 cover an intentionally dirty expected canary, later drift, stale/inconsistent
-proof rejection, bounded output, and unchanged state bytes. The repository
-capability is implemented, but the current installed runtime predates it and
-requires a separately authorized enabled-runtime upgrade before host use.
+proof rejection, bounded output, and unchanged state bytes. The capability is
+installed in enabled production.
 
 `automation/agent_dashboard.py` adds a separate loopback-only view over the
 safe SQLite target summary. It joins all 15 validated catalog venues to any
@@ -343,7 +344,9 @@ report state. It does not consume private cloud/canary proofs because it makes
 no overall production-health claim. Every request reopens SQLite immutable and
 read-only; fake state/HTTP tests prove all-catalog rendering, escaped content,
 security headers, method rejection, non-loopback refusal, and unchanged state
-bytes. This repository capability is not installed.
+bytes. The backend is installed as a loopback LaunchDaemon. A separate
+unprivileged Caddy LaunchDaemon provides local-CA HTTPS and Basic Auth on the
+host's fixed NIU private address; unauthenticated requests return 401.
 
 `replace_disabled_agent_production_root` stages canonical private files,
 fsyncs them, and replaces the marker last. It rejects enabled current or

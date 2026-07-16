@@ -56,9 +56,9 @@ The repository now implements a narrow monitor-change scheduling hint: a
 changed available registered source can advance an existing configured future
 agent check to its cooldown boundary, after all ordinary work in that wake.
 It copies only venue/year/time, cannot create or reactivate work, and a later
-wake still enforces every due-policy gate before Codex. The installed runtime
-predates this bridge, so its current deterministic monitor changes remain
-email-only until a separately authorized deployment.
+wake still enforces every due-policy gate before Codex. This bridge is
+installed; it applies only to sources already present in the deterministic
+monitor registry and does not invent sources for newly enrolled venues.
 
 ## Local scheduling boundary
 
@@ -75,38 +75,33 @@ hourly wakes still perform external work only when persisted due state and the
 separate date/agent budgets, cooldowns, concurrency slot, and failure circuit
 permit it. See the [`roadmap`](./automation-system/roadmap.md).
 
-The repository now replaces that static target list with an explicit allowlist
+The installed target policy uses an explicit allowlist
 of all 14 annual catalog venues plus an annual cohort policy: October adds the
 following year for bounded date initialization and January advances the active
 window. Continuous JMLR remains outside this conference-success state machine.
 The policy does not delete or reactivate older durable rows or make a date into
-readiness proof. This repository change is not yet installed in the enabled
-production runtime and requires a separately authorized upgrade.
+readiness proof. The authorized enabled-runtime upgrade to commit `eb0e762`
+registered all 14 current-year targets and its first wake selected exactly one
+date lookup while preserving enabled effects.
 
 ## Current scope, visibility, and development handoff
 
-The enabled installation does not monitor every venue in the repository
-catalog. Its deterministic source monitor and coding-agent cohort currently
-cover exactly AISTATS 2026, ICML 2026, and IJCAI 2026. The source monitor may
-email `openpapers.source.changed` for those targets; that message is an
-observation, not proof of archival readiness. The coding agent independently
-decides readiness and sends a run report whose disposition is `not_ready`,
-`needs_human`, `failed`, or `success`.
-
-The repository target policy now explicitly enrolls every annual catalog venue
-and can add the following year each October, but that policy and the newer
-monitor-hint, retry-prompt, and status changes are not installed yet. JMLR is
-continuous rather than annual and needs a separate recurring-success design.
-The deterministic monitor still has only the three explicitly configured
-venue/year source definitions; agent enrollment does not invent monitor
-sources. Upgrading the enabled runtime remains a separate reviewed operation.
+The enabled coding-agent cohort covers all 14 annual catalog venues. The
+deterministic source monitor remains the narrower independent registry with
+the three explicitly configured 2026 sources: AISTATS, ICML, and IJCAI.
+Enrolling an agent target does not invent a trusted deterministic source.
+JMLR is displayed but remains outside annual scheduling because continuous
+publication needs recurring-success semantics. A source-monitor email is an
+observation, not proof of archival readiness; Codex independently decides
+readiness and reports `not_ready`, `needs_human`, `failed`, or `success`.
 
 The LaunchDaemon and SQLite schedule continue without an IDE or Codex
 conversation. It is therefore safe to close a development conversation while
-waiting for normal production work. The practical installed status surface is
-currently the bounded source-change and agent-run email stream. A report counts
-as the next development gate only when it says `Disposition: success`; a source
-change or `not_ready` report does not satisfy that gate.
+waiting for normal production work. The installed status surfaces are the
+bounded source-change/agent-run email stream, the secret-free status command,
+and the read-only dashboard described below. A report counts as the next
+development gate only when it says `Disposition: success`; a source change or
+`not_ready` report does not satisfy that gate.
 
 To resume development after a genuine success, start either the existing
 conversation or a new one with the success report and this instruction:
@@ -119,21 +114,25 @@ conversation or a new one with the success report and this instruction:
 > that acceptance passes. Do not deploy, push, run a manual canary, resume
 > cloud, or change IAM without separate authorization.
 
-Until the status module is deployed, a complete safe summary requires the
-maintainer-generated fresh cloud and two-canary proofs described in
+An overall safe status summary still requires fresh cloud and two-canary
+proofs described in
 [`automation-system/development.md`](./automation-system/development.md). Do
 not inspect the protected SQLite database by weakening its filesystem
 permissions or copy private paths, credentials, recipient addresses, or agent
 explanations into a public log.
 
-The repository also implements a loopback-only read-only venue dashboard. It
+The installed dashboard backend is loopback-only and read-only. It
 shows all 15 catalog venues, whether each has a deterministic monitor source,
 persisted agent target years, the last schedule update, next attempt, latest
 disposition, and report state. It does not expose paths, explanations,
-addresses, receipts, credentials, or production control methods. Remote access
-is designed for SSH local port forwarding. The current enabled installation
-does not contain this module; using it requires the same separately authorized
-enabled-runtime upgrade as the newer status and cohort changes.
+addresses, receipts, credentials, or production control methods. A separate
+LaunchDaemon runs a root-owned Caddy copy as `_openpapers`, binds only the
+fixed NIU private address, terminates local-CA HTTPS, requires Basic Auth, and
+proxies to `127.0.0.1:8765`. On the NIU network or VPN, open
+`https://archer.cs.niu.edu:8443/`. The username is `openpapers`; the password
+is operator-held and not stored in documentation. The public CA certificate is
+exported at `/Users/Shared/OpenPapers-dashboard-local-ca.crt` for explicit
+client trust.
 
 The installed external volume intentionally holds a validated `agent-source`
 and the managed `agent-runs` root as siblings. One authorized activation
@@ -171,22 +170,19 @@ rollback backup, enabled effects marker-last, and passed its bounded first
 wake. Installation and rehearsal by themselves still do not authorize
 activation.
 
-The repository now also contains `automation.agent_status`, a bounded read-only
+The installed `automation.agent_status` module provides a bounded read-only
 summary for enabled production and a strict private two-canary proof format.
 It does not expose paths, addresses, explanations, changed filenames, receipts,
-or credentials and cannot claim work or change the effects gate. The currently
-installed runtime is still pinned to the earlier activation repair and does not
-contain this newer status module; deployment requires a separately authorized
-enabled-runtime upgrade with an exact rollback path. The disabled-only refresh
-command must not be used while production effects are enabled.
+or credentials and cannot claim work or change the effects gate. The
+disabled-only refresh command must not be used while production effects are
+enabled; future enabled upgrades require the same stopped-service, marker-last,
+exact-state rollback boundary used for `eb0e762`.
 
-The repository Codex prompt has also been refined after observing a production
+The installed Codex prompt was refined after observing a production
 `not_ready` result with a useful publication explanation but no structured
 retry. It now supplies the accepted retry window and requests a concrete UTC
 time when evidence supports one, while retaining null/fallback compatibility
-and Codex's readiness authority. The currently installed runtime predates this
-prompt change as well; no production behavior changed with the repository
-commit alone.
+and Codex's readiness authority.
 
 Schema version 10 adds event-date and agent schedule/attempt tables plus the
 new execution-artifact and agent-run-report records.

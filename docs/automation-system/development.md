@@ -182,10 +182,9 @@ exactly two entries named `codex_installed` and `icml_2026`; each entry contains
 `path`, `head`, `branch`, `status_sha256`, and `remote_count`. Baseline creation
 is an explicit operator act because it blesses the current Git state. Neither
 command writes SQLite, calls a provider, sends email, or changes service/cloud
-state. The current production runtime predates this module; invoking it there
-requires a separately authorized enabled-runtime upgrade with an exact
-rollback path. The disabled-only refresh command rejects enabled production
-and must not be used for that upgrade.
+state. The module is installed in enabled production. Generating its required
+fresh private proofs remains an operator action. The disabled-only refresh
+command rejects enabled production and must not be used for future upgrades.
 
 The venue dashboard is a narrower scheduling view and does not need cloud or
 canary proofs. Run it as the account that can read the schema-10 database from
@@ -197,17 +196,17 @@ the installed runtime directory:
 ```
 
 It refuses any bind other than `127.0.0.1`, rereads state immutably on each
-page request, and has no mutation endpoint. From a remote workstation, forward
-the loopback port and open `http://127.0.0.1:8765/` locally:
-
-```bash
-ssh -N -L 8765:127.0.0.1:8765 <server>
-```
+page request, and has no mutation endpoint. Production manages that backend as
+a LaunchDaemon. A separate `_openpapers` Caddy LaunchDaemon exposes only the
+fixed NIU private interface with local-CA HTTPS and Basic Auth. From the NIU
+network or VPN, open `https://archer.cs.niu.edu:8443/`.
 
 The page shows all catalog venues even when not enrolled, and distinguishes
 deterministic monitor registration from coding-agent schedule state. The
-current installed runtime predates the module; do not weaken SQLite
-permissions or use a non-loopback listener as a workaround.
+username is `openpapers`. Copy
+`/Users/Shared/OpenPapers-dashboard-local-ca.crt` from the server and explicitly
+trust it on the client; never move the Caddy private key or password verifier.
+Do not weaken SQLite permissions or expose the application listener directly.
 
 ## Checks
 
