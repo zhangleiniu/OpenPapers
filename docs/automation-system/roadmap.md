@@ -18,7 +18,7 @@ graph.
 | Run notification | One replay-safe email per agent run | Implemented |
 | Production composition | Explicit cohort/config plus one bounded agent wakeup effect | Implemented |
 | Installation | Private config v2, production backup/migration, and LaunchDaemon switch | Implemented |
-| Post-install operations | Private credentials, isolated live-canary commands, and disabled refresh | Implemented |
+| Post-install operations | Private credentials, isolated live-canary commands, disabled refresh, and read-only status | Implemented |
 | Activation and rollback | Read-only readiness, marker-last transition, exact recovery, disabled rehearsal, and enabled production gate | Implemented |
 | State simplification | Migrate away from vestigial verification/case/job/notification schema | Planned after target run state is fixed |
 
@@ -278,6 +278,20 @@ different exact live flag and constructs only its selected adapter. Gemini
 returns a bounded date summary, Codex retains a dedicated no-remote canary
 checkout, and Resend returns only delivery status. None changes
 `external_effects_enabled` or production scheduler state.
+
+`automation/agent_status.py` adds two read-only commands. `canary-proof`
+compares the original ICML and installed Codex canaries against a private
+baseline containing their expected branch, HEAD, status digest, remote count,
+and unprinted paths. `report` consumes that fresh address-free proof plus the
+strict paused/drained cloud proof, then summarizes enabled configuration,
+schema/idle state, the last three service wakes, current venue schedules,
+latest attempts/reports/artifacts, and canary drift. SQLite opens with
+`mode=ro&immutable=1`; output excludes explanations, changed filenames,
+private paths, addresses, receipts, and credentials. Fake Git/SQLite tests
+cover an intentionally dirty expected canary, later drift, stale/inconsistent
+proof rejection, bounded output, and unchanged state bytes. The repository
+capability is implemented, but the current installed runtime predates it and
+requires a separately authorized refresh before host use.
 
 `replace_disabled_agent_production_root` stages canonical private files,
 fsyncs them, and replaces the marker last. It rejects enabled current or

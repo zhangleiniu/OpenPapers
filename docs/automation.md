@@ -103,6 +103,14 @@ rollback backup, enabled effects marker-last, and passed its bounded first
 wake. Installation and rehearsal by themselves still do not authorize
 activation.
 
+The repository now also contains `automation.agent_status`, a bounded read-only
+summary for enabled production and a strict private two-canary proof format.
+It does not expose paths, addresses, explanations, changed filenames, receipts,
+or credentials and cannot claim work or change the effects gate. The currently
+installed runtime is still pinned to the earlier activation repair and does not
+contain this newer status module; deployment requires a separately authorized
+disabled refresh.
+
 Schema version 10 adds event-date and agent schedule/attempt tables plus the
 new execution-artifact and agent-run-report records.
 `automation/control_state.py` still also contains tables and interfaces for the

@@ -146,6 +146,14 @@ The following exists and runs today:
   restored its exact disabled backup, the source-layout repair was refreshed
   disabled and a newly authorized activation completed. The first successful
   bounded wake recorded one event-date attempt and no Codex or Resend attempt.
+- `automation/agent_status.py`: a repository-implemented, read-only safe-summary
+  CLI for enabled production. It combines schema/idle lifecycle state, the last
+  three bounded service wakes, credential/recipient/source/disk readiness, a
+  fresh paused/drained cloud proof, and a fresh two-canary drift proof without
+  printing paths, addresses, explanations, changed filenames, receipts, or
+  credentials. Canary comparison uses a private expected branch/HEAD/status
+  digest, so an intentionally dirty retained canary is not a false alarm. This
+  module has not yet been refreshed into the installed runtime.
 - `automation/control_state_migration.py`: a safe-summary read-only audit,
   new-file SQLite backup, and isolated-copy schema rehearsal command. Fixture
   rehearsal passed; the dedicated-role production database was migrated from
@@ -168,6 +176,8 @@ claim; repository files only describe the expected topology.
 ## Not yet active or built
 
 - Automatic future-year cohort creation.
+- Using deterministic monitor changes as an earlier scheduling hint; monitor
+  changes currently remain email-only and never alter agent due state.
 - Migration of `control_state.py` from its vestigial old schema to the small
   date/dispatch/run model.
 

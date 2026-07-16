@@ -124,6 +124,12 @@ forward or require intervention; they must not create a tight retry loop.
   change a run disposition or cause the agent's worktree to be promoted.
 - **Documents do not prove deployment.** Only executable wiring and an
   authorized live check establish that a component is active.
+- **Status evidence is non-authoritative and secret-free.** Read-only status
+  may summarize lifecycle, service, cloud, and canary evidence, but it cannot
+  claim work or change a gate. It excludes credentials, recipient addresses,
+  private paths, agent explanations, changed filenames, and provider receipts.
+  A canary is compared with its private expected Git state rather than assumed
+  clean.
 - **Canary authority is adapter-specific.** Gemini, Codex, and Resend live
   canaries are distinct commands and permissions. No canary permission enables
   the automatic production composition or another adapter.
@@ -166,6 +172,8 @@ Currently reusable:
   commands, and disabled-only marker-last refresh binding;
 - read-only external-effects readiness, explicit marker-last activation,
   exact disabled rollback, and effects-disabled rehearsal tooling;
+- repository read-only enabled-production status and private two-canary proof
+  validation (not yet refreshed into the installed runtime);
 - lease-protected SQLite repository and local due selector;
 - marker-gated LaunchDaemon service and bounded local records;
 - paused Cloud Run monitor as a rollback mechanism;

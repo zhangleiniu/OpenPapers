@@ -49,6 +49,7 @@ python -m unittest automation.tests.test_agent_worktree_retention -v
 python -m unittest automation.tests.test_agent_run_notifications -v
 python -m unittest automation.tests.test_agent_production -v
 python -m unittest automation.tests.test_control_state_migration -v
+python -m unittest automation.tests.test_agent_status -v
 ```
 
 The fake-tested production composition is selected by the installed service.
@@ -133,6 +134,32 @@ python -m automation.control_state_migration rehearse \
 Run those commands as the dedicated service role for production evidence.
 They do not authorize installation or production migration. See
 [`installation-readiness.md`](./installation-readiness.md).
+
+Enabled production status is also read-only. Exact canary paths and expected
+Git identities stay in a private schema-1 baseline; the tracked command emits
+only booleans for branch, HEAD, status-digest, and remote-count matches. An
+ignored privileged host wrapper may inspect both differently owned canaries,
+then must install the generated proof as a mode-0600 file owned by the service
+role. The proof is valid for 15 minutes, like the separately generated cloud
+proof:
+
+```bash
+python -m automation.agent_status canary-proof \
+  --baseline <private-canary-baseline>
+python -m automation.agent_status report \
+  --internal-root <private-root> --repository-root <runtime> \
+  --execution-root <execution-root> --state <control-state> \
+  --cloud-proof <fresh-private-cloud-proof> \
+  --canary-proof <fresh-private-canary-proof>
+```
+
+The private baseline has exact fields `schema_version` and `canaries`. It has
+exactly two entries named `codex_installed` and `icml_2026`; each entry contains
+`path`, `head`, `branch`, `status_sha256`, and `remote_count`. Baseline creation
+is an explicit operator act because it blesses the current Git state. Neither
+command writes SQLite, calls a provider, sends email, or changes service/cloud
+state. The current production runtime predates this module; invoking it there
+requires a separately authorized disabled refresh.
 
 ## Checks
 

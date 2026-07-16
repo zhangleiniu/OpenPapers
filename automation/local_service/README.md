@@ -90,6 +90,14 @@ service is stopped. Repository implementation and disabled rehearsal do not
 authorize activation; the current enabled state came from a separate explicit
 production activation and retains its exact disabled rollback backup.
 
+`automation.agent_status` is the separate enabled-state diagnostic boundary.
+It reads schema-10 state and bounded service records without preparing a writer,
+requires fresh cloud and two-canary proofs, and emits only secret/path-free
+lifecycle evidence. Its canary proof compares against an explicit private Git
+baseline, so a reviewed dirty canary remains healthy until its status digest,
+branch, HEAD, or remote count changes. This repository capability is not proof
+that the installed runtime has been refreshed to include it.
+
 ## Focused verification
 
 ```bash

@@ -12,6 +12,7 @@ from typing import Mapping
 
 
 MAX_RECORD_FILE_BYTES = 262_144
+MAX_STORED_RUN_RECORDS = 256
 RUN_RECORD_KEYS = frozenset(
     {
         "status",
@@ -142,6 +143,37 @@ def _validate_run_record(record: object) -> dict[str, object]:
     ):
         raise ServiceRecordError("stored service run record is invalid")
     return dict(record)
+
+
+def read_service_run_records(
+    path: Path, *, limit: int = 3
+) -> tuple[dict[str, object], ...]:
+    """Read a bounded tail of service records without preparing a writer."""
+    if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 20:
+        raise ServiceRecordError("service record read limit is invalid")
+    target = Path(path)
+    _safe_target(target)
+    try:
+        with target.open("rb") as file_obj:
+            raw = file_obj.read(MAX_RECORD_FILE_BYTES + 1)
+    except OSError as exc:
+        raise ServiceRecordError("stored service records are unavailable") from exc
+    if len(raw) > MAX_RECORD_FILE_BYTES:
+        raise ServiceRecordError("stored service records exceed the byte bound")
+    try:
+        document = json.loads(raw)
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ServiceRecordError("stored service records are invalid") from exc
+    if (
+        not isinstance(document, dict)
+        or set(document) != {"schema_version", "records"}
+        or document.get("schema_version") != 1
+        or not isinstance(document.get("records"), list)
+        or len(document["records"]) > MAX_STORED_RUN_RECORDS
+    ):
+        raise ServiceRecordError("stored service records are invalid")
+    records = tuple(_validate_run_record(item) for item in document["records"])
+    return records[-limit:]
 
 
 class BoundedServiceRecords:
