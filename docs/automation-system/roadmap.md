@@ -64,9 +64,12 @@ ICML 2026's main-conference start as July 7, matching the official July 7–9
 [schedule](https://icml.cc/Conferences/2026/Dates). Initial canary attempts
 exposed and removed an unsupported Google
 Search/response-schema combination and made the nonessential explanation
-field optional. The explicit cohort, independent monthly lookup ceiling,
-installed caller, and schema migration now exist; automatic future-year cohort
-generation remains planned.
+field optional. The explicit venue cohort, independent monthly lookup ceiling,
+installed caller, and schema migration now exist. The repository target policy
+also adds the following year each October and advances the active window each
+January without expanding the venue allowlist or reopening durable old rows.
+That annual policy is fake-clock tested but has not yet been refreshed into the
+enabled installed runtime.
 
 Deliverables:
 
@@ -229,14 +232,18 @@ were added later under separate operational authorities.
 
 `automation/agent_production.py` composes the target path behind injected
 provider, Codex, and notification boundaries. The tracked
-`automation/config/agent_targets.v1.json` cohort starts with AISTATS, ICML, and
-IJCAI 2026 and is deliberately independent of the deterministic monitor
-registry. Private configuration pins the cohort fingerprint, Gemini identity,
-absolute Codex binary, separate monthly date-lookup and agent-run budgets,
-worktree age/count/per-wakeup removal bounds, and a bounded approved-recipient
-fingerprint allowlist; credentials and email addresses remain in a separate
-non-repr runtime object. Legacy single-recipient schema 2 remains readable,
-while interactive replacement upgrades both policy and secrets to schema 3.
+`automation/config/agent_targets.v1.json` keeps an explicit AISTATS, ICML, and
+IJCAI venue allowlist and is deliberately independent of the deterministic
+monitor registry. Starting from 2026, October includes the following year for
+one-time date initialization and January moves the active window forward.
+Existing persisted rows remain authoritative and are not deleted or
+reactivated by the calendar. Private configuration pins the cohort fingerprint,
+Gemini identity, absolute Codex binary, separate monthly date-lookup and
+agent-run budgets, worktree age/count/per-wakeup removal bounds, and a bounded
+approved-recipient fingerprint allowlist; credentials and email addresses
+remain in a separate non-repr runtime object. Legacy single-recipient schema 2
+remains readable, while interactive replacement upgrades both policy and
+secrets to schema 3.
 
 Each wake performs at most one missing-date lookup. A lookup attempt ends agent
 processing for that wake even when it produces an immediately due date, so the
@@ -262,6 +269,11 @@ checks. Cross-database replay is idempotent and closed journal rows are bounded.
 Fake monitor/composition/state tests cover these properties. The currently
 installed runtime predates this bridge and still sends monitor change email
 without altering agent schedules.
+
+Annual cohort expansion is likewise repository-implemented but not installed.
+Fake-date tests cover the September/October/January boundary, fixed venue
+scope, registration of the full expanded cohort, and the one-date-attempt
+per-wake bound.
 
 The installed filesystem layout keeps the validated no-remote source at
 `<external>/agent-source` and managed worktrees at the sibling

@@ -75,6 +75,13 @@ hourly wakes still perform external work only when persisted due state and the
 separate date/agent budgets, cooldowns, concurrency slot, and failure circuit
 permit it. See the [`roadmap`](./automation-system/roadmap.md).
 
+The repository now replaces that static target list with the same three-venue
+allowlist plus an annual cohort policy: October adds the following year for
+bounded date initialization and January advances the active window. It does
+not delete or reactivate older durable rows, broaden venue scope, or make a
+date into readiness proof. This repository change is not yet installed in the
+enabled production runtime and requires a separately authorized upgrade.
+
 The installed external volume intentionally holds a validated `agent-source`
 and the managed `agent-runs` root as siblings. One authorized activation
 revealed that the production composition incorrectly rejected this safe layout

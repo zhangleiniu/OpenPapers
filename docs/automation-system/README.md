@@ -126,11 +126,14 @@ The following exists and runs today:
   report atomically; Resend supplies the selected provider idempotency key,
   and transient/permanent delivery state never changes the run outcome.
 - `automation/agent_production.py` and
-  `automation/config/agent_targets.v1.json`: an installed, production-enabled
-  production composition and explicit AISTATS/ICML/IJCAI 2026 cohort. A date
-  lookup, agent run, report attempt, and retention cleanup are separately
+  `automation/config/agent_targets.v1.json`: an installed production
+  composition whose repository policy now keeps the explicit
+  AISTATS/ICML/IJCAI venue scope and rolls its year cohort forward annually. A
+  date lookup, agent run, report attempt, and retention cleanup are separately
   bounded; adapters are constructed only after the enabled configuration and
-  all credential/source gates validate.
+  all credential/source gates validate. The annual cohort policy has not yet
+  been refreshed into the enabled installed runtime, which remains pinned to
+  the explicit 2026 target file.
 - `automation/agent_credentials.py` and `automation/agent_canary.py`: private
   dedicated-role credential layout plus three mutually exclusive operator
   canaries. Codex receives an explicit private `CODEX_HOME`, Gemini loads an
@@ -190,7 +193,6 @@ claim; repository files only describe the expected topology.
 
 ## Not yet active or built
 
-- Automatic future-year cohort creation.
 - Migration of `control_state.py` from its vestigial old schema to the small
   date/dispatch/run model.
 

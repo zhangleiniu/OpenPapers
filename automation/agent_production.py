@@ -8,9 +8,10 @@ import os
 import re
 import shutil
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any, Callable, Mapping, Protocol
+from zoneinfo import ZoneInfo
 
 from automation.agent_run_notifications import deliver_agent_run_email
 from automation.agent_credentials import AgentCredentialContext
@@ -45,6 +46,7 @@ DEFAULT_AGENT_TARGETS = (
     Path(__file__).with_name("config") / "agent_targets.v1.json"
 )
 _ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+_COHORT_TIMEZONE = ZoneInfo("America/Chicago")
 
 
 class AgentProductionConfigurationError(ValueError):
@@ -109,31 +111,75 @@ class NotificationTransportFactory(Protocol):
     def __call__(self) -> NotificationTransport: ...
 
 
-def load_agent_targets(path: Path = DEFAULT_AGENT_TARGETS) -> tuple[EventDateTarget, ...]:
-    """Load one canonical, catalog-bounded target cohort."""
+def load_agent_targets(
+    path: Path = DEFAULT_AGENT_TARGETS,
+    *,
+    today: date | None = None,
+) -> tuple[EventDateTarget, ...]:
+    """Load explicit targets or expand one bounded annual cohort policy."""
     try:
         raw = Path(path).read_bytes()
         payload = json.loads(raw)
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise AgentProductionConfigurationError("agent targets are unavailable") from exc
-    if not isinstance(payload, dict) or set(payload) != {"schema_version", "targets"} \
-            or payload.get("schema_version") != 1 or not isinstance(
-                payload.get("targets"), list
-            ) or not payload["targets"]:
-        raise AgentProductionConfigurationError("agent targets are invalid")
     if raw != json.dumps(payload, indent=2, ensure_ascii=False).encode() + b"\n":
         raise AgentProductionConfigurationError("agent targets are not canonical")
     catalog = load_venue_catalog()
     known = {item["venue_id"] for item in catalog["venues"]}
     targets: list[EventDateTarget] = []
-    for item in payload["targets"]:
-        if not isinstance(item, dict) or set(item) != {"venue_id", "year"}:
-            raise AgentProductionConfigurationError("agent target fields are invalid")
-        venue_id, year = item["venue_id"], item["year"]
-        if venue_id not in known or not isinstance(year, int) or isinstance(year, bool) \
-                or not 2020 <= year <= 2200:
-            raise AgentProductionConfigurationError("agent target identity is invalid")
-        targets.append(EventDateTarget(venue_id, year))
+    if isinstance(payload, dict) and set(payload) == {"schema_version", "targets"} \
+            and payload.get("schema_version") == 1 \
+            and isinstance(payload.get("targets"), list) and payload["targets"]:
+        for item in payload["targets"]:
+            if not isinstance(item, dict) or set(item) != {"venue_id", "year"}:
+                raise AgentProductionConfigurationError("agent target fields are invalid")
+            venue_id, year = item["venue_id"], item["year"]
+            if venue_id not in known or not isinstance(year, int) \
+                    or isinstance(year, bool) or not 2020 <= year <= 2200:
+                raise AgentProductionConfigurationError(
+                    "agent target identity is invalid"
+                )
+            targets.append(EventDateTarget(venue_id, year))
+    elif isinstance(payload, dict) and set(payload) == {"schema_version", "cohort"} \
+            and payload.get("schema_version") == 2 \
+            and isinstance(payload.get("cohort"), dict):
+        cohort = payload["cohort"]
+        if set(cohort) != {
+            "venue_ids", "initial_year", "rollover_month",
+            "years_ahead_after_rollover",
+        }:
+            raise AgentProductionConfigurationError("agent cohort fields are invalid")
+        venue_ids = cohort["venue_ids"]
+        initial_year = cohort["initial_year"]
+        rollover_month = cohort["rollover_month"]
+        years_ahead = cohort["years_ahead_after_rollover"]
+        resolved_today = today or datetime.now(_COHORT_TIMEZONE).date()
+        if not isinstance(resolved_today, date) or isinstance(resolved_today, datetime) \
+                or not isinstance(venue_ids, list) or not 1 <= len(venue_ids) <= 100 \
+                or any(not isinstance(venue, str) or venue not in known
+                       for venue in venue_ids) \
+                or venue_ids != sorted(set(venue_ids)) \
+                or not isinstance(initial_year, int) or isinstance(initial_year, bool) \
+                or not 2020 <= initial_year <= 2200 \
+                or not isinstance(rollover_month, int) \
+                or isinstance(rollover_month, bool) \
+                or not 1 <= rollover_month <= 12 \
+                or not isinstance(years_ahead, int) or isinstance(years_ahead, bool) \
+                or not 1 <= years_ahead <= 3:
+            raise AgentProductionConfigurationError("agent cohort policy is invalid")
+        active_year = max(initial_year, resolved_today.year)
+        final_year = active_year + (
+            years_ahead if resolved_today.month >= rollover_month else 0
+        )
+        if final_year > 2200:
+            raise AgentProductionConfigurationError("agent cohort year is invalid")
+        targets.extend(
+            EventDateTarget(venue_id, year)
+            for venue_id in venue_ids
+            for year in range(active_year, final_year + 1)
+        )
+    else:
+        raise AgentProductionConfigurationError("agent targets are invalid")
     resolved = tuple(targets)
     if len(set(resolved)) != len(resolved) or resolved != tuple(sorted(resolved)):
         raise AgentProductionConfigurationError(
@@ -146,6 +192,7 @@ def load_agent_production_configuration(
     payload: Mapping[str, Any],
     *,
     targets_path: Path = DEFAULT_AGENT_TARGETS,
+    target_date: date | None = None,
 ) -> AgentProductionConfiguration:
     """Validate private, credential-free production policy configuration."""
     common = {
@@ -182,7 +229,7 @@ def load_agent_production_configuration(
     targets_hash = hashlib.sha256(targets_bytes).hexdigest()
     if payload["targets_sha256"] != targets_hash:
         raise AgentProductionConfigurationError("agent target fingerprint changed")
-    targets = load_agent_targets(targets_path)
+    targets = load_agent_targets(targets_path, today=target_date)
     if hashlib.sha256(targets_path.read_bytes()).hexdigest() != targets_hash:
         raise AgentProductionConfigurationError("agent targets changed while loading")
     project = payload["gemini_project_id"]

@@ -1,17 +1,13 @@
 {
-  "schema_version": 1,
-  "targets": [
-    {
-      "venue_id": "aistats",
-      "year": 2026
-    },
-    {
-      "venue_id": "icml",
-      "year": 2026
-    },
-    {
-      "venue_id": "ijcai",
-      "year": 2026
-    }
-  ]
+  "schema_version": 2,
+  "cohort": {
+    "venue_ids": [
+      "aistats",
+      "icml",
+      "ijcai"
+    ],
+    "initial_year": 2026,
+    "rollover_month": 10,
+    "years_ahead_after_rollover": 1
+  }
 }

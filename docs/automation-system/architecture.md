@@ -102,6 +102,14 @@ An uninitialized venue/year gets one approximate-date lookup. A valid future
 estimate sleeps without periodic refresh. When it becomes due, the coding
 agent—not the discovery provider—checks actual publication readiness.
 
+The tracked cohort policy preserves an explicit venue allowlist. In the
+America/Chicago calendar, October adds the following year to initialization;
+January advances the active window to that year. Expansion registers all
+targets idempotently but still attempts at most one missing date per wake.
+Durable rows for earlier years are neither deleted nor reopened: their
+persisted terminal or retry state continues to govern them. Calendar dates and
+the rollover remain scheduling hints, never readiness evidence.
+
 A new discovery call is justified only when the estimate is absent or invalid,
 the venue/year was explicitly rescheduled, or an agent result reports that the
 date changed. Budget limits and provider failures must move `next_check_at`
