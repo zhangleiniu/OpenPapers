@@ -69,9 +69,10 @@ authorization. See the [`roadmap`](./automation-system/roadmap.md).
 
 Dedicated-role credential-path injection, three adapter-specific canary
 commands, and disabled-only marker-last refresh are implemented in the
-repository. They are not live deployment evidence: no credential has been
-provisioned through that path, no new canary has run, and the installed global
-gate remains false until separately authorized activation.
+repository. The dedicated role now has private Codex device authentication and
+Google ADC backed by service-account impersonation; no service-account key was
+created. Resend is not configured, no new live canary has completed, and the
+installed global gate remains false until separately authorized activation.
 
 Schema version 10 adds event-date and agent schedule/attempt tables plus the
 new execution-artifact and agent-run-report records.
@@ -93,7 +94,10 @@ explicit authorization, Application Default Credentials, and makes a real
 provider call. The original adapter still produces strict citation-backed
 evidence. The new `GeminiEventDateProvider` has a separate loose date-only
 prompt plus fake and isolated-live coverage; its installed caller is disabled
-and the dedicated role does not yet have ADC.
+and the dedicated role now has explicit private ADC. The first separately
+authorized installed canary attempt stopped before a provider request because
+the fixed service venv lacked the tracked `google-genai` dependency; the
+installed-dependency gate must pass before another live authorization.
 
 This automation discovery use is separate from Gemini track classification in
 some core scrapers, documented in

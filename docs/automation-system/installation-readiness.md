@@ -14,8 +14,38 @@ effect. The deterministic baseline monitor remains active. Treat the checklist
 below as the completed installation record and as prerequisites for any future
 replacement; activation and live canaries remain separate operations.
 The repository now has disabled-only marker-last refresh and dedicated-role
-credential/canary tooling. Their existence does not mean credentials are
-configured or that a live canary has been authorized or run.
+credential/canary tooling. Current host status evidence confirms private Codex
+authentication and impersonated Google ADC; Resend remains unconfigured and no
+new live canary has completed. These observations do not authorize a canary or
+activation.
+
+## Installed automation dependency gate
+
+The fixed LaunchDaemon uses its own Python environment, not the repository
+`.venv`. Before requesting root, stopping the service, refreshing the runtime,
+or running any live canary, verify the installed interpreter can import every
+declared automation runtime dependency:
+
+```bash
+PYTHON=$(/usr/libexec/PlistBuddy -c \
+  'Print :ProgramArguments:0' \
+  /Library/LaunchDaemons/org.openpapers.local-control.plist)
+"$PYTHON" - <<'PY'
+import importlib
+
+for name in ("dotenv", "google.auth", "google.genai", "jsonschema"):
+    importlib.import_module(name)
+print("installed_automation_dependencies=verified")
+PY
+```
+
+The host-local disabled install and refresh wrappers run this gate before
+privilege escalation and again in the privileged preflight. A failure is an
+installation defect, not permission to substitute the repository `.venv`,
+inherit maintainer credentials, or retry a live canary. Install only the
+tracked `automation/requirements.txt` into the fixed interpreter, keep
+external effects disabled, and repeat this import-only gate before requesting
+fresh live authority.
 
 ## Read-only audit gate
 

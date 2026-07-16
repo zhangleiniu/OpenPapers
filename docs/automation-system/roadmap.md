@@ -252,7 +252,7 @@ bytes unchanged, and kept cloud scheduling paused. The installed v2 gate is
 `external_effects_enabled=false`; Gemini, Codex agent execution, and Resend
 remain inactive until separately authorized canaries and activation.
 
-## Post-install operations (Implemented, not exercised live)
+## Post-install operations (Implemented; credentials provisioned)
 
 `automation/agent_credentials.py` prepares and validates a fixed private
 credential layout beneath the dedicated role's internal root. It can hand an
@@ -275,9 +275,13 @@ permission; an interrupted set fails validation closed. Fake filesystem tests
 cover successful replacement, activation rejection, Resend-only secret
 provisioning, and partial replacement.
 
-Acceptance met in repository tests. Actual credential login, every live
-canary, and activation remain separate operator actions. The first authorized
-host refresh is operational evidence, not permission for those actions.
+Acceptance met in repository tests. Dedicated-role Codex device authentication
+and impersonated Google ADC have now passed the private-file status gate;
+Resend configuration, every successful live canary, and activation remain
+separate operator actions. The first authorized Gemini canary attempt failed
+at the installed SDK import before any provider request, which exposed the
+need for an explicit installed-automation-dependency gate. The first authorized
+host refresh is operational evidence, not permission for further actions.
 
 ## State simplification (Planned)
 
