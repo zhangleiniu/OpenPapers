@@ -181,7 +181,9 @@ exactly two entries named `codex_installed` and `icml_2026`; each entry contains
 is an explicit operator act because it blesses the current Git state. Neither
 command writes SQLite, calls a provider, sends email, or changes service/cloud
 state. The current production runtime predates this module; invoking it there
-requires a separately authorized disabled refresh.
+requires a separately authorized enabled-runtime upgrade with an exact
+rollback path. The disabled-only refresh command rejects enabled production
+and must not be used for that upgrade.
 
 ## Checks
 

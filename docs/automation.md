@@ -82,6 +82,47 @@ not delete or reactivate older durable rows, broaden venue scope, or make a
 date into readiness proof. This repository change is not yet installed in the
 enabled production runtime and requires a separately authorized upgrade.
 
+## Current scope, visibility, and development handoff
+
+The enabled installation does not monitor every venue in the repository
+catalog. Its deterministic source monitor and coding-agent cohort currently
+cover exactly AISTATS 2026, ICML 2026, and IJCAI 2026. The source monitor may
+email `openpapers.source.changed` for those targets; that message is an
+observation, not proof of archival readiness. The coding agent independently
+decides readiness and sends a run report whose disposition is `not_ready`,
+`needs_human`, `failed`, or `success`.
+
+The repository target policy preserves those three venue ids and can add the
+following year each October, but that policy and the newer monitor-hint,
+retry-prompt, and status changes are not installed yet. Other catalog venues
+are not silently enrolled. Expanding venue scope or upgrading the enabled
+runtime is a separate reviewed operation.
+
+The LaunchDaemon and SQLite schedule continue without an IDE or Codex
+conversation. It is therefore safe to close a development conversation while
+waiting for normal production work. The practical installed status surface is
+currently the bounded source-change and agent-run email stream. A report counts
+as the next development gate only when it says `Disposition: success`; a source
+change or `not_ready` report does not satisfy that gate.
+
+To resume development after a genuine success, start either the existing
+conversation or a new one with the success report and this instruction:
+
+> Continue OpenPapers agent-driven automation. Read `AGENTS.md`, the required
+> automation-system documents, current ExecPlans, and commits since the last
+> handoff. Production has produced a genuine agent `success`; perform the
+> large-volume production acceptance without changing production state, then
+> implement, test, document, and commit legacy state simplification only if
+> that acceptance passes. Do not deploy, push, run a manual canary, resume
+> cloud, or change IAM without separate authorization.
+
+Until the status module is deployed, a complete safe summary requires the
+maintainer-generated fresh cloud and two-canary proofs described in
+[`automation-system/development.md`](./automation-system/development.md). Do
+not inspect the protected SQLite database by weakening its filesystem
+permissions or copy private paths, credentials, recipient addresses, or agent
+explanations into a public log.
+
 The installed external volume intentionally holds a validated `agent-source`
 and the managed `agent-runs` root as siblings. One authorized activation
 revealed that the production composition incorrectly rejected this safe layout
@@ -124,7 +165,8 @@ It does not expose paths, addresses, explanations, changed filenames, receipts,
 or credentials and cannot claim work or change the effects gate. The currently
 installed runtime is still pinned to the earlier activation repair and does not
 contain this newer status module; deployment requires a separately authorized
-disabled refresh.
+enabled-runtime upgrade with an exact rollback path. The disabled-only refresh
+command must not be used while production effects are enabled.
 
 The repository Codex prompt has also been refined after observing a production
 `not_ready` result with a useful publication explanation but no structured
