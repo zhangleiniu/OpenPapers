@@ -6,7 +6,7 @@ import json
 import os
 import subprocess
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Mapping, Protocol
 
@@ -97,7 +97,12 @@ def _git(root: Path, *args: str) -> str:
     return completed.stdout.strip()
 
 
-def _prompt(claim: AgentRunClaim) -> str:
+def _prompt(claim: AgentRunClaim, policy: DuePolicy) -> str:
+    started = datetime.fromisoformat(claim.started_at.replace("Z", "+00:00"))
+    earliest = (started + policy.minimum_retry_delay).astimezone(timezone.utc)
+    latest = (started + policy.max_suggested_retry_delay).astimezone(timezone.utc)
+    earliest_text = earliest.isoformat().replace("+00:00", "Z")
+    latest_text = latest.isoformat().replace("+00:00", "Z")
     return f"""Handle {claim.venue_id} {claim.year} for OpenPapers.
 Decide whether the canonical papers and PDFs are now downloadable. Investigate
 the web and repository, reuse or repair the scraper, run the scrape and required
@@ -105,7 +110,16 @@ validation when ready, and leave all useful edits in this worktree. Never
 commit, push, merge, deploy, edit Git metadata, or modify another checkout.
 Return only the required structured result. Use success only after scrape and
 validation complete; not_ready for unpublished data; needs_human for policy or
-access ambiguity; failed for operational or code failure."""
+access ambiguity; failed for operational or code failure.
+
+For not_ready, investigate the most relevant next publication signal and set
+suggested_retry_at to a concrete UTC timestamp between {earliest_text} and
+{latest_text} when there is a credible timing basis. Check actively during a
+conference or partial/rapid official release; otherwise use an announced
+camera-ready, revision, or proceedings date when available. Do not minimize
+normal agent use merely to save calls: a venue may release thousands of papers.
+Use null only when no defensible time in that window exists. Explain the timing
+basis briefly, but do not treat a date or source change as readiness proof."""
 
 
 def parse_codex_result(raw: str) -> AgentRunResult:
@@ -135,6 +149,9 @@ def parse_codex_result(raw: str) -> AgentRunResult:
             suggested = datetime.fromisoformat(suggested.replace("Z", "+00:00"))
         except (AttributeError, ValueError) as exc:
             raise ValueError("Codex retry time is invalid") from exc
+        if suggested.tzinfo is None or suggested.utcoffset() is None:
+            raise ValueError("Codex retry time is invalid")
+        suggested = suggested.astimezone(timezone.utc)
     if disposition != "not_ready" and suggested is not None:
         raise ValueError("Codex retry suggestion is inconsistent")
     if disposition != "failed":
@@ -193,7 +210,7 @@ def run_claimed_codex_agent(
             "--ephemeral", "--ignore-user-config", "--ignore-rules",
             "--sandbox", "workspace-write", "--cd", str(worktree),
             "--config", 'mcp_servers={}', "--config", 'web_search="cached"',
-            "--output-schema", str(RESULT_SCHEMA), _prompt(claim),
+            "--output-schema", str(RESULT_SCHEMA), _prompt(claim, policy),
         ),
         worktree,
         config.timeout_seconds,

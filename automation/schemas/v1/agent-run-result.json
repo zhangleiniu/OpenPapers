@@ -6,7 +6,11 @@
   "properties": {
     "disposition": {"enum": ["success", "not_ready", "needs_human", "failed"]},
     "explanation": {"type": "string", "minLength": 1, "maxLength": 4000},
-    "suggested_retry_at": {"type": ["string", "null"], "format": "date-time"},
+    "suggested_retry_at": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "description": "For not_ready, an evidence-based UTC retry time inside the prompt's accepted policy window; otherwise null."
+    },
     "failure_category": {"type": ["string", "null"], "minLength": 1, "maxLength": 200}
   }
 }

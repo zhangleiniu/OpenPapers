@@ -2,12 +2,16 @@ import json
 import subprocess
 import tempfile
 import unittest
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from automation.codex_agent import CodexProcessResult, run_claimed_codex_agent
+from automation.codex_agent import (
+    CodexProcessResult,
+    parse_codex_result,
+    run_claimed_codex_agent,
+)
 from automation.control_state import ControlStateRepository
-from automation.due_policy import claim_due_agent_run
+from automation.due_policy import DuePolicy, claim_due_agent_run
 from automation.domain import Writer
 from automation.event_dates import EventDateEstimate, EventDateTarget, initialize_event_dates
 
@@ -99,6 +103,41 @@ class CodexAgentTests(unittest.TestCase):
         self.assertEqual(artifact.retention_status, "retained")
         self.assertEqual(report.status, "pending")
         self.assertEqual(report.schedule_status, "completed")
+
+    def test_prompt_requests_bounded_evidence_based_not_ready_retry(self):
+        invoker = FakeInvoker()
+        policy = DuePolicy(
+            minimum_retry_delay=timedelta(hours=1),
+            max_suggested_retry_delay=timedelta(days=30),
+        )
+        run_claimed_codex_agent(
+            self.state, self.repo, self.root / "runs", self.claim,
+            clock=lambda: NOW, invoker=invoker, policy=policy,
+        )
+
+        prompt = invoker.invocation.argv[-1]
+        self.assertIn("suggested_retry_at", prompt)
+        self.assertIn("2026-07-15T15:00:00Z", prompt)
+        self.assertIn("2026-08-14T14:00:00Z", prompt)
+        self.assertIn("thousands of papers", prompt)
+        self.assertIn("do not treat a date or source change as readiness proof", prompt)
+
+    def test_retry_timestamp_requires_timezone_and_normalizes_to_utc(self):
+        with self.assertRaisesRegex(ValueError, "retry time"):
+            parse_codex_result(json.dumps({
+                "disposition": "not_ready", "explanation": "Not ready.",
+                "suggested_retry_at": "2026-07-16T09:00:00",
+                "failure_category": None,
+            }))
+        result = parse_codex_result(json.dumps({
+            "disposition": "not_ready", "explanation": "Not ready.",
+            "suggested_retry_at": "2026-07-16T09:00:00-05:00",
+            "failure_category": None,
+        }))
+        self.assertEqual(
+            result.suggested_retry_at,
+            datetime(2026, 7, 16, 14, 0, tzinfo=timezone.utc),
+        )
 
     def test_timeout_and_malformed_output_fail_closed_and_preserve_worktree(self):
         for invoker, category, disposition, venue, suffix in (

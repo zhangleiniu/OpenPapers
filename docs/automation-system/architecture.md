@@ -72,6 +72,14 @@ The agent's natural-language explanation and worktree diff are primary review
 artifacts. Do not recreate the abandoned case/action/job hierarchy merely to
 encode its reasoning.
 
+For `not_ready`, the standing prompt should expose the policy's accepted retry
+window and ask the agent for a concrete UTC time when web/repository evidence
+supports one. An active conference or partial/rapid official release warrants
+a timely check; a stable prepublication state may use an announced revision or
+proceedings date. Null remains valid when there is no defensible time, and the
+controller uses its bounded fallback. The controller never parses prose to
+invent a date.
+
 ## Scheduling state
 
 The target durable state for each venue/year is deliberately small:

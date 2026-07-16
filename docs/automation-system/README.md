@@ -111,6 +111,12 @@ The following exists and runs today:
   isolation and exposed CLI flag placement, portable-schema, and overly strict
   optional-field handling; none modified either checkout. The final call was
   cleanly accepted as `not_ready`. Its installed caller is due- and budget-gated.
+  The repository standing prompt now also supplies the exact accepted retry
+  window and asks `not_ready` runs for a concrete evidence-based UTC retry,
+  with active/partial releases checked promptly and no artificial conservation
+  of normal agent usage. It still permits null when no defensible time exists,
+  and neither dates nor source changes become readiness proof. This prompt
+  refinement has not yet been refreshed into the installed runtime.
 - `automation/agent_worktree_retention.py`: an explicit, production-enabled retention
   effect that removes only terminal schema-10 worktrees beneath the exact
   configured runs root, using age and count bounds. Unregistered worktrees,

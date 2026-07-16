@@ -152,6 +152,18 @@ accepted as `not_ready`: Codex reported that OpenReview content was provisional
 and the archival PMLR proceedings were not yet available. It made no edits;
 both checkout HEADs and statuses remained unchanged.
 
+Later production observation showed why structured retry guidance matters: an
+ICML run explained the likely post-conference publication sequence but returned
+no suggestion, so the controller correctly used its configured fallback. The
+repository prompt now gives Codex the exact minimum/maximum accepted window,
+asks it to investigate a concrete next publication signal, encourages timely
+checks during active or partial release, and explicitly says not to suppress
+normal use merely to save calls. The portable result schema documents that
+contract, and parsing rejects timezone-free suggestions before durable
+completion. Null and the existing fallback remain compatible when no credible
+time exists. This refinement is fake-tested but is not in the currently
+installed runtime until a separately authorized refresh.
+
 Deliverables:
 
 - create an isolated branch/worktree per run without modifying the primary

@@ -111,6 +111,14 @@ installed runtime is still pinned to the earlier activation repair and does not
 contain this newer status module; deployment requires a separately authorized
 disabled refresh.
 
+The repository Codex prompt has also been refined after observing a production
+`not_ready` result with a useful publication explanation but no structured
+retry. It now supplies the accepted retry window and requests a concrete UTC
+time when evidence supports one, while retaining null/fallback compatibility
+and Codex's readiness authority. The currently installed runtime predates this
+prompt change as well; no production behavior changed with the repository
+commit alone.
+
 Schema version 10 adds event-date and agent schedule/attempt tables plus the
 new execution-artifact and agent-run-report records.
 `automation/control_state.py` still also contains tables and interfaces for the

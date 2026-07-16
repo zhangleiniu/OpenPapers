@@ -52,6 +52,12 @@ python -m unittest automation.tests.test_control_state_migration -v
 python -m unittest automation.tests.test_agent_status -v
 ```
 
+The Codex standing prompt receives the due policy's accepted retry window. For
+`not_ready`, it asks for an evidence-based UTC `suggested_retry_at`, with timely
+checks during active/partial publication and an announced revision/proceedings
+date used when appropriate. It may still return null; the controller then uses
+its configured fallback. Tests must not infer a retry from explanation text.
+
 The fake-tested production composition is selected by the installed service.
 It returns before constructing adapters whenever
 `external_effects_enabled=false`; the current production installation is
