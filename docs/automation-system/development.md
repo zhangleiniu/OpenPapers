@@ -36,7 +36,8 @@ python -m automation.run_discovery --venue icml
 python -m automation.run_discovery --live --venue icml --year 2026
 ```
 
-The target date-only path is installed behind the disabled production gate.
+The target date-only path is installed behind the enabled production gate;
+development and test commands still inject fakes and make no automatic call.
 `automation.event_dates.initialize_event_dates` tests inject an
 `EventDateProvider`; there is deliberately no standalone automatic live command:
 
@@ -50,8 +51,10 @@ python -m unittest automation.tests.test_agent_production -v
 python -m unittest automation.tests.test_control_state_migration -v
 ```
 
-The fake-tested production composition is selected by the installed service
-but returns before constructing adapters while `external_effects_enabled=false`.
+The fake-tested production composition is selected by the installed service.
+It returns before constructing adapters whenever
+`external_effects_enabled=false`; the current production installation is
+enabled, so ordinary development must continue using injected fake adapters.
 Its private configuration contract pins the tracked target file hash,
 Gemini project/location/model, an absolute Codex binary path, monthly/systemic
 agent limits, a separate monthly date-lookup ceiling, worktree retention

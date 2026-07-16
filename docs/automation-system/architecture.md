@@ -150,17 +150,17 @@ Currently reusable:
 - deterministic baseline monitor and immutable snapshots;
 - venue catalog/configuration and discovery request plumbing;
 - Gemini adapter, after simplifying its target use to approximate dates;
-- additive schema-v8 approximate-date schedules and the installed-disabled
+- additive schema-v8 approximate-date schedules and the production-enabled
   `initialize_event_dates()` composition boundary;
-- additive schema-v9 agent schedules/run history and the installed-disabled,
+- additive schema-v9 agent schedules/run history and the production-enabled,
   effect-free `due_policy.py` transition boundary;
 - additive schema-v10 execution artifacts, managed-worktree retention, and
   dedicated run-report delivery state;
-- the installed-disabled Codex-only isolated-worktree runner and retention effect,
+- the production-enabled Codex-only isolated-worktree runner and retention effect,
   with fake tests and one accepted ICML 2026 `not_ready` canary;
-- the installed-disabled run-report composer/coordinator, with Resend selected as its
+- the production-enabled run-report composer/coordinator, with Resend selected as its
   sole provider-idempotent transport; baseline monitor SMTP remains separate;
-- the installed-disabled explicit target cohort and bounded production composition;
+- the production-enabled explicit target cohort and bounded production composition;
 - read-only control-state audit and isolated-copy migration rehearsal tooling;
 - dedicated-role credential-path validation, three separately gated canary
   commands, and disabled-only marker-last refresh binding;

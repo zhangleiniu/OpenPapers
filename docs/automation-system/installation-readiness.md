@@ -9,10 +9,10 @@ binary, ADC, or Resend recipient are ready.
 
 The installation gate completed with schema-10 state and private agent-control
 v2 configuration. The unchanged fixed LaunchDaemon selects the installed
-composition, but `external_effects_enabled=false` prevents every new external
-effect. The deterministic baseline monitor remains active. Treat the checklist
-below as the completed installation record and as prerequisites for any future
-replacement; activation and live canaries remain separate operations.
+composition. Its production external-effects gate is now enabled, while the
+deterministic baseline monitor remains active. Treat the checklist below as the
+completed installation record and as prerequisites for rollback or any future
+replacement; live canaries and activation remain separate authorities.
 The repository now has disabled-only marker-last refresh and dedicated-role
 credential/canary tooling. Current host status evidence confirms private Codex
 authentication and impersonated Google ADC. After the installed dependency
@@ -26,13 +26,16 @@ authorized canary made a single provider request, and the operator confirmed
 delivery to both approved recipients. These observations do not authorize
 another canary or activation.
 
-The installed runtime now contains the explicit activation/readiness/rollback
-boundary from commit `a09aac9`. Its stopped-service disabled rehearsal and
+The installed runtime now contains the source-layout repair and explicit
+activation/readiness/rollback boundary through commit `a17f9c5`. Its
+stopped-service disabled rehearsal and
 post-bootstrap read-only audit completed successfully. The audit proved schema
 10 healthy and idle, both credentials, two approved recipients, sufficient
 disk, the pinned source, the fixed service loaded, and cloud paused with zero
-active executions. The gate remains false; a future activation still requires
-separate authorization and fresh evidence.
+active executions. A separately authorized activation repeated fresh evidence,
+retained an exact disabled backup, and passed its first bounded wake with one
+event-date attempt and no Codex or Resend attempt. The gate is enabled; future
+refresh through the disabled-only path first requires an explicit rollback.
 
 ## Installed automation dependency gate
 

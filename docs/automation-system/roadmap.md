@@ -19,7 +19,7 @@ graph.
 | Production composition | Explicit cohort/config plus one bounded agent wakeup effect | Implemented |
 | Installation | Private config v2, production backup/migration, and LaunchDaemon switch | Implemented |
 | Post-install operations | Private credentials, isolated live-canary commands, and disabled refresh | Implemented |
-| Activation and rollback | Read-only readiness, marker-last transition, exact recovery, and disabled rehearsal; external effects remain disabled | Implemented |
+| Activation and rollback | Read-only readiness, marker-last transition, exact recovery, disabled rehearsal, and enabled production gate | Implemented |
 | State simplification | Migrate away from vestigial verification/case/job/notification schema | Planned after target run state is fixed |
 
 Valid phase statuses are `Planned`, `In progress`, `Implemented`, and
@@ -41,13 +41,13 @@ venue.
 
 `automation/local_scheduler.py` takes the existing single-writer lease and
 selects bounded due conference state from SQLite. The installed service invokes
-that selection on each wakeup. Today it completes the selection without a
-discovery or agent effect.
+that selection on each wakeup. Due selections now feed the enabled bounded
+date/agent/report composition.
 
 This polling shape is retained: an hourly local SQLite query is cheap, while
 network/model calls occur only for records whose `next_check_at` is due.
 
-## Date initialization (Implemented, installed disabled)
+## Date initialization (Implemented, production enabled)
 
 `automation/event_dates.py` now provides a provider-neutral
 `initialize_event_dates()` boundary. Schema version 8 stores one current
@@ -64,8 +64,9 @@ ICML 2026's main-conference start as July 7, matching the official July 7–9
 [schedule](https://icml.cc/Conferences/2026/Dates). Initial canary attempts
 exposed and removed an unsupported Google
 Search/response-schema combination and made the nonessential explanation
-field optional. No target-cohort generator, budget-ledger connection,
-installed caller, or production migration exists.
+field optional. The explicit cohort, independent monthly lookup ceiling,
+installed caller, and schema migration now exist; automatic future-year cohort
+generation remains planned.
 
 Deliverables:
 
@@ -121,10 +122,10 @@ Acceptance met: fake-clock tests cover all four dispositions, pre-date sleep,
 valid and rejected suggestions, default retry, three-step failure pause and
 explicit recovery, active-run exclusion, UTC-month budget deferral, and a
 24-hour distinct-venue failure circuit. Schema-8 migration seeds the new due
-state without losing date history. No installed caller or external effect
-exists.
+state without losing date history. Its installed caller is now enabled but
+cannot itself invoke an external adapter.
 
-## Agent execution (Implemented, installed disabled)
+## Agent execution (Implemented, production enabled)
 
 `automation/codex_agent.py` now creates a dedicated branch/worktree, invokes a
 replaceable Codex boundary, validates the four-field result, inventories
@@ -180,7 +181,7 @@ worktrees. The separately authorized ICML 2026 run supplied the required live
 agent/sandbox evidence. No retention effect or schema migration ran against
 that canary or production state.
 
-## Run notification (Implemented, installed disabled)
+## Run notification (Implemented, production enabled)
 
 `automation/agent_run_notifications.py` composes one bounded report from the
 terminal run, its schema-10 artifact, and a snapshot of retry/stop state.
@@ -209,10 +210,10 @@ content.
 Acceptance met: fake transports cover successful delivery and replay
 suppression, transient failure followed by a second numbered attempt,
 permanent failure suppression, stable idempotency identity, and bounded
-secret-checked content. No live email, recipient configuration, or installed
-caller is part of this phase.
+secret-checked content. Live recipient provisioning and the installed caller
+were added later under separate operational authorities.
 
-## Production composition (Implemented, installed disabled)
+## Production composition (Implemented, production enabled)
 
 `automation/agent_production.py` composes the target path behind injected
 provider, Codex, and notification boundaries. The tracked
@@ -246,9 +247,10 @@ new-file SQLite backup, and isolated-copy schema rehearsal. Schema-9 fixtures
 migrate to schema 10 without changing the source bytes or retained row counts.
 The dedicated-role production database passed read-only audit and isolated
 rehearsal, then migrated from schema 6 to schema 10 during the authorized
-installation. The installed external-effects gate remains disabled.
+installation. The production external-effects gate is now enabled after the
+repaired activation path passed its bounded first wake.
 
-## Installation (Implemented, external effects disabled)
+## Installation (Implemented, external effects enabled)
 
 The dedicated role passed the schema-6 audit and isolated schema-10 rehearsal.
 An authorized installation retained a fresh private backup and previous
@@ -256,9 +258,10 @@ runtime, migrated production state to schema 10, installed private v2
 configuration, a pinned clean no-remote `agent-source`, and a role-executable
 Codex binary, then reloaded the unchanged fixed LaunchDaemon. The accepted
 wake returned `no_due_work`, created zero target rows, left the baseline monitor
-bytes unchanged, and kept cloud scheduling paused. The installed v2 gate is
-`external_effects_enabled=false`; Gemini, Codex agent execution, and Resend
-remain inactive until separately authorized canaries and activation.
+bytes unchanged, and kept cloud scheduling paused. The v2 gate was
+`external_effects_enabled=false` at installation. After credential canaries,
+an initial failed activation/rollback, the `a17f9c5` source-layout repair, and
+a disabled refresh, a newly authorized activation enabled the installed gate.
 
 ## Post-install operations (Implemented; credentials provisioned)
 
@@ -300,7 +303,7 @@ existing provisional OpenReview fallback, made no scraper-logic or readiness
 claim, and retained the isolated canary worktree. None of these results is
 permission for further actions.
 
-## Activation and rollback (Implemented; external effects disabled)
+## Activation and rollback (Implemented; external effects enabled)
 
 `automation/agent_activation.py` adds four deliberately separate operator
 commands. `audit` is read-only. `rehearse-disabled` exercises exact backup,
@@ -341,8 +344,13 @@ is not activation. A later separately authorized activation passed readiness
 and marker-last transition, but the first wake exposed an overly broad path
 check before any date, agent, or report attempt. The host wrapper restored the
 exact disabled backup and reloaded the service; cloud and both canaries
-remained unchanged. The gate remains disabled pending a repaired refresh and
-separate future activation authority.
+remained unchanged. Commit `a17f9c5` repaired the isolation predicate, and a
+disabled refresh/rehearsal again passed every readiness gate. A new separately
+authorized activation then completed: its first bounded wake recorded exactly
+one event-date attempt, zero agent-run attempts, and zero report attempts.
+The fixed service exited successfully and remains loaded, cloud remains paused
+with zero active executions, both canaries are unchanged, and a fresh exact
+disabled rollback backup is retained. The production gate is enabled.
 
 ## State simplification (Planned)
 

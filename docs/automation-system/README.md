@@ -78,8 +78,9 @@ The following exists and runs today:
   `automation/local_service/agent_control.py`: the installed Mac LaunchDaemon
   production composition. The service wakes hourly; once daily at or after 08:00
   America/Chicago it runs the baseline monitor and emails change/error events
-  over TLS SMTP. The agent-control v2 boundary validates installed state and
-  returns before every new external adapter while its gate is disabled.
+  over TLS SMTP. The agent-control v2 boundary validates installed state; its
+  external-effects gate is now enabled, so due work may reach the bounded
+  Gemini, Codex, retention, and Resend composition.
 - `automation/local_scheduler.py` and `automation/control_state.py`: local,
   lease-protected due-work selection and versioned SQLite storage. The schema
   is now version 10 and adds approximate-date and coding-agent schedules,
@@ -89,40 +90,41 @@ The following exists and runs today:
   inherited from the abandoned design. They are not evidence that those old
   workflows are active.
 - `automation/event_dates.py` and
-  `automation/providers/gemini.py::GeminiEventDateProvider`: an installed-disabled,
-  fake-tested one-time date initializer. Given explicit venue/year targets, it
-  calls the provider only when a pending target is due, stores an 08:00
+  `automation/providers/gemini.py::GeminiEventDateProvider`: an installed,
+  production-enabled one-time date initializer. Given explicit venue/year
+  targets, it calls the provider only when a pending target is due, stores an 08:00
   America/Chicago check time, sleeps on replay, and schedules a 30-day retry
   for expected no-date/provider failures. An isolated ICML 2026 live canary on
   2026-07-15 returned the correct main-conference start date after the adapter
   was adjusted for the provider's optional explanation field; it did not
   retain state or change the installed service.
-- `automation/due_policy.py`: an installed-disabled, effect-free agent-run policy.
+- `automation/due_policy.py`: an installed, active, effect-free agent-run policy.
   It claims at most one due schedule, durably applies `success`, `not_ready`,
   `needs_human`, and `failed`, and enforces default/suggested retries, bounded
   failure backoff, a global active slot, a monthly ceiling, and a recent
   distinct-venue systemic-failure circuit. It does not start an agent.
-- `automation/codex_agent.py`: an installed-disabled, fake-tested Codex-only runner.
+- `automation/codex_agent.py`: an installed, production-enabled Codex-only runner.
   It uses real isolated Git worktrees in tests, pins Codex's workspace sandbox
   and structured result schema, durably records bounded review artifacts, and
   verifies the primary checkout did not change. Four authorized ICML 2026
   canary starts verified
   isolation and exposed CLI flag placement, portable-schema, and overly strict
   optional-field handling; none modified either checkout. The final call was
-  cleanly accepted as `not_ready`. Its installed caller is disabled.
-- `automation/agent_worktree_retention.py`: an explicit, installed-disabled retention
+  cleanly accepted as `not_ready`. Its installed caller is due- and budget-gated.
+- `automation/agent_worktree_retention.py`: an explicit, production-enabled retention
   effect that removes only terminal schema-10 worktrees beneath the exact
   configured runs root, using age and count bounds. Unregistered worktrees,
   including the retained ICML 2026 canary, are never candidates.
-- `automation/agent_run_notifications.py`: an installed-disabled run-report composer
+- `automation/agent_run_notifications.py`: a production-enabled run-report composer
   and delivery coordinator. Terminal runner completion creates one pending
   report atomically; Resend supplies the selected provider idempotency key,
   and transient/permanent delivery state never changes the run outcome.
 - `automation/agent_production.py` and
-  `automation/config/agent_targets.v1.json`: an installed-disabled, fake-tested
+  `automation/config/agent_targets.v1.json`: an installed, production-enabled
   production composition and explicit AISTATS/ICML/IJCAI 2026 cohort. A date
   lookup, agent run, report attempt, and retention cleanup are separately
-  bounded; its installed caller returns before adapters are constructed.
+  bounded; adapters are constructed only after the enabled configuration and
+  all credential/source gates validate.
 - `automation/agent_credentials.py` and `automation/agent_canary.py`: private
   dedicated-role credential layout plus three mutually exclusive operator
   canaries. Codex receives an explicit private `CODEX_HOME`, Gemini loads an
@@ -136,13 +138,14 @@ The following exists and runs today:
   provisioning. Either an enabled current configuration or an enabled
   candidate is rejected, and an interrupted replacement fails marker
   validation closed.
-- `automation/agent_activation.py`: an installed-disabled, fake-tested
+- `automation/agent_activation.py`: an installed and exercised
   read-only readiness audit plus separately authorized activation, disabled
   rehearsal, and rollback commands. It requires exact schema/idle,
   credential/allowlist, disk/source, fixed-service, and fresh paused/drained
-  cloud evidence before the gate can be opened. Its installed disabled
-  rehearsal completed and the read-only audit passed; the gate remains false,
-  and implementation or rehearsal permission is not activation permission.
+  cloud evidence before the gate can be opened. After one failed first wake
+  restored its exact disabled backup, the source-layout repair was refreshed
+  disabled and a newly authorized activation completed. The first successful
+  bounded wake recorded one event-date attempt and no Codex or Resend attempt.
 - `automation/control_state_migration.py`: a safe-summary read-only audit,
   new-file SQLite backup, and isolated-copy schema rehearsal command. Fixture
   rehearsal passed; the dedicated-role production database was migrated from
@@ -153,8 +156,8 @@ The following exists and runs today:
   target scheduler needs; that scheduling use is not wired.
 - `automation/resend_notifications.py`: the selected low-level Resend HTTPS
   adapter for agent-run reports. Its rotated private credential and approved
-  two-recipient allowlist are installed, while its automatic caller remains
-  disabled by the global external-effects gate.
+  two-recipient allowlist are installed; its automatic caller is enabled but
+  runs only for a durable pending/retryable agent report.
 - `automation/prefect_flows.py`, `automation/run_monitor_flow.py`, and
   `automation/deployment/`: the paused Cloud Run monitor retained solely as a
   rollback path. It is not the target scheduler.
@@ -165,11 +168,6 @@ claim; repository files only describe the expected topology.
 ## Not yet active or built
 
 - Automatic future-year cohort creation.
-- Production external effects are not active. The explicit transition tooling
-  exists in the repository. One authorized activation reached its first wake,
-  exposed an execution-layout check defect before any provider attempt, and
-  restored its exact disabled backup; a repaired disabled runtime still needs
-  a separately authorized activation.
 - Migration of `control_state.py` from its vestigial old schema to the small
   date/dispatch/run model.
 

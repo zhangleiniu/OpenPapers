@@ -62,10 +62,10 @@ blocks work.
 The production command now validates the retained baseline v1 boundary plus an
 agent-control v2 marker/config, schema-10 state, a pinned clean no-remote
 `agent-source`, and the installed Codex executable. The installed v2 config has
-`external_effects_enabled=false`, so date discovery, Codex agent execution,
-retention, and Resend delivery are wired but inactive. Hourly replay therefore
-preserves the baseline monitor and returns without a new external effect until
-activation and each live canary are separately authorized.
+`external_effects_enabled=true`; date discovery, Codex agent execution,
+retention, and Resend delivery are active only behind their persisted due,
+budget, cooldown, concurrency, and replay gates. The first enabled wake made
+one event-date attempt and no Codex or Resend attempt.
 
 The validated source may be `<external>/agent-source` while managed worktrees
 use its sibling `<external>/agent-runs`. The composition rejects the production
@@ -87,7 +87,8 @@ restores the disabled binding. `activate` changes only the gate bit after its
 own exact authorization; `rollback` restores the retained disabled files even
 from a marker-invalid partial transition. All writes are marker-last while the
 service is stopped. Repository implementation and disabled rehearsal do not
-authorize activation.
+authorize activation; the current enabled state came from a separate explicit
+production activation and retains its exact disabled rollback backup.
 
 ## Focused verification
 
