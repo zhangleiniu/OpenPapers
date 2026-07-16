@@ -287,6 +287,79 @@ def replace_disabled_agent_production_root(
     return paths
 
 
+def replace_enabled_agent_production_root(
+    internal_root: Path,
+    current_repository_root: Path,
+    candidate_repository_root: Path,
+    configuration: Mapping[str, Any],
+    secrets: Mapping[str, Any],
+    *,
+    replace_file: Callable[[Path, Path], None] = os.replace,
+) -> tuple[Path, Path, Path]:
+    """Replace one enabled binding marker-last with exact in-process recovery.
+
+    The host caller must stop the service and retain byte-exact filesystem and
+    SQLite backups for crash recovery. This primitive never changes the
+    external-effects bit and cannot activate a disabled installation.
+    """
+    root = Path(internal_root)
+    current_repository = Path(current_repository_root)
+    candidate_repository = Path(candidate_repository_root)
+    current, current_secrets, before = _validated_agent_file_set(
+        root, root, current_repository
+    )
+    if not current.external_effects_enabled or current_secrets is None:
+        raise ProductionControlError(
+            "enabled agent production upgrade requires enabled current state"
+        )
+    installed = _agent_configuration(
+        configuration,
+        targets_path=(candidate_repository / "automation" / "config"
+                      / "agent_targets.v1.json"),
+    )
+    resolved_secrets = _agent_secrets(secrets)
+    if not installed.external_effects_enabled or resolved_secrets is None:
+        raise ProductionControlError(
+            "enabled agent production upgrade requires enabled candidate state"
+        )
+    config_bytes = _canonical(configuration)
+    secret_bytes = _canonical(secrets)
+    encoded_files = (
+        config_bytes,
+        secret_bytes,
+        _agent_marker(config_bytes, secret_bytes, root),
+    )
+    try:
+        paths = _replace_agent_file_set(
+            root, encoded_files, replace_file=replace_file
+        )
+        validated, validated_secrets = validate_agent_production_root(
+            root, candidate_repository
+        )
+        if not validated.external_effects_enabled or validated_secrets is None:
+            raise ProductionControlError(
+                "enabled agent production upgrade did not remain enabled"
+            )
+    except (OSError, ProductionControlError) as exc:
+        try:
+            _replace_agent_file_set(root, before)
+            restored, restored_secrets = validate_agent_production_root(
+                root, current_repository
+            )
+            if not restored.external_effects_enabled or restored_secrets is None:
+                raise ProductionControlError(
+                    "enabled agent production upgrade recovery is disabled"
+                )
+        except ProductionControlError as rollback_exc:
+            raise ProductionControlError(
+                "enabled agent production upgrade recovery failed"
+            ) from rollback_exc
+        raise ProductionControlError(
+            "enabled agent production upgrade failed"
+        ) from exc
+    return paths
+
+
 def _replace_agent_file_set(
     internal_root: Path,
     encoded_files: tuple[bytes, bytes, bytes],

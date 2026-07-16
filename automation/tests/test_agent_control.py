@@ -15,6 +15,7 @@ from automation.local_service.agent_control import (
     initialize_agent_production_root,
     rehearse_disabled_agent_activation,
     replace_disabled_agent_production_root,
+    replace_enabled_agent_production_root,
     replace_disabled_agent_resend,
     replace_disabled_agent_secrets,
     restore_disabled_agent_production_root,
@@ -300,6 +301,93 @@ class AgentControlTests(unittest.TestCase):
             )
         with self.assertRaisesRegex(ValueError, "marker is invalid"):
             validate_agent_production_root(self.internal, self.repository)
+
+    def test_enabled_replacement_is_marker_last_and_changes_policy(self):
+        secrets = {"schema_version": 2, "resend": {
+            "api_key": "placeholder-key",
+            "email_from": "from@example.test",
+            "email_to": "to@example.test",
+        }}
+        initialize_agent_production_root(
+            self.internal, self.repository, self._configuration(enabled=True), secrets,
+        )
+        replacement = self._configuration(enabled=True)
+        replacement["agent_configuration"] = dict(
+            self.agent_payload, monthly_run_limit=121
+        )
+        calls = []
+
+        def replace(source, target):
+            calls.append(target.name)
+            return os.replace(source, target)
+
+        replace_enabled_agent_production_root(
+            self.internal, self.repository, self.repository,
+            replacement, secrets, replace_file=replace,
+        )
+
+        self.assertEqual(calls[-1], AGENT_PRODUCTION_MARKER)
+        configuration, installed_secrets = validate_agent_production_root(
+            self.internal, self.repository
+        )
+        self.assertTrue(configuration.external_effects_enabled)
+        self.assertEqual(configuration.agent.due_policy.monthly_run_limit, 121)
+        self.assertIsNotNone(installed_secrets)
+
+    def test_enabled_replacement_rejects_disabled_endpoint(self):
+        no_secrets = {"schema_version": 2, "resend": None}
+        initialize_agent_production_root(
+            self.internal, self.repository, self._configuration(), no_secrets,
+        )
+        with self.assertRaisesRegex(ValueError, "enabled current"):
+            replace_enabled_agent_production_root(
+                self.internal, self.repository, self.repository,
+                self._configuration(enabled=True), no_secrets,
+            )
+
+    def test_interrupted_enabled_replacement_restores_exact_files(self):
+        secrets = {"schema_version": 2, "resend": {
+            "api_key": "placeholder-key",
+            "email_from": "from@example.test",
+            "email_to": "to@example.test",
+        }}
+        initialize_agent_production_root(
+            self.internal, self.repository, self._configuration(enabled=True), secrets,
+        )
+        names = (
+            ".agent-production-config.v2.json",
+            ".agent-production-secrets.v2.json",
+            ".agent-production-control.v2.json",
+        )
+        before = {name: (self.internal / name).read_bytes() for name in names}
+        replacement = self._configuration(enabled=True)
+        replacement["agent_configuration"] = dict(
+            self.agent_payload, monthly_run_limit=121
+        )
+        calls = 0
+
+        def interrupt(source, target):
+            nonlocal calls
+            calls += 1
+            if calls == 2:
+                raise OSError("fixture interruption")
+            os.replace(source, target)
+
+        with self.assertRaisesRegex(ValueError, "upgrade failed"):
+            replace_enabled_agent_production_root(
+                self.internal, self.repository, self.repository,
+                replacement, secrets, replace_file=interrupt,
+            )
+
+        configuration, installed_secrets = validate_agent_production_root(
+            self.internal, self.repository
+        )
+        self.assertTrue(configuration.external_effects_enabled)
+        self.assertIsNotNone(installed_secrets)
+        self.assertEqual(
+            before,
+            {name: (self.internal / name).read_bytes() for name in names},
+        )
 
     def test_resend_secrets_can_be_installed_without_activation(self):
         initialize_agent_production_root(
