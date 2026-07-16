@@ -235,6 +235,12 @@ idempotency key, idle replay, primary-checkout isolation, and the hard
 retention bound. The separate monthly date ceiling defers a due lookup to the
 next UTC month without calling the provider.
 
+The installed filesystem layout keeps the validated no-remote source at
+`<external>/agent-source` and managed worktrees at the sibling
+`<external>/agent-runs`. Isolation checks allow that safe shape while
+rejecting an execution root inside the source and any source overlap with the
+managed runs root.
+
 `automation/control_state_migration.py` provides read-only safe-summary audit,
 new-file SQLite backup, and isolated-copy schema rehearsal. Schema-9 fixtures
 migrate to schema 10 without changing the source bytes or retained row counts.
@@ -331,7 +337,12 @@ acceptance also passed: the 203-file `a09aac9` runtime/source refresh completed,
 stopped-service rehearsal ended disabled, the reloaded service returned
 `no_due_work`, the loaded-service audit reported every readiness gate healthy,
 cloud remained paused/drained, and both canary worktrees were preserved. This
-is not activation.
+is not activation. A later separately authorized activation passed readiness
+and marker-last transition, but the first wake exposed an overly broad path
+check before any date, agent, or report attempt. The host wrapper restored the
+exact disabled backup and reloaded the service; cloud and both canaries
+remained unchanged. The gate remains disabled pending a repaired refresh and
+separate future activation authority.
 
 ## State simplification (Planned)
 

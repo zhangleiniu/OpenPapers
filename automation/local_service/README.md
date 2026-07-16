@@ -67,6 +67,11 @@ retention, and Resend delivery are wired but inactive. Hourly replay therefore
 preserves the baseline monitor and returns without a new external effect until
 activation and each live canary are separately authorized.
 
+The validated source may be `<external>/agent-source` while managed worktrees
+use its sibling `<external>/agent-runs`. The composition rejects the production
+execution root when it equals or sits inside the source, and rejects any source
+that equals or sits inside the managed runs root.
+
 Post-install operations use `automation.agent_credentials` for a fixed private
 credential layout and `automation.agent_canary` for three independently gated
 Gemini, Codex, and Resend checks. Disabled runtime/source updates must call the

@@ -166,7 +166,10 @@ claim; repository files only describe the expected topology.
 
 - Automatic future-year cohort creation.
 - Production external effects are not active. The explicit transition tooling
-  exists in the repository, but activation has not been authorized or run.
+  exists in the repository. One authorized activation reached its first wake,
+  exposed an execution-layout check defect before any provider attempt, and
+  restored its exact disabled backup; a repaired disabled runtime still needs
+  a separately authorized activation.
 - Migration of `control_state.py` from its vestigial old schema to the small
   date/dispatch/run model.
 

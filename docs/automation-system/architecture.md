@@ -104,6 +104,10 @@ forward or require intervention; they must not create a tight retry loop.
 - **The agent runs in an isolated worktree/branch.** It has no write path to
   the primary checkout, `main`, or a remote and no code path commits, pushes,
   merges, or deploys. A maintainer reviews and commits manually.
+- **Installed source and managed runs are siblings.** The validated read-only
+  `agent-source` may share an external-volume parent with `agent-runs`, but the
+  execution root may not equal or sit inside the source and the source may not
+  equal or sit inside the managed runs root.
 - **External content is untrusted.** The agent and monitor must respect
   authentication, robots/access controls, rate limits, and source terms.
   Permission to fetch a PDF does not grant redistribution rights.

@@ -225,6 +225,63 @@ class AgentProductionTests(unittest.TestCase):
         self.assertEqual(invoker.calls, [])
         self.assertEqual(transports.transports, [])
 
+    def test_installed_source_and_managed_runs_are_safe_siblings(self):
+        provider = Provider()
+        source = self.execution / "agent-source"
+        source.mkdir()
+        effect = AgentProductionEffect(
+            repository_root=source,
+            configuration=self.configuration,
+            event_date_provider=provider,
+            codex_invoker=Invoker(),
+            transport_factory=TransportFactory([]),
+        )
+
+        outcome = effect.run(
+            state_path=self.state,
+            execution_root=self.execution,
+            scheduled_for=NOW,
+            observed_at=NOW,
+        )
+
+        self.assertEqual(outcome.status, LocalEffectStatus.COMPLETED)
+        self.assertEqual(len(provider.calls), 1)
+        self.assertFalse((source / "agent-change.txt").exists())
+        self.assertFalse((self.execution / "agent-runs").exists())
+
+    def test_execution_layout_rejects_source_and_managed_run_overlaps(self):
+        provider = Provider()
+        layouts = (
+            (self.repo, self.repo),
+            (self.repo, self.repo / "execution"),
+            (self.execution / "agent-runs", self.execution),
+            (self.execution / "agent-runs" / "source", self.execution),
+        )
+        for repository_root, execution_root in layouts:
+            with self.subTest(
+                repository_root=repository_root,
+                execution_root=execution_root,
+            ):
+                execution_root.mkdir(parents=True, exist_ok=True)
+                repository_root.mkdir(parents=True, exist_ok=True)
+                effect = AgentProductionEffect(
+                    repository_root=repository_root,
+                    configuration=self.configuration,
+                    event_date_provider=provider,
+                    codex_invoker=Invoker(),
+                    transport_factory=TransportFactory([]),
+                )
+
+                with self.assertRaisesRegex(ValueError, "must be disjoint"):
+                    effect.run(
+                        state_path=self.state,
+                        execution_root=execution_root,
+                        scheduled_for=NOW,
+                        observed_at=NOW,
+                    )
+
+        self.assertEqual(provider.calls, [])
+
     def test_fake_wake_initializes_then_runs_and_retries_report_once(self):
         provider = Provider()
         invoker = Invoker()

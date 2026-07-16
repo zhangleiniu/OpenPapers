@@ -298,13 +298,16 @@ class AgentProductionEffect:
         del scheduled_for
         state_path = Path(state_path)
         execution_root = Path(execution_root).resolve()
+        runs_root = execution_root / "agent-runs"
         if execution_root == self._repository_root \
                 or execution_root.is_relative_to(self._repository_root) \
-                or self._repository_root.is_relative_to(execution_root):
+                or runs_root == self._repository_root \
+                or runs_root.is_relative_to(self._repository_root) \
+                or self._repository_root.is_relative_to(runs_root):
             raise AgentProductionConfigurationError(
-                "agent execution root must be disjoint from the repository"
+                "agent execution and managed run roots must be disjoint "
+                "from the repository"
             )
-        runs_root = execution_root / "agent-runs"
         if shutil.disk_usage(execution_root).free \
                 < self._configuration.minimum_free_bytes:
             raise AgentProductionConfigurationError(

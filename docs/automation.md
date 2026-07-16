@@ -67,6 +67,14 @@ returned `no_due_work` with zero target rows and unchanged baseline monitor
 state. Each live adapter and final activation still requires separate operator
 authorization. See the [`roadmap`](./automation-system/roadmap.md).
 
+The installed external volume intentionally holds a validated `agent-source`
+and the managed `agent-runs` root as siblings. One authorized activation
+revealed that the production composition incorrectly rejected this safe layout
+before any provider attempt. Exact rollback restored disabled state; the path
+check now isolates the writable runs root from the source without permitting
+execution inside either source or managed worktrees. A disabled refresh does
+not authorize another activation.
+
 Dedicated-role credential-path injection, three adapter-specific canary
 commands, and disabled-only marker-last refresh are implemented in the
 repository. The dedicated role now has private Codex device authentication and
