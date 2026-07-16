@@ -165,6 +165,12 @@ The following exists and runs today:
   credentials. Canary comparison uses a private expected branch/HEAD/status
   digest, so an intentionally dirty retained canary is not a false alarm. This
   module has not yet been refreshed into the installed runtime.
+- `automation/agent_dashboard.py`: a repository-implemented local web view
+  built only from the immutable safe state summary and the validated catalog.
+  It lists all catalog venues, deterministic-monitor registration, enrolled
+  years, last schedule update, next attempt, disposition, and report state.
+  The listener accepts only `127.0.0.1`, exposes no control methods or external
+  resources, and has not been installed.
 - `automation/source_change_hints.py`: a repository-implemented, durable
   scheduling-only bridge from the trusted deterministic monitor. A changed,
   available source records only venue/year/time in the bounded production

@@ -255,11 +255,11 @@ def read_agent_state_summary(path: Path) -> list[dict[str, object]]:
     try:
         with _readonly_connection(path) as connection:
             dates = _rows(connection, "SELECT venue_id, year, status, next_check_at, "
-                "estimated_event_date, attempt_count, last_failure_category "
+                "estimated_event_date, attempt_count, last_failure_category, updated_at "
                 "FROM event_date_schedule ORDER BY venue_id, year")
             agents = _rows(connection, "SELECT venue_id, year, status, next_check_at, "
                 "attempt_count, consecutive_failures, last_disposition, last_run_at, "
-                "suggested_retry_at, last_gate_reason FROM agent_schedule "
+                "suggested_retry_at, last_gate_reason, updated_at FROM agent_schedule "
                 "ORDER BY venue_id, year")
             attempts = _rows(connection, "SELECT venue_id, year, attempt_number, "
                 "started_at, completed_at, disposition, suggested_retry_at, "

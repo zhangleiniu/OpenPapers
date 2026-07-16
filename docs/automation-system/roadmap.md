@@ -18,7 +18,7 @@ graph.
 | Run notification | One replay-safe email per agent run | Implemented |
 | Production composition | Explicit cohort/config plus one bounded agent wakeup effect | Implemented |
 | Installation | Private config v2, production backup/migration, and LaunchDaemon switch | Implemented |
-| Post-install operations | Private credentials, isolated live-canary commands, disabled refresh, and read-only status | Implemented |
+| Post-install operations | Private credentials, isolated live-canary commands, disabled refresh, read-only status, and local dashboard | Implemented |
 | Activation and rollback | Read-only readiness, marker-last transition, exact recovery, disabled rehearsal, and enabled production gate | Implemented |
 | State simplification | Migrate away from vestigial verification/case/job/notification schema | Planned after target run state is fixed |
 
@@ -91,7 +91,7 @@ venue/year, exact replay causes no second call, future estimates sleep, and
 failure schedules a bounded later attempt. No live provider call is part of
 ordinary tests.
 
-## Due-state policy (Implemented, installed disabled)
+## Due-state policy (Implemented, production enabled)
 
 `automation/due_policy.py` and schema version 9 implement this boundary
 without invoking an agent. A successful date estimate creates an
@@ -165,7 +165,7 @@ normal use merely to save calls. The portable result schema documents that
 contract, and parsing rejects timezone-free suggestions before durable
 completion. Null and the existing fallback remain compatible when no credible
 time exists. This refinement is fake-tested but is not in the currently
-installed runtime until a separately authorized refresh.
+installed runtime until a separately authorized enabled-runtime upgrade.
 
 Deliverables:
 
@@ -333,7 +333,17 @@ private paths, addresses, receipts, and credentials. Fake Git/SQLite tests
 cover an intentionally dirty expected canary, later drift, stale/inconsistent
 proof rejection, bounded output, and unchanged state bytes. The repository
 capability is implemented, but the current installed runtime predates it and
-requires a separately authorized refresh before host use.
+requires a separately authorized enabled-runtime upgrade before host use.
+
+`automation/agent_dashboard.py` adds a separate loopback-only view over the
+safe SQLite target summary. It joins all 15 validated catalog venues to any
+persisted venue/year state and displays monitor registration, lifecycle,
+enrollment, last schedule update, next attempt, latest agent disposition, and
+report state. It does not consume private cloud/canary proofs because it makes
+no overall production-health claim. Every request reopens SQLite immutable and
+read-only; fake state/HTTP tests prove all-catalog rendering, escaped content,
+security headers, method rejection, non-loopback refusal, and unchanged state
+bytes. This repository capability is not installed.
 
 `replace_disabled_agent_production_root` stages canonical private files,
 fsyncs them, and replaces the marker last. It rejects enabled current or

@@ -199,6 +199,10 @@ class AgentStatusTests(unittest.TestCase):
         self.assertEqual(len(result["canaries"]["items"]), 2)
         self.assertEqual(result["targets"][0]["latest_attempt"]["disposition"],
                          "not_ready")
+        self.assertEqual(result["targets"][0]["agent"]["updated_at"],
+                         self._time(NOW))
+        self.assertEqual(result["targets"][0]["event_date"]["updated_at"],
+                         self._time(NOW))
         self.assertEqual(result["targets"][0]["latest_report"]["status"],
                          "delivered")
         self.assertEqual(result["targets"][0]["latest_artifact"][

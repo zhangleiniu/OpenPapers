@@ -161,6 +161,10 @@ forward or require intervention; they must not create a tight retry loop.
   private paths, agent explanations, changed filenames, and provider receipts.
   A canary is compared with its private expected Git state rather than assumed
   clean.
+- **The dashboard is a view, not a controller.** Its HTTP listener is numeric
+  loopback-only, rereads SQLite through the immutable safe-summary boundary,
+  and offers no mutation method. HTML is escaped and self-contained; remote
+  access uses SSH local port forwarding rather than a public bind.
 - **Canary authority is adapter-specific.** Gemini, Codex, and Resend live
   canaries are distinct commands and permissions. No canary permission enables
   the automatic production composition or another adapter.
@@ -205,6 +209,8 @@ Currently reusable:
   exact disabled rollback, and effects-disabled rehearsal tooling;
 - repository read-only enabled-production status and private two-canary proof
   validation (not yet refreshed into the installed runtime);
+- repository loopback-only, read-only all-catalog venue dashboard (not yet
+  refreshed into the installed runtime);
 - repository durable monitor-change scheduling hints with later-wake due-gate
   enforcement (not yet refreshed into the installed runtime);
 - lease-protected SQLite repository and local due selector;

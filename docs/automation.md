@@ -126,6 +126,15 @@ not inspect the protected SQLite database by weakening its filesystem
 permissions or copy private paths, credentials, recipient addresses, or agent
 explanations into a public log.
 
+The repository also implements a loopback-only read-only venue dashboard. It
+shows all 15 catalog venues, whether each has a deterministic monitor source,
+persisted agent target years, the last schedule update, next attempt, latest
+disposition, and report state. It does not expose paths, explanations,
+addresses, receipts, credentials, or production control methods. Remote access
+is designed for SSH local port forwarding. The current enabled installation
+does not contain this module; using it requires the same separately authorized
+enabled-runtime upgrade as the newer status and cohort changes.
+
 The installed external volume intentionally holds a validated `agent-source`
 and the managed `agent-runs` root as siblings. One authorized activation
 revealed that the production composition incorrectly rejected this safe layout

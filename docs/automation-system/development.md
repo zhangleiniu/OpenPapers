@@ -187,6 +187,28 @@ requires a separately authorized enabled-runtime upgrade with an exact
 rollback path. The disabled-only refresh command rejects enabled production
 and must not be used for that upgrade.
 
+The venue dashboard is a narrower scheduling view and does not need cloud or
+canary proofs. Run it as the account that can read the schema-10 database from
+the installed runtime directory:
+
+```bash
+<installed-python> -m automation.agent_dashboard \
+  --state <control-state> --bind 127.0.0.1 --port 8765
+```
+
+It refuses any bind other than `127.0.0.1`, rereads state immutably on each
+page request, and has no mutation endpoint. From a remote workstation, forward
+the loopback port and open `http://127.0.0.1:8765/` locally:
+
+```bash
+ssh -N -L 8765:127.0.0.1:8765 <server>
+```
+
+The page shows all catalog venues even when not enrolled, and distinguishes
+deterministic monitor registration from coding-agent schedule state. The
+current installed runtime predates the module; do not weaken SQLite
+permissions or use a non-loopback listener as a workaround.
+
 ## Checks
 
 Minimum checks for an automation-only code change:

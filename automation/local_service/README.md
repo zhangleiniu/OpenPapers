@@ -98,6 +98,11 @@ baseline, so a reviewed dirty canary remains healthy until its status digest,
 branch, HEAD, or remote count changes. This repository capability is not proof
 that the installed runtime has been refreshed to include it.
 
+`automation.agent_dashboard` is a narrower loopback-only scheduling view. It
+uses the immutable safe target summary, lists every catalog venue, and exposes
+no service, cloud, credential, or mutation interface. It is repository-only
+until an enabled-runtime upgrade is separately authorized.
+
 `automation.source_change_hints` is the scheduling-only bridge from a validated
 baseline monitor change to an existing configured agent schedule. The baseline
 stores a de-identified pending hint in its existing wakeup journal; enabled
