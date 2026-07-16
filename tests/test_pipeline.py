@@ -9,6 +9,7 @@ from unittest.mock import Mock, patch
 import main
 from automation.monitor import StateStore, load_registry, save_snapshot
 from scrapers.base import BaseScraper
+from scrapers.icml import ICMLScraper
 from scrapers.ijcai import IJCAIScraper
 from scrapers.openreview import OpenReviewClient
 from postprocessing.backfill_missing_metadata_fields import enrich_papers
@@ -150,6 +151,41 @@ class CompletenessTests(unittest.TestCase):
 
 
 class SourceLifecycleTests(unittest.TestCase):
+    def test_icml_2026_falls_back_to_accepted_openreview_papers(self):
+        scraper = ICMLScraper()
+        accepted = {
+            "id": "accepted-paper",
+            "content": {
+                "title": {"value": "A Useful Paper"},
+                "authors": {"value": ["Ada Lovelace"]},
+                "abstract": {"value": "Abstract"},
+                "venueid": {"value": "ICML.cc/2026/Conference"},
+                "pdf": {"value": "/pdf/accepted-paper.pdf"},
+            },
+        }
+
+        with patch.object(scraper, "_get_volume_for_year", return_value=None), \
+                patch.object(
+                    scraper._openreview, "get_notes", return_value=[accepted]
+                ) as get_notes:
+            urls = scraper.get_paper_urls(2026)
+
+        get_notes.assert_called_once_with(
+            "ICML.cc/2026/Conference/-/Submission",
+            "ICML.cc/2026/Conference",
+        )
+        self.assertEqual(
+            urls,
+            ["https://openreview.net/forum?id=accepted-paper"],
+        )
+        paper = scraper.parse_paper(urls[0])
+        self.assertEqual(paper["metadata_source"], "openreview")
+        self.assertEqual(paper["publication_status"], "provisional")
+        self.assertEqual(
+            paper["pdf_url"],
+            "https://openreview.net/pdf/accepted-paper.pdf",
+        )
+
     def test_openreview_client_requests_json(self):
         session = Mock()
         response = Mock()

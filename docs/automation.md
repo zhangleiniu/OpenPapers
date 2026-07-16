@@ -74,8 +74,11 @@ Google ADC backed by service-account impersonation; no service-account key was
 created. After repairing the fixed service venv from tracked automation
 requirements, the separately authorized installed Gemini canary completed and
 returned the ICML 2026 date hint `2026-07-07`. Resend is not configured, no
-Codex canary has run through the installed command, and the installed global
-gate remains false until separately authorized activation.
+Resend canary has run, and the installed global gate remains false until
+separately authorized activation. A separately authorized installed Codex
+canary completed with `needs_human`; review accepted only its passing regression
+test for the existing provisional OpenReview fallback and retained the isolated
+canary worktree. It did not establish scrape readiness or change scraper logic.
 
 Schema version 10 adds event-date and agent schedule/attempt tables plus the
 new execution-artifact and agent-run-report records.

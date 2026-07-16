@@ -17,8 +17,10 @@ The repository now has disabled-only marker-last refresh and dedicated-role
 credential/canary tooling. Current host status evidence confirms private Codex
 authentication and impersonated Google ADC. After the installed dependency
 gate passed, one separately authorized Gemini canary returned the ICML 2026
-date hint `2026-07-07`; Resend remains unconfigured and no installed-command
-Codex canary has run. These observations do not authorize another canary or
+date hint `2026-07-07`. One separately authorized Codex canary completed with
+`needs_human`; review accepted only a passing regression test for the existing
+provisional OpenReview fallback and retained its isolated worktree. Resend
+remains unconfigured. These observations do not authorize another canary or
 activation.
 
 ## Installed automation dependency gate

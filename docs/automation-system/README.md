@@ -154,8 +154,8 @@ claim; repository files only describe the expected topology.
 ## Not yet built
 
 - Automatic future-year cohort creation.
-- Dedicated-role Resend credential provisioning, separately authorized Codex
-  and Resend live canaries, and final external-effect activation.
+- Dedicated-role Resend credential provisioning, its separately authorized
+  live canary, and final external-effect activation.
 - Migration of `control_state.py` from its vestigial old schema to the small
   date/dispatch/run model.
 
