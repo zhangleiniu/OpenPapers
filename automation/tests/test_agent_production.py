@@ -14,6 +14,7 @@ from automation.agent_production import (
     load_agent_production_configuration,
     load_agent_targets,
 )
+from automation.resend_notifications import recipient_fingerprints
 from automation.codex_agent import CodexProcessResult
 from automation.event_dates import EventDateEstimate
 from automation.local_service.service import LocalEffectStatus
@@ -163,6 +164,39 @@ class AgentProductionTests(unittest.TestCase):
                 configuration=self.configuration,
                 secrets=secrets,
                 credentials=None,
+            )
+
+    def test_configuration_accepts_legacy_single_and_v3_recipient_allowlist(self):
+        self.assertEqual(self.configuration.resend_recipient_sha256s, ("a" * 64,))
+        recipients = ("first@example.test", "second@example.test")
+        payload = dict(self.payload)
+        payload.pop("resend_recipient_sha256")
+        payload.update({
+            "schema_version": 3,
+            "resend_recipient_sha256s": list(recipient_fingerprints(recipients)),
+        })
+
+        configuration = load_agent_production_configuration(
+            payload, targets_path=self.targets
+        )
+
+        self.assertEqual(
+            configuration.resend_recipient_sha256s,
+            recipient_fingerprints(recipients),
+        )
+        with self.assertRaisesRegex(
+            AgentProductionConfigurationError, "plural interface"
+        ):
+            configuration.resend_recipient_sha256
+        with self.assertRaises(AgentProductionConfigurationError):
+            load_agent_production_configuration(
+                dict(payload, resend_recipient_sha256s=[]),
+                targets_path=self.targets,
+            )
+        with self.assertRaises(AgentProductionConfigurationError):
+            load_agent_production_configuration(
+                dict(payload, resend_recipient_sha256s="not-a-list"),
+                targets_path=self.targets,
             )
 
     def test_execution_volume_capacity_gate_precedes_every_external_effect(self):

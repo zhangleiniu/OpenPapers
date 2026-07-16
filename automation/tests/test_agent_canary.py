@@ -11,7 +11,7 @@ from automation.agent_canary import AgentCanaryError, _codex, _gemini, _resend
 from automation.codex_agent import CodexProcessResult, CodexRunConfig
 from automation.event_dates import EventDateEstimate
 from automation.notifications import TransportReceipt
-from automation.resend_notifications import recipient_fingerprint
+from automation.resend_notifications import recipient_fingerprints
 
 
 class AgentCanaryTests(unittest.TestCase):
@@ -104,7 +104,7 @@ class AgentCanaryTests(unittest.TestCase):
     def test_resend_mode_constructs_only_one_transport(self):
         recipient = "to@example.test"
         configuration = SimpleNamespace(agent=SimpleNamespace(
-            resend_recipient_sha256=recipient_fingerprint(recipient)
+            resend_recipient_sha256s=recipient_fingerprints(recipient)
         ))
         secrets = SimpleNamespace(
             resend_api_key="placeholder", email_from="from@example.test",

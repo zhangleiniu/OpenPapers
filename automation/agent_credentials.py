@@ -127,6 +127,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     resend = actions.add_parser("configure-resend")
     resend.add_argument("--repository-root", type=Path, required=True)
     resend.add_argument("--confirm-service-stopped", action="store_true")
+    resend.add_argument("--recipient-count", type=int, default=1)
     args = parser.parse_args(argv)
     if args.action == "prepare":
         prepare_agent_credential_context(args.internal_root)
@@ -146,18 +147,23 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.action == "configure-resend":
         if not args.confirm_service_stopped:
             raise AgentCredentialError("stopped service confirmation is required")
+        if not 1 <= args.recipient_count <= 10:
+            raise AgentCredentialError("Resend recipient count must be 1-10")
         from automation.local_service.agent_control import (
-            replace_disabled_agent_secrets,
+            replace_disabled_agent_resend,
         )
         api_key = getpass.getpass("Resend API key: ")
         email_from = input("Resend sender: ").strip()
-        email_to = input("Resend recipient: ").strip()
-        replace_disabled_agent_secrets(
-            args.internal_root, args.repository_root,
-            {"schema_version": 2, "resend": {
-                "api_key": api_key, "email_from": email_from,
-                "email_to": email_to,
-            }},
+        email_to = tuple(
+            input(f"Resend recipient {index + 1}: ").strip()
+            for index in range(args.recipient_count)
+        )
+        replace_disabled_agent_resend(
+            args.internal_root,
+            args.repository_root,
+            api_key=api_key,
+            email_from=email_from,
+            email_to=email_to,
         )
         print(json.dumps({"resend_configuration": "installed"}, sort_keys=True))
         return 0

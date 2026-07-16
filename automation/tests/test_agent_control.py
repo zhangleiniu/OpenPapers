@@ -12,6 +12,7 @@ from automation.local_service.agent_control import (
     InstalledAgentProductionEffect,
     initialize_agent_production_root,
     replace_disabled_agent_production_root,
+    replace_disabled_agent_resend,
     replace_disabled_agent_secrets,
     validate_agent_production_root,
 )
@@ -305,6 +306,30 @@ class AgentControlTests(unittest.TestCase):
         )
         self.assertFalse(configuration.external_effects_enabled)
         self.assertIsNotNone(secrets)
+        self.assertNotIn("placeholder-key", repr(secrets))
+
+    def test_resend_allowlist_upgrades_legacy_disabled_configuration(self):
+        initialize_agent_production_root(
+            self.internal, self.repository, self._configuration(),
+            {"schema_version": 2, "resend": None},
+        )
+
+        replace_disabled_agent_resend(
+            self.internal,
+            self.repository,
+            api_key="placeholder-key",
+            email_from="from@example.test",
+            email_to=("second@example.test", "to@example.test"),
+        )
+
+        configuration, secrets = validate_agent_production_root(
+            self.internal, self.repository
+        )
+        self.assertFalse(configuration.external_effects_enabled)
+        self.assertEqual(len(configuration.agent.resend_recipient_sha256s), 2)
+        self.assertEqual(
+            secrets.email_to, ("second@example.test", "to@example.test")
+        )
         self.assertNotIn("placeholder-key", repr(secrets))
 
 

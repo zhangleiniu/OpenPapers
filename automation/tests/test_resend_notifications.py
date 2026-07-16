@@ -11,6 +11,7 @@ from automation.resend_notifications import (
     ResendNotificationError,
     ResendNotificationTransport,
     recipient_fingerprint,
+    recipient_fingerprints,
 )
 
 
@@ -92,6 +93,38 @@ class ResendTransportTests(unittest.TestCase):
         self.assertEqual(payload["text"], notification.body)
         self.assertNotIn("html", payload)
         self.assertTrue(connection.closed)
+
+    def test_one_request_accepts_a_bounded_unique_recipient_allowlist(self):
+        connection = FakeConnection()
+        transport = ResendNotificationTransport(
+            api_key="ignored-test-key",
+            email_from="sender@example.org",
+            email_to=("Second@example.org", "first@example.org"),
+            connection_factory=lambda host, timeout: connection,
+        )
+
+        notification = intent()
+        transport.send(notification, idempotency_key=notification.notification_id)
+
+        payload = json.loads(connection.requests[0][2])
+        self.assertEqual(payload["to"], ["first@example.org", "Second@example.org"])
+        self.assertEqual(
+            recipient_fingerprints(("Second@example.org", "first@example.org")),
+            tuple(sorted((
+                recipient_fingerprint("first@example.org"),
+                recipient_fingerprint("second@example.org"),
+            ))),
+        )
+
+        for recipients in ((), ("same@example.org", "SAME@example.org"),
+                           tuple(f"user{i}@example.org" for i in range(11))):
+            with self.subTest(recipients=recipients), self.assertRaises(
+                ResendNotificationError
+            ):
+                ResendNotificationTransport(
+                    api_key="key", email_from="sender@example.org",
+                    email_to=recipients,
+                )
 
     def test_configuration_and_success_response_fail_closed(self):
         for kwargs, pattern in (

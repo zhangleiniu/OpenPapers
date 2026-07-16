@@ -6,6 +6,7 @@ import hashlib
 import http.client
 import json
 import socket
+from collections.abc import Sequence
 from email.utils import getaddresses, parseaddr
 from typing import Callable, Protocol
 
@@ -95,6 +96,26 @@ def recipient_fingerprint(value: str) -> str:
     return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
 
 
+def normalize_recipients(value: str | Sequence[str]) -> tuple[str, ...]:
+    """Validate one bounded recipient allowlist and return canonical order."""
+    values = (value,) if isinstance(value, str) else tuple(value)
+    if not 1 <= len(values) <= 10:
+        raise ResendNotificationError("recipient count must be 1-10")
+    recipients = tuple(sorted(
+        (_plain_recipient(item) for item in values), key=str.casefold
+    ))
+    if len({item.casefold() for item in recipients}) != len(recipients):
+        raise ResendNotificationError("recipients must be unique")
+    return recipients
+
+
+def recipient_fingerprints(value: str | Sequence[str]) -> tuple[str, ...]:
+    """Return canonical address-free approval identities for a recipient list."""
+    return tuple(sorted(
+        recipient_fingerprint(item) for item in normalize_recipients(value)
+    ))
+
+
 def _failure_for_status(status: int) -> FailureCategory:
     if status == 401:
         return FailureCategory.AUTHENTICATION
@@ -117,7 +138,7 @@ class ResendNotificationTransport:
         *,
         api_key: str,
         email_from: str,
-        email_to: str,
+        email_to: str | Sequence[str],
         timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
         connection_factory: ConnectionFactory = _connection_factory,
     ) -> None:
@@ -136,7 +157,7 @@ class ResendNotificationTransport:
             raise ResendNotificationError("timeout must be 1-30 seconds")
         self._api_key = api_key
         self._email_from = _sender(email_from)
-        self._email_to = _plain_recipient(email_to)
+        self._email_to = normalize_recipients(email_to)
         self._timeout_seconds = float(timeout_seconds)
         self._connection_factory = connection_factory
         self._request_count = 0
@@ -160,7 +181,7 @@ class ResendNotificationTransport:
         payload = json.dumps(
             {
                 "from": self._email_from,
-                "to": [self._email_to],
+                "to": list(self._email_to),
                 "subject": intent.subject,
                 "text": intent.body,
             },

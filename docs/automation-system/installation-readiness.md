@@ -19,9 +19,10 @@ authentication and impersonated Google ADC. After the installed dependency
 gate passed, one separately authorized Gemini canary returned the ICML 2026
 date hint `2026-07-07`. One separately authorized Codex canary completed with
 `needs_human`; review accepted only a passing regression test for the existing
-provisional OpenReview fallback and retained its isolated worktree. Resend
-remains unconfigured. These observations do not authorize another canary or
-activation.
+provisional OpenReview fallback and retained its isolated worktree. The first
+Resend key was revoked before any email; private configuration must be replaced
+with the rotated key and approved recipient allowlist before a canary. These
+observations do not authorize another canary or activation.
 
 ## Installed automation dependency gate
 
@@ -96,7 +97,7 @@ Before installation, review and approve:
 - monthly run and systemic-failure limits;
 - the separate monthly date-lookup ceiling;
 - worktree age, retained-count, and per-wakeup deletion limits;
-- the Resend sender and address-free recipient fingerprint;
+- the Resend sender and 1-10 address-free recipient fingerprints;
 - external `agent-runs` ownership/capacity and the fact that the old ICML 2026
   canary is unregistered and outside cleanup ownership.
 

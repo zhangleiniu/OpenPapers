@@ -219,9 +219,10 @@ provider, Codex, and notification boundaries. The tracked
 IJCAI 2026 and is deliberately independent of the deterministic monitor
 registry. Private configuration pins the cohort fingerprint, Gemini identity,
 absolute Codex binary, separate monthly date-lookup and agent-run budgets,
-worktree age/count/per-wakeup removal bounds, and approved recipient
-fingerprint; credentials and email addresses remain in a separate non-repr
-runtime object.
+worktree age/count/per-wakeup removal bounds, and a bounded approved-recipient
+fingerprint allowlist; credentials and email addresses remain in a separate
+non-repr runtime object. Legacy single-recipient schema 2 remains readable,
+while interactive replacement upgrades both policy and secrets to schema 3.
 
 Each wake performs at most one missing-date lookup. A lookup attempt ends agent
 processing for that wake even when it produces an immediately due date, so the
@@ -277,8 +278,9 @@ provisioning, and partial replacement.
 
 Acceptance met in repository tests. Dedicated-role Codex device authentication
 and impersonated Google ADC have now passed the private-file status gate;
-Resend configuration, its live canary, and activation remain separate operator
-actions. The first authorized installed Gemini canary attempt
+Resend reconfiguration with a rotated key and approved recipient allowlist, its
+live canary, and activation remain separate operator actions. The first
+authorized installed Gemini canary attempt
 failed at the SDK import before any provider request, which exposed the need
 for an explicit installed-automation-dependency gate. After the fixed service
 venv was repaired from tracked requirements, a newly authorized installed

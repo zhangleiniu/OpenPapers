@@ -73,9 +73,10 @@ repository. The dedicated role now has private Codex device authentication and
 Google ADC backed by service-account impersonation; no service-account key was
 created. After repairing the fixed service venv from tracked automation
 requirements, the separately authorized installed Gemini canary completed and
-returned the ICML 2026 date hint `2026-07-07`. Resend is not configured, no
-Resend canary has run, and the installed global gate remains false until
-separately authorized activation. A separately authorized installed Codex
+returned the ICML 2026 date hint `2026-07-07`. The first configured Resend key
+was revoked before any email; a rotated key and approved recipient allowlist
+must replace it before a Resend canary. The installed global gate remains false
+until separately authorized activation. A separately authorized installed Codex
 canary completed with `needs_human`; review accepted only its passing regression
 test for the existing provisional OpenReview fallback and retained the isolated
 canary worktree. It did not establish scrape readiness or change scraper logic.

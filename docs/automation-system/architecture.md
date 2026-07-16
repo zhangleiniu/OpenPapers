@@ -123,6 +123,10 @@ forward or require intervention; they must not create a tight retry loop.
 - **Canary authority is adapter-specific.** Gemini, Codex, and Resend live
   canaries are distinct commands and permissions. No canary permission enables
   the automatic production composition or another adapter.
+- **Email recipients are an explicit allowlist.** Private schema-3 Resend
+  configuration accepts 1-10 unique plain addresses, while tracked/private
+  policy stores only their sorted SHA-256 fingerprints. Changing the allowlist
+  requires a stopped-service marker-last replacement and never implies a send.
 
 ## Current and retired components
 

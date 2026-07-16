@@ -127,8 +127,8 @@ The following exists and runs today:
   dedicated-role credential layout plus three mutually exclusive operator
   canaries. Codex receives an explicit private `CODEX_HOME`, Gemini loads an
   explicit private ADC file, and Resend secrets are marker-bound without
-  activation. Each canary requires its own live authorization flag; no live
-  canary has run through these commands.
+  activation. Each canary requires its own live authorization flag; installed
+  Gemini and Codex canaries have completed, while Resend has not sent.
 - `automation/local_service/agent_control.py`: disabled-only marker-last
   replacement primitives for runtime/source refresh and Resend secret
   provisioning. Either an enabled current configuration or an enabled
@@ -154,8 +154,9 @@ claim; repository files only describe the expected topology.
 ## Not yet built
 
 - Automatic future-year cohort creation.
-- Dedicated-role Resend credential provisioning, its separately authorized
-  live canary, and final external-effect activation.
+- Dedicated-role rotated Resend key plus approved recipient-allowlist
+  provisioning, its separately authorized live canary, and final
+  external-effect activation.
 - Migration of `control_state.py` from its vestigial old schema to the small
   date/dispatch/run model.
 

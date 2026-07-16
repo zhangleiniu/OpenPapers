@@ -20,6 +20,7 @@ from automation.agent_production import (
     load_agent_production_configuration,
 )
 from automation.agent_credentials import validate_agent_credential_context
+from automation.resend_notifications import recipient_fingerprints
 from automation.local_service.production import (
     PRODUCTION_CONFIG,
     PRODUCTION_MARKER,
@@ -96,7 +97,7 @@ def _agent_configuration(
 
 def _agent_secrets(payload: Mapping[str, Any]) -> AgentProductionSecrets | None:
     if set(payload) != {"schema_version", "resend"} \
-            or payload.get("schema_version") != 2:
+            or payload.get("schema_version") not in {2, 3}:
         raise ProductionControlError("agent production secrets are invalid")
     resend = payload["resend"]
     if resend is None:
@@ -105,11 +106,16 @@ def _agent_secrets(payload: Mapping[str, Any]) -> AgentProductionSecrets | None:
         "api_key", "email_from", "email_to"
     }:
         raise ProductionControlError("agent production secrets are invalid")
+    email_to = resend["email_to"]
+    if payload["schema_version"] == 2 and not isinstance(email_to, str):
+        raise ProductionControlError("agent production secrets are invalid")
+    if payload["schema_version"] == 3 and not isinstance(email_to, list):
+        raise ProductionControlError("agent production secrets are invalid")
     try:
         return AgentProductionSecrets(
             resend_api_key=resend["api_key"],
             email_from=resend["email_from"],
-            email_to=resend["email_to"],
+            email_to=tuple(email_to) if isinstance(email_to, list) else email_to,
         )
     except (AgentProductionConfigurationError, KeyError) as exc:
         raise ProductionControlError("agent production secrets are invalid") from exc
@@ -303,6 +309,36 @@ def replace_disabled_agent_secrets(
     )
     return replace_disabled_agent_production_root(
         internal_root, repository_root, repository_root, configuration, secrets
+    )
+
+
+def replace_disabled_agent_resend(
+    internal_root: Path,
+    repository_root: Path,
+    *,
+    api_key: str,
+    email_from: str,
+    email_to: tuple[str, ...],
+) -> tuple[Path, Path, Path]:
+    """Install one approved recipient allowlist without enabling effects."""
+    root = Path(internal_root)
+    validate_agent_production_root(root, repository_root)
+    _, configuration = _payload(
+        root / AGENT_PRODUCTION_CONFIG,
+        field="agent production configuration",
+    )
+    agent = dict(configuration["agent_configuration"])
+    agent.pop("resend_recipient_sha256", None)
+    agent["schema_version"] = 3
+    agent["resend_recipient_sha256s"] = list(recipient_fingerprints(email_to))
+    configuration["agent_configuration"] = agent
+    secrets = {"schema_version": 3, "resend": {
+        "api_key": api_key,
+        "email_from": email_from,
+        "email_to": list(email_to),
+    }}
+    return replace_disabled_agent_production_root(
+        root, repository_root, repository_root, configuration, secrets
     )
 
 

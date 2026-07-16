@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 from automation.agent_credentials import (
     AgentCredentialError,
+    main as credential_main,
     prepare_agent_credential_context,
     validate_agent_credential_context,
 )
@@ -60,6 +61,31 @@ class AgentCredentialTests(unittest.TestCase):
         self.assertEqual(run.call_args.kwargs["env"], {
             "HOME": "/private", "CODEX_HOME": "/codex"
         })
+
+    def test_resend_configuration_collects_exact_recipient_count(self):
+        prepare_agent_credential_context(self.internal)
+        arguments = [
+            "--internal-root", str(self.internal), "configure-resend",
+            "--repository-root", str(self.internal),
+            "--confirm-service-stopped", "--recipient-count", "2",
+        ]
+        with patch("automation.agent_credentials.getpass.getpass",
+                   return_value="placeholder-key"), \
+                patch("builtins.input", side_effect=(
+                    "sender@example.test", "one@example.test", "two@example.test"
+                )), \
+                patch(
+                    "automation.local_service.agent_control.replace_disabled_agent_resend"
+                ) as replace:
+            self.assertEqual(credential_main(arguments), 0)
+
+        replace.assert_called_once_with(
+            self.internal,
+            self.internal,
+            api_key="placeholder-key",
+            email_from="sender@example.test",
+            email_to=("one@example.test", "two@example.test"),
+        )
 
 
 if __name__ == "__main__":

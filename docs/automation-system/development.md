@@ -55,8 +55,10 @@ but returns before constructing adapters while `external_effects_enabled=false`.
 Its private configuration contract pins the tracked target file hash,
 Gemini project/location/model, an absolute Codex binary path, monthly/systemic
 agent limits, a separate monthly date-lookup ceiling, worktree retention
-bounds, and the SHA-256 fingerprint of the approved plain recipient. Resend API
-key, sender, and recipient values are supplied
+bounds, and a bounded sorted list of SHA-256 fingerprints for approved plain
+recipients. Legacy schema-2 single-recipient configuration remains readable;
+interactive configuration upgrades it to schema 3. Resend API key, sender, and
+recipient values are supplied
 separately at runtime and must never be committed.
 
 Post-install credential preparation and safe status checks use the dedicated
@@ -70,8 +72,10 @@ python -m automation.agent_credentials --internal-root <private-root> status
 
 `codex-login`, `google-adc-login`, and `configure-resend` are interactive
 operator actions. Resend configuration additionally requires the fixed service
-to be stopped and the exact `--confirm-service-stopped` flag. Never pipe or
-paste their credential values into logs, prompts, or tracked files.
+to be stopped, the exact `--confirm-service-stopped` flag, and a non-secret
+`--recipient-count` from 1 through 10. Recipient addresses are prompted
+individually and must be unique. Never pipe or paste their credential values
+into logs, prompts, or tracked files.
 
 Live adapter checks are intentionally three subcommands with three unrelated
 flags:

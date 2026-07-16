@@ -29,7 +29,7 @@ from automation.notifications import NotificationIntent, NotificationKind
 from automation.providers.gemini import GeminiEventDateProvider
 from automation.resend_notifications import (
     ResendNotificationTransport,
-    recipient_fingerprint,
+    recipient_fingerprints,
 )
 
 
@@ -147,8 +147,8 @@ def _resend(args) -> dict[str, object]:
     configuration, secrets = _installed(args)
     if secrets is None:
         raise AgentCanaryError("Resend secrets are not configured")
-    if recipient_fingerprint(secrets.email_to) \
-            != configuration.agent.resend_recipient_sha256:
+    if recipient_fingerprints(secrets.email_to) \
+            != configuration.agent.resend_recipient_sha256s:
         raise AgentCanaryError("Resend recipient approval changed")
     source_id = f"agent-canary.{authorization}"
     notification_id = "notification:immediate:" + hashlib.sha256(

@@ -37,7 +37,7 @@ from automation.local_service.service import LocalEffectOutcome, LocalEffectStat
 from automation.notifications import NotificationTransport
 from automation.resend_notifications import (
     ResendNotificationTransport,
-    recipient_fingerprint,
+    recipient_fingerprints,
 )
 
 
@@ -63,24 +63,46 @@ class AgentProductionConfiguration:
     codex: CodexRunConfig
     due_policy: DuePolicy
     retention: WorktreeRetentionPolicy
-    resend_recipient_sha256: str
+    resend_recipient_sha256s: tuple[str, ...]
+
+    @property
+    def resend_recipient_sha256(self) -> str:
+        """Compatibility view for legacy single-recipient callers."""
+        if len(self.resend_recipient_sha256s) != 1:
+            raise AgentProductionConfigurationError(
+                "multiple recipient approvals require the plural interface"
+            )
+        return self.resend_recipient_sha256s[0]
 
 
 @dataclass(frozen=True, repr=False)
 class AgentProductionSecrets:
     resend_api_key: str
     email_from: str
-    email_to: str
+    email_to: str | tuple[str, ...]
 
     def __post_init__(self) -> None:
         for value, field in (
             (self.resend_api_key, "Resend API key"),
             (self.email_from, "email sender"),
-            (self.email_to, "email recipient"),
         ):
             if not isinstance(value, str) or not value.strip() or value != value.strip() \
                     or any(character in value for character in "\r\n\x00"):
                 raise AgentProductionConfigurationError(f"{field} is invalid")
+        try:
+            recipients = tuple(
+                sorted(
+                    (self.email_to,) if isinstance(self.email_to, str)
+                    else tuple(self.email_to),
+                    key=str.casefold,
+                )
+            )
+            recipient_fingerprints(recipients)
+        except (TypeError, ValueError) as exc:
+            raise AgentProductionConfigurationError(
+                "email recipients are invalid"
+            ) from exc
+        object.__setattr__(self, "email_to", recipients)
 
 
 class NotificationTransportFactory(Protocol):
@@ -126,7 +148,7 @@ def load_agent_production_configuration(
     targets_path: Path = DEFAULT_AGENT_TARGETS,
 ) -> AgentProductionConfiguration:
     """Validate private, credential-free production policy configuration."""
-    expected = {
+    common = {
         "schema_version", "targets_sha256", "gemini_project_id",
         "gemini_location", "gemini_model", "codex_binary",
         "monthly_date_lookup_limit",
@@ -138,10 +160,13 @@ def load_agent_production_configuration(
         "systemic_failure_window_hours", "systemic_circuit_delay_hours",
         "minimum_free_bytes", "retention_max_retained",
         "retention_max_age_days", "retention_max_removals_per_run",
-        "resend_recipient_sha256",
     }
+    version = payload.get("schema_version") if isinstance(payload, Mapping) else None
+    expected = common | ({"resend_recipient_sha256"} if version == 2 else {
+        "resend_recipient_sha256s"
+    })
     if not isinstance(payload, Mapping) or set(payload) != expected \
-            or payload.get("schema_version") != 2:
+            or version not in {2, 3}:
         raise AgentProductionConfigurationError("agent configuration is invalid")
     try:
         assert_secret_free(dict(payload))
@@ -163,12 +188,19 @@ def load_agent_production_configuration(
     project = payload["gemini_project_id"]
     location = payload["gemini_location"]
     model = payload["gemini_model"]
-    fingerprint = payload["resend_recipient_sha256"]
+    raw_fingerprints = payload.get("resend_recipient_sha256s")
+    if version == 3 and not isinstance(raw_fingerprints, list):
+        raise AgentProductionConfigurationError("agent adapter identity is invalid")
+    fingerprints = ((payload["resend_recipient_sha256"],) if version == 2
+                    else tuple(raw_fingerprints))
     if not all(isinstance(value, str) and _ID.fullmatch(value) for value in (
         project, location, model
-    )) or not isinstance(fingerprint, str) or not re.fullmatch(
-        r"[0-9a-f]{64}", fingerprint
-    ):
+    )) or not 1 <= len(fingerprints) <= 10 \
+            or tuple(sorted(fingerprints)) != fingerprints \
+            or len(set(fingerprints)) != len(fingerprints) or any(
+                not isinstance(value, str) or not re.fullmatch(r"[0-9a-f]{64}", value)
+                for value in fingerprints
+            ):
         raise AgentProductionConfigurationError("agent adapter identity is invalid")
     if not isinstance(payload["codex_binary"], str):
         raise AgentProductionConfigurationError("Codex binary path is invalid")
@@ -231,7 +263,7 @@ def load_agent_production_configuration(
         raise AgentProductionConfigurationError("agent policy is invalid") from exc
     return AgentProductionConfiguration(
         targets, targets_hash, project, location, model, date_limit,
-        minimum_free_bytes, codex, due, retention, fingerprint,
+        minimum_free_bytes, codex, due, retention, fingerprints,
     )
 
 
@@ -342,7 +374,8 @@ def build_live_agent_production_effect(
     credentials: AgentCredentialContext,
 ) -> AgentProductionEffect:
     """Construct real adapters without invoking them or installing a caller."""
-    if recipient_fingerprint(secrets.email_to) != configuration.resend_recipient_sha256:
+    if recipient_fingerprints(secrets.email_to) \
+            != configuration.resend_recipient_sha256s:
         raise AgentProductionConfigurationError("agent recipient approval changed")
     if not isinstance(credentials, AgentCredentialContext):
         raise AgentProductionConfigurationError("agent credential context is invalid")
