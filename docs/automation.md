@@ -75,12 +75,13 @@ hourly wakes still perform external work only when persisted due state and the
 separate date/agent budgets, cooldowns, concurrency slot, and failure circuit
 permit it. See the [`roadmap`](./automation-system/roadmap.md).
 
-The repository now replaces that static target list with the same three-venue
-allowlist plus an annual cohort policy: October adds the following year for
-bounded date initialization and January advances the active window. It does
-not delete or reactivate older durable rows, broaden venue scope, or make a
-date into readiness proof. This repository change is not yet installed in the
-enabled production runtime and requires a separately authorized upgrade.
+The repository now replaces that static target list with an explicit allowlist
+of all 14 annual catalog venues plus an annual cohort policy: October adds the
+following year for bounded date initialization and January advances the active
+window. Continuous JMLR remains outside this conference-success state machine.
+The policy does not delete or reactivate older durable rows or make a date into
+readiness proof. This repository change is not yet installed in the enabled
+production runtime and requires a separately authorized upgrade.
 
 ## Current scope, visibility, and development handoff
 
@@ -92,11 +93,13 @@ observation, not proof of archival readiness. The coding agent independently
 decides readiness and sends a run report whose disposition is `not_ready`,
 `needs_human`, `failed`, or `success`.
 
-The repository target policy preserves those three venue ids and can add the
-following year each October, but that policy and the newer monitor-hint,
-retry-prompt, and status changes are not installed yet. Other catalog venues
-are not silently enrolled. Expanding venue scope or upgrading the enabled
-runtime is a separate reviewed operation.
+The repository target policy now explicitly enrolls every annual catalog venue
+and can add the following year each October, but that policy and the newer
+monitor-hint, retry-prompt, and status changes are not installed yet. JMLR is
+continuous rather than annual and needs a separate recurring-success design.
+The deterministic monitor still has only the three explicitly configured
+venue/year source definitions; agent enrollment does not invent monitor
+sources. Upgrading the enabled runtime remains a separate reviewed operation.
 
 The LaunchDaemon and SQLite schedule continue without an IDE or Codex
 conversation. It is therefore safe to close a development conversation while

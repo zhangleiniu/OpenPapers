@@ -232,10 +232,12 @@ were added later under separate operational authorities.
 
 `automation/agent_production.py` composes the target path behind injected
 provider, Codex, and notification boundaries. The tracked
-`automation/config/agent_targets.v1.json` keeps an explicit AISTATS, ICML, and
-IJCAI venue allowlist and is deliberately independent of the deterministic
-monitor registry. Starting from 2026, October includes the following year for
-one-time date initialization and January moves the active window forward.
+`automation/config/agent_targets.v1.json` keeps an explicit allowlist of all 14
+annual catalog venues and is deliberately independent of the deterministic
+monitor registry. JMLR remains visible in the catalog but is excluded because
+continuous publication needs recurring, non-terminal success semantics.
+Starting from 2026, October includes the following year for one-time date
+initialization and January moves the active window forward.
 Existing persisted rows remain authoritative and are not deleted or
 reactivated by the calendar. Private configuration pins the cohort fingerprint,
 Gemini identity, absolute Codex binary, separate monthly date-lookup and
@@ -271,9 +273,10 @@ installed runtime predates this bridge and still sends monitor change email
 without altering agent schedules.
 
 Annual cohort expansion is likewise repository-implemented but not installed.
-Fake-date tests cover the September/October/January boundary, fixed venue
-scope, registration of the full expanded cohort, and the one-date-attempt
-per-wake bound.
+Fake-date tests cover exact equality with the catalog's 14 annual venues,
+continuous-JMLR exclusion, the September/October/January boundary,
+registration of the full expanded cohort, and the one-date-attempt-per-wake
+bound.
 
 The installed filesystem layout keeps the validated no-remote source at
 `<external>/agent-source` and managed worktrees at the sibling

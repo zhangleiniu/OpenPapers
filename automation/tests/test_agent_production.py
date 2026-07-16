@@ -16,6 +16,7 @@ from automation.agent_production import (
 )
 from automation.resend_notifications import recipient_fingerprints
 from automation.codex_agent import CodexProcessResult
+from automation.configuration import load_venue_catalog
 from automation.control_state import ControlStateRepository
 from automation.domain import Writer
 from automation.event_dates import EventDateEstimate
@@ -24,6 +25,9 @@ from automation.notifications import FailureCategory, TransportFailure, Transpor
 
 
 NOW = datetime(2026, 7, 15, 14, 0, tzinfo=timezone.utc)
+TRACKED_TARGETS = (
+    Path(__file__).resolve().parents[1] / "config" / "agent_targets.v1.json"
+)
 
 
 def git(root, *args):
@@ -136,10 +140,16 @@ class AgentProductionTests(unittest.TestCase):
 
     def test_tracked_targets_and_strict_configuration_are_bounded(self):
         tracked = load_agent_targets(today=date(2026, 7, 16))
+        annual = {
+            venue["venue_id"] for venue in load_venue_catalog()["venues"]
+            if venue["lifecycle"]["kind"] == "annual"
+        }
         self.assertEqual(
-            [(item.venue_id, item.year) for item in tracked],
-            [("aistats", 2026), ("icml", 2026), ("ijcai", 2026)],
+            {(item.venue_id, item.year) for item in tracked},
+            {(venue_id, 2026) for venue_id in annual},
         )
+        self.assertEqual(len(tracked), 14)
+        self.assertNotIn("jmlr", {item.venue_id for item in tracked})
         invalid = dict(self.payload, resend_api_key="secret")
         with self.assertRaises(AgentProductionConfigurationError):
             load_agent_production_configuration(invalid, targets_path=self.targets)
@@ -169,51 +179,28 @@ class AgentProductionTests(unittest.TestCase):
             )
 
     def test_annual_cohort_rolls_forward_without_expanding_venue_scope(self):
-        lifecycle = self.root / "lifecycle-targets.json"
-        lifecycle.write_text(json.dumps({
-            "schema_version": 2,
-            "cohort": {
-                "venue_ids": ["aistats", "icml", "ijcai"],
-                "initial_year": 2026,
-                "rollover_month": 10,
-                "years_ahead_after_rollover": 1,
-            },
-        }, indent=2) + "\n", encoding="utf-8")
+        before = load_agent_targets(TRACKED_TARGETS, today=date(2026, 9, 30))
+        rollover = load_agent_targets(TRACKED_TARGETS, today=date(2026, 10, 1))
+        next_year = load_agent_targets(TRACKED_TARGETS, today=date(2027, 1, 1))
 
-        before = load_agent_targets(lifecycle, today=date(2026, 9, 30))
-        rollover = load_agent_targets(lifecycle, today=date(2026, 10, 1))
-        next_year = load_agent_targets(lifecycle, today=date(2027, 1, 1))
-
-        self.assertEqual(
-            [(item.venue_id, item.year) for item in before],
-            [("aistats", 2026), ("icml", 2026), ("ijcai", 2026)],
-        )
-        self.assertEqual(len(rollover), 6)
+        self.assertEqual(len(before), 14)
+        self.assertEqual({item.year for item in before}, {2026})
+        self.assertEqual(len(rollover), 28)
         self.assertEqual({item.year for item in rollover}, {2026, 2027})
+        self.assertEqual(len(next_year), 14)
+        self.assertEqual({item.year for item in next_year}, {2027})
         self.assertEqual(
-            [(item.venue_id, item.year) for item in next_year],
-            [("aistats", 2027), ("icml", 2027), ("ijcai", 2027)],
+            {item.venue_id for item in rollover},
+            {item.venue_id for item in before},
         )
-        self.assertEqual({item.venue_id for item in rollover},
-                         {"aistats", "icml", "ijcai"})
 
     def test_rollover_registers_all_targets_but_attempts_one_date(self):
-        lifecycle = self.root / "lifecycle-targets.json"
-        lifecycle.write_text(json.dumps({
-            "schema_version": 2,
-            "cohort": {
-                "venue_ids": ["aistats", "icml", "ijcai"],
-                "initial_year": 2026,
-                "rollover_month": 10,
-                "years_ahead_after_rollover": 1,
-            },
-        }, indent=2) + "\n", encoding="utf-8")
         payload = dict(
             self.payload,
-            targets_sha256=hashlib.sha256(lifecycle.read_bytes()).hexdigest(),
+            targets_sha256=hashlib.sha256(TRACKED_TARGETS.read_bytes()).hexdigest(),
         )
         configuration = load_agent_production_configuration(
-            payload, targets_path=lifecycle, target_date=date(2026, 10, 1)
+            payload, targets_path=TRACKED_TARGETS, target_date=date(2026, 10, 1)
         )
         provider = Provider()
         state = self.root / "rollover.sqlite3"
@@ -236,7 +223,7 @@ class AgentProductionTests(unittest.TestCase):
             state, writer=Writer.LOCAL_CONTROL_PLANE, clock=lambda: NOW
         ) as repository:
             schedules = repository.list_event_date_schedules()
-        self.assertEqual(len(schedules), 6)
+        self.assertEqual(len(schedules), 28)
         self.assertEqual(len(provider.calls), 1)
 
     def test_configuration_accepts_legacy_single_and_v3_recipient_allowlist(self):

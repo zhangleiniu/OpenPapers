@@ -79,13 +79,15 @@ interactive configuration upgrades it to schema 3. Resend API key, sender, and
 recipient values are supplied
 separately at runtime and must never be committed.
 
-The tracked target file is a bounded annual cohort policy, not a request to
-activate the full venue catalog. Its America/Chicago rollover adds the next
-year in October and moves the active window in January while preserving all
-older durable state. Tests that exercise the boundary inject an explicit date;
-ordinary runtime loading uses the local calendar. The enabled installed
-runtime remains pinned to the previous explicit-2026 file until a separately
-authorized production upgrade.
+The tracked target file is a bounded annual cohort policy with an explicit
+allowlist equal to all 14 annual catalog venues. It does not enroll continuous
+JMLR because terminal `success` would miss later papers in the same year. Its
+America/Chicago rollover adds the next year in October and moves the active
+window in January while preserving all older durable state. Tests that
+exercise the boundary inject an explicit date; ordinary runtime loading uses
+the local calendar. The enabled installed runtime remains pinned to the
+previous three-venue explicit-2026 file until a separately authorized
+production upgrade.
 
 Post-install credential preparation and safe status checks use the dedicated
 role and private internal root. These commands do not call a model or send

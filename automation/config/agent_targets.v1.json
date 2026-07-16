@@ -2,9 +2,20 @@
   "schema_version": 2,
   "cohort": {
     "venue_ids": [
+      "aaai",
+      "acl",
       "aistats",
+      "colt",
+      "cvpr",
+      "eccv",
+      "emnlp",
+      "iccv",
+      "iclr",
       "icml",
-      "ijcai"
+      "ijcai",
+      "naacl",
+      "neurips",
+      "uai"
     ],
     "initial_year": 2026,
     "rollover_month": 10,

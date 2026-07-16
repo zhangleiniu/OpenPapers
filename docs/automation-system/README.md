@@ -127,13 +127,15 @@ The following exists and runs today:
   and transient/permanent delivery state never changes the run outcome.
 - `automation/agent_production.py` and
   `automation/config/agent_targets.v1.json`: an installed production
-  composition whose repository policy now keeps the explicit
-  AISTATS/ICML/IJCAI venue scope and rolls its year cohort forward annually. A
+  composition whose repository policy now explicitly covers all 14 annual
+  venues in the catalog and rolls their year cohort forward annually. The
+  continuous JMLR lifecycle is not forced through terminal conference-success
+  semantics. A
   date lookup, agent run, report attempt, and retention cleanup are separately
   bounded; adapters are constructed only after the enabled configuration and
   all credential/source gates validate. The annual cohort policy has not yet
   been refreshed into the enabled installed runtime, which remains pinned to
-  the explicit 2026 target file.
+  the explicit AISTATS/ICML/IJCAI 2026 target file.
 - `automation/agent_credentials.py` and `automation/agent_canary.py`: private
   dedicated-role credential layout plus three mutually exclusive operator
   canaries. Codex receives an explicit private `CODEX_HOME`, Gemini loads an

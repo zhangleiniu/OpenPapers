@@ -102,13 +102,16 @@ An uninitialized venue/year gets one approximate-date lookup. A valid future
 estimate sleeps without periodic refresh. When it becomes due, the coding
 agent—not the discovery provider—checks actual publication readiness.
 
-The tracked cohort policy preserves an explicit venue allowlist. In the
-America/Chicago calendar, October adds the following year to initialization;
-January advances the active window to that year. Expansion registers all
-targets idempotently but still attempts at most one missing date per wake.
-Durable rows for earlier years are neither deleted nor reopened: their
-persisted terminal or retry state continues to govern them. Calendar dates and
-the rollover remain scheduling hints, never readiness evidence.
+The tracked cohort policy preserves an explicit allowlist containing every
+annual venue currently in the catalog. It does not infer enrollment from
+deterministic monitor coverage and does not force the continuous JMLR journal
+through a terminal conference-success lifecycle. In the America/Chicago
+calendar, October adds the following year to initialization; January advances
+the active window to that year. Expansion registers all targets idempotently
+but still attempts at most one missing date per wake. Durable rows for earlier
+years are neither deleted nor reopened: their persisted terminal or retry
+state continues to govern them. Calendar dates and the rollover remain
+scheduling hints, never readiness evidence.
 
 A new discovery call is justified only when the estimate is absent or invalid,
 the venue/year was explicitly rescheduled, or an agent result reports that the
