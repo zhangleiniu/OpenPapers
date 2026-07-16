@@ -96,6 +96,26 @@ python -m automation.agent_canary --internal-root <private-root> \
 These examples document interfaces; they are not standing live authorization.
 One canary flag never authorizes either other adapter or automatic activation.
 
+External-effects control is a separate four-command boundary. The cloud proof
+is produced by an ignored host wrapper after querying the exact retained GCP
+resources; it contains only schema version, paused state, active execution
+count, and a UTC observation time. `audit` probes the fixed LaunchDaemon and is
+read-only:
+
+```bash
+python -m automation.agent_activation audit \
+  --internal-root <private-root> --repository-root <runtime> \
+  --execution-root <execution-root> --state <control-state> \
+  --cloud-proof <fresh-private-cloud-proof>
+```
+
+`rehearse-disabled`, `activate`, and `rollback` additionally require a stopped
+service, a fresh private backup destination, and different exact authorization
+flags. These interfaces are documented for review; no flag shown in
+documentation is standing authority to run it. In particular, disabled
+rehearsal/refresh permission cannot be reused with
+`--authorize-external-effects-activation`.
+
 The migration helper has two explicit modes. `audit` is read-only and never
 prints the supplied path. `rehearse` creates and migrates a new SQLite backup
 inside an already-created private directory; it refuses an existing
@@ -150,7 +170,7 @@ that permission by default.
    and notification boundaries; do not constrain the coding agent with a
    deterministic list of allowed source or scraper actions.
 5. Run the checks above.
-6. Update `README.md`'s "Current implementation"/"Not yet built" split and
+6. Update `README.md`'s "Current implementation"/"Not yet active or built" split and
    `roadmap.md`'s status table in the same change if phase status, persisted
    schemas, or safety policy changed.
 7. Inspect the full diff and exclude local agent context before committing.

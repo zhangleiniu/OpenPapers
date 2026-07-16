@@ -136,6 +136,12 @@ The following exists and runs today:
   provisioning. Either an enabled current configuration or an enabled
   candidate is rejected, and an interrupted replacement fails marker
   validation closed.
+- `automation/agent_activation.py`: a repository-implemented, fake-tested
+  read-only readiness audit plus separately authorized activation, disabled
+  rehearsal, and rollback commands. It requires exact schema/idle,
+  credential/allowlist, disk/source, fixed-service, and fresh paused/drained
+  cloud evidence before the gate can be opened. The installed gate remains
+  false; implementation or rehearsal permission is not activation permission.
 - `automation/control_state_migration.py`: a safe-summary read-only audit,
   new-file SQLite backup, and isolated-copy schema rehearsal command. Fixture
   rehearsal passed; the dedicated-role production database was migrated from
@@ -155,10 +161,11 @@ The following exists and runs today:
 External GCP and Mac state must be inspected before making a live-health
 claim; repository files only describe the expected topology.
 
-## Not yet built
+## Not yet active or built
 
 - Automatic future-year cohort creation.
-- Final external-effect activation.
+- Production external effects are not active. The explicit transition tooling
+  exists in the repository, but activation has not been authorized or run.
 - Migration of `control_state.py` from its vestigial old schema to the small
   date/dispatch/run model.
 

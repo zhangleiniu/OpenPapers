@@ -84,6 +84,12 @@ only its passing regression test for the existing provisional OpenReview
 fallback and retained the isolated canary worktree. It did not establish scrape
 readiness or change scraper logic.
 
+The repository now also implements a separate read-only activation audit,
+effects-disabled rehearsal, marker-last gate transition, and exact disabled
+rollback. These tools still require a disabled installation refresh before
+host use. Implementation and rehearsal do not authorize activation; the live
+gate remains false.
+
 Schema version 10 adds event-date and agent schedule/attempt tables plus the
 new execution-artifact and agent-run-report records.
 `automation/control_state.py` still also contains tables and interfaces for the
@@ -103,11 +109,11 @@ The ordinary command uses fixtures/development behavior. `--live` requires
 explicit authorization, Application Default Credentials, and makes a real
 provider call. The original adapter still produces strict citation-backed
 evidence. The new `GeminiEventDateProvider` has a separate loose date-only
-prompt plus fake and isolated-live coverage; its installed caller is disabled
-and the dedicated role now has explicit private ADC. The first separately
-authorized installed canary attempt stopped before a provider request because
-the fixed service venv lacked the tracked `google-genai` dependency; the
-installed-dependency gate must pass before another live authorization.
+prompt plus fake and installed-live coverage; its installed caller is disabled
+and the dedicated role has explicit private ADC. The first installed canary
+attempt exposed a missing fixed-venv dependency before a provider request; the
+dependency gate was added, the venv repaired from tracked requirements, and a
+newly authorized canary then completed.
 
 This automation discovery use is separate from Gemini track classification in
 some core scrapers, documented in
@@ -116,12 +122,10 @@ some core scrapers, documented in
 ## Email boundaries
 
 The installed monitor uses TLS SMTP and reports only deterministic source
-changes/errors. `automation/resend_notifications.py` is an unconnected
-low-level HTTPS adapter.
-
-The future agent-run report will select one production transport and send one
-replay-safe email per run. The old case, reminder, canary, and fatigue-digest
-notification design has been retired.
+changes/errors. The separate agent-run path has selected the Resend HTTPS
+adapter and durably composes one replay-safe report per terminal run; its
+automatic caller remains behind the false external-effects gate. The old case,
+reminder, canary, and fatigue-digest notification design has been retired.
 
 ## Cloud rollback path
 

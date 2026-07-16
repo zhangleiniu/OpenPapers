@@ -43,6 +43,11 @@ from automation.local_service.service import (
 AGENT_PRODUCTION_MARKER = ".agent-production-control.v2.json"
 AGENT_PRODUCTION_CONFIG = ".agent-production-config.v2.json"
 AGENT_PRODUCTION_SECRETS = ".agent-production-secrets.v2.json"
+_AGENT_PRODUCTION_FILES = (
+    AGENT_PRODUCTION_CONFIG,
+    AGENT_PRODUCTION_SECRETS,
+    AGENT_PRODUCTION_MARKER,
+)
 
 
 @dataclass(frozen=True)
@@ -132,6 +137,45 @@ def _payload(path: Path, *, field: str) -> tuple[bytes, dict[str, Any]]:
     return encoded, payload
 
 
+def _validated_agent_file_set(
+    source_root: Path,
+    baseline_root: Path,
+    repository_root: Path,
+) -> tuple[
+    InstalledAgentConfiguration,
+    AgentProductionSecrets | None,
+    tuple[bytes, bytes, bytes],
+]:
+    """Validate one exact v2 set against the current v1 baseline."""
+    source = Path(source_root)
+    baseline = Path(baseline_root)
+    repository = Path(repository_root)
+    _private_directory(source)
+    config_bytes, config_payload = _payload(
+        source / AGENT_PRODUCTION_CONFIG,
+        field="agent production configuration",
+    )
+    secret_bytes, secret_payload = _payload(
+        source / AGENT_PRODUCTION_SECRETS,
+        field="agent production secrets",
+    )
+    marker_bytes, _ = _payload(
+        source / AGENT_PRODUCTION_MARKER,
+        field="agent production marker",
+    )
+    configuration = _agent_configuration(
+        config_payload,
+        targets_path=(repository / "automation" / "config"
+                      / "agent_targets.v1.json"),
+    )
+    secrets = _agent_secrets(secret_payload)
+    if configuration.external_effects_enabled and secrets is None:
+        raise ProductionControlError("enabled agent production secrets are missing")
+    if marker_bytes != _agent_marker(config_bytes, secret_bytes, baseline):
+        raise ProductionControlError("agent production marker is invalid")
+    return configuration, secrets, (config_bytes, secret_bytes, marker_bytes)
+
+
 def validate_agent_production_root(
     internal_root: Path,
     repository_root: Path,
@@ -140,38 +184,9 @@ def validate_agent_production_root(
     root = Path(internal_root)
     repository = Path(repository_root)
     validate_production_root(root)
-    config_bytes, config_payload = _payload(
-        root / AGENT_PRODUCTION_CONFIG, field="agent production configuration"
+    configuration, secrets, _ = _validated_agent_file_set(
+        root, root, repository
     )
-    secret_bytes, secret_payload = _payload(
-        root / AGENT_PRODUCTION_SECRETS, field="agent production secrets"
-    )
-    _, marker = _payload(
-        root / AGENT_PRODUCTION_MARKER, field="agent production marker"
-    )
-    configuration = _agent_configuration(
-        config_payload,
-        targets_path=repository / "automation" / "config" / "agent_targets.v1.json",
-    )
-    secrets = _agent_secrets(secret_payload)
-    if configuration.external_effects_enabled and secrets is None:
-        raise ProductionControlError("enabled agent production secrets are missing")
-    expected_marker = {
-        "schema_version": 2,
-        "label": LOCAL_SERVICE_LABEL,
-        "mode": "agent_production_control",
-        "configuration_sha256": _fingerprint(config_bytes),
-        "secrets_sha256": _fingerprint(secret_bytes),
-        "baseline_marker_sha256": _fingerprint(_private_file(root / PRODUCTION_MARKER)),
-        "baseline_configuration_sha256": _fingerprint(
-            _private_file(root / PRODUCTION_CONFIG)
-        ),
-        "baseline_secrets_sha256": _fingerprint(
-            _private_file(root / PRODUCTION_SECRETS)
-        ),
-    }
-    if marker != expected_marker:
-        raise ProductionControlError("agent production marker is invalid")
     return configuration, secrets
 
 
@@ -256,16 +271,30 @@ def replace_disabled_agent_production_root(
         raise ProductionControlError("disabled refresh cannot enable external effects")
     config_bytes = _canonical(configuration)
     secret_bytes = _canonical(secrets)
-    files = (
-        (root / AGENT_PRODUCTION_CONFIG, config_bytes),
-        (root / AGENT_PRODUCTION_SECRETS, secret_bytes),
-        (root / AGENT_PRODUCTION_MARKER, _agent_marker(
-            config_bytes, secret_bytes, root
-        )),
+    encoded_files = (
+        config_bytes,
+        secret_bytes,
+        _agent_marker(config_bytes, secret_bytes, root),
     )
+    paths = _replace_agent_file_set(
+        root, encoded_files, replace_file=replace_file
+    )
+    validate_agent_production_root(root, candidate_repository_root)
+    return paths
+
+
+def _replace_agent_file_set(
+    internal_root: Path,
+    encoded_files: tuple[bytes, bytes, bytes],
+    *,
+    replace_file: Callable[[Path, Path], None] = os.replace,
+) -> tuple[Path, Path, Path]:
+    """Stage an already-validated v2 set and replace its marker last."""
+    root = Path(internal_root)
+    targets = tuple(root / name for name in _AGENT_PRODUCTION_FILES)
     candidates: list[Path] = []
     try:
-        for index, (target, encoded) in enumerate(files):
+        for index, (target, encoded) in enumerate(zip(targets, encoded_files)):
             candidate = root / f".{target.name}.candidate-{os.getpid()}-{index}"
             descriptor = os.open(
                 candidate,
@@ -278,7 +307,7 @@ def replace_disabled_agent_production_root(
                 file_obj.write(encoded)
                 file_obj.flush()
                 os.fsync(file_obj.fileno())
-        for candidate, (target, _) in zip(candidates, files):
+        for candidate, target in zip(candidates, targets):
             replace_file(candidate, target)
         directory = os.open(root, os.O_RDONLY)
         try:
@@ -293,8 +322,167 @@ def replace_disabled_agent_production_root(
                 candidate.unlink()
             except FileNotFoundError:
                 pass
-    validate_agent_production_root(root, candidate_repository_root)
-    return files[0][0], files[1][0], files[2][0]
+    return targets
+
+
+def create_agent_activation_backup(
+    internal_root: Path,
+    repository_root: Path,
+    backup_root: Path,
+) -> tuple[Path, Path, Path]:
+    """Create one exact private disabled v2 backup, refusing overwrite."""
+    root = Path(internal_root)
+    backup = Path(backup_root)
+    configuration, _, encoded_files = _validated_agent_file_set(
+        root, root, Path(repository_root)
+    )
+    if configuration.external_effects_enabled:
+        raise ProductionControlError("activation backup requires disabled state")
+    _private_directory(backup.parent)
+    try:
+        backup.mkdir(mode=0o700)
+    except OSError as exc:
+        raise ProductionControlError("activation backup creation failed") from exc
+    _private_directory(backup)
+    paths: list[Path] = []
+    try:
+        for name, encoded in zip(_AGENT_PRODUCTION_FILES, encoded_files):
+            path = backup / name
+            descriptor = os.open(
+                path,
+                os.O_WRONLY | os.O_CREAT | os.O_EXCL
+                | getattr(os, "O_NOFOLLOW", 0),
+                0o600,
+            )
+            paths.append(path)
+            with os.fdopen(descriptor, "wb") as file_obj:
+                file_obj.write(encoded)
+                file_obj.flush()
+                os.fsync(file_obj.fileno())
+        directory = os.open(backup, os.O_RDONLY)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
+    except OSError as exc:
+        raise ProductionControlError("activation backup creation failed") from exc
+    restored, _, _ = _validated_agent_file_set(
+        backup, root, Path(repository_root)
+    )
+    if restored.external_effects_enabled:
+        raise ProductionControlError("activation backup is not disabled")
+    return paths[0], paths[1], paths[2]
+
+
+def restore_disabled_agent_production_root(
+    internal_root: Path,
+    repository_root: Path,
+    backup_root: Path,
+    *,
+    replace_file: Callable[[Path, Path], None] = os.replace,
+) -> tuple[Path, Path, Path]:
+    """Restore an exact disabled backup even if the current v2 set is invalid."""
+    root = Path(internal_root)
+    validate_production_root(root)
+    configuration, _, encoded_files = _validated_agent_file_set(
+        Path(backup_root), root, Path(repository_root)
+    )
+    if configuration.external_effects_enabled:
+        raise ProductionControlError("activation rollback backup is not disabled")
+    try:
+        paths = _replace_agent_file_set(
+            root, encoded_files, replace_file=replace_file
+        )
+        restored, _ = validate_agent_production_root(root, repository_root)
+    except ProductionControlError as exc:
+        raise ProductionControlError("agent production rollback failed") from exc
+    if restored.external_effects_enabled:
+        raise ProductionControlError("agent production rollback did not disable effects")
+    return paths
+
+
+def activate_agent_production_root(
+    internal_root: Path,
+    repository_root: Path,
+    backup_root: Path,
+    *,
+    replace_file: Callable[[Path, Path], None] = os.replace,
+) -> tuple[Path, Path, Path]:
+    """Change only the external-effects bit, marker-last, with exact recovery."""
+    root = Path(internal_root)
+    repository = Path(repository_root)
+    current, secrets = validate_agent_production_root(root, repository)
+    if current.external_effects_enabled:
+        raise ProductionControlError("agent production is already enabled")
+    if secrets is None:
+        raise ProductionControlError("activation requires configured secrets")
+    create_agent_activation_backup(root, repository, backup_root)
+    _, configuration = _payload(
+        root / AGENT_PRODUCTION_CONFIG,
+        field="agent production configuration",
+    )
+    configuration["external_effects_enabled"] = True
+    config_bytes = _canonical(configuration)
+    secret_bytes = _private_file(root / AGENT_PRODUCTION_SECRETS)
+    encoded_files = (
+        config_bytes,
+        secret_bytes,
+        _agent_marker(config_bytes, secret_bytes, root),
+    )
+    try:
+        paths = _replace_agent_file_set(
+            root, encoded_files, replace_file=replace_file
+        )
+        installed, _ = validate_agent_production_root(root, repository)
+        if not installed.external_effects_enabled:
+            raise ProductionControlError("activation did not enable effects")
+    except (OSError, ProductionControlError) as exc:
+        try:
+            restore_disabled_agent_production_root(
+                root, repository, backup_root
+            )
+        except ProductionControlError as rollback_exc:
+            raise ProductionControlError(
+                "agent production activation rollback failed"
+            ) from rollback_exc
+        raise ProductionControlError("agent production activation failed") from exc
+    return paths
+
+
+def rehearse_disabled_agent_activation(
+    internal_root: Path,
+    repository_root: Path,
+    backup_root: Path,
+) -> tuple[Path, Path, Path]:
+    """Exercise backup/replacement/restore without ever enabling effects."""
+    root = Path(internal_root)
+    repository = Path(repository_root)
+    current, _, before = _validated_agent_file_set(root, root, repository)
+    if current.external_effects_enabled:
+        raise ProductionControlError("disabled rehearsal requires disabled state")
+    create_agent_activation_backup(root, repository, backup_root)
+    try:
+        _replace_agent_file_set(root, before)
+        replayed, _ = validate_agent_production_root(root, repository)
+        if replayed.external_effects_enabled:
+            raise ProductionControlError("disabled rehearsal enabled effects")
+    except ProductionControlError as exc:
+        try:
+            restore_disabled_agent_production_root(
+                root, repository, backup_root
+            )
+        except ProductionControlError as rollback_exc:
+            raise ProductionControlError(
+                "disabled activation rehearsal rollback failed"
+            ) from rollback_exc
+        raise ProductionControlError("disabled activation rehearsal failed") from exc
+    paths = restore_disabled_agent_production_root(
+        root, repository, backup_root
+    )
+    final, _, after = _validated_agent_file_set(root, root, repository)
+    if final.external_effects_enabled or after != before:
+        raise ProductionControlError("disabled activation rehearsal changed state")
+    return paths
 
 
 def replace_disabled_agent_secrets(

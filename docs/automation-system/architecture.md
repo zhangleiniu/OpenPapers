@@ -127,6 +127,17 @@ forward or require intervention; they must not create a tight retry loop.
   configuration accepts 1-10 unique plain addresses, while tracked/private
   policy stores only their sorted SHA-256 fingerprints. Changing the allowlist
   requires a stopped-service marker-last replacement and never implies a send.
+- **Activation is a separate authority.** Readiness, canary, refresh,
+  rehearsal, and rollback permissions cannot open the production gate.
+  Activation requires the fixed service stopped, exact current schema with no
+  active/in-flight work, valid credentials and recipient binding, sufficient
+  disk, a safe pinned source, and a fresh proof that cloud is paused and
+  drained.
+- **Activation replacement is marker-last and recoverable.** A fresh exact
+  disabled backup is retained before changing only the effects bit. The marker
+  binding config/secrets is installed last; interruption therefore fails
+  validation closed. Rollback restores the exact disabled files marker-last
+  while the service remains stopped and never resumes cloud.
 
 ## Current and retired components
 
@@ -149,6 +160,8 @@ Currently reusable:
 - read-only control-state audit and isolated-copy migration rehearsal tooling;
 - dedicated-role credential-path validation, three separately gated canary
   commands, and disabled-only marker-last refresh binding;
+- read-only external-effects readiness, explicit marker-last activation,
+  exact disabled rollback, and effects-disabled rehearsal tooling;
 - lease-protected SQLite repository and local due selector;
 - marker-gated LaunchDaemon service and bounded local records;
 - paused Cloud Run monitor as a rollback mechanism;

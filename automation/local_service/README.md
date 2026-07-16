@@ -74,6 +74,16 @@ marker-last `replace_disabled_agent_production_root` boundary while the service
 is stopped. That boundary rejects enabled state on either side; it is not an
 activation interface.
 
+`automation.agent_activation` is the separate activation boundary. Its
+read-only audit combines the exact v1/v2 files with schema-10 idle state,
+credential/recipient/source/disk checks, the fixed LaunchDaemon probe, and a
+fresh paused/drained cloud proof. `rehearse-disabled` backs up, replays, and
+restores the disabled binding. `activate` changes only the gate bit after its
+own exact authorization; `rollback` restores the retained disabled files even
+from a marker-invalid partial transition. All writes are marker-last while the
+service is stopped. Repository implementation and disabled rehearsal do not
+authorize activation.
+
 ## Focused verification
 
 ```bash

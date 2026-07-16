@@ -26,6 +26,11 @@ authorized canary made a single provider request, and the operator confirmed
 delivery to both approved recipients. These observations do not authorize
 another canary or activation.
 
+The repository now also contains an explicit activation/readiness/rollback
+boundary. It has not opened the installed gate. Before any future activation,
+install the exact committed implementation through the disabled refresh path
+and complete the disabled rehearsal below.
+
 ## Installed automation dependency gate
 
 The fixed LaunchDaemon uses its own Python environment, not the repository
@@ -135,3 +140,40 @@ If any step fails, stop the service. Restore the pre-migration database and
 private config/marker/plist as one set before restarting; never attempt an
 in-place schema downgrade. Do not resume the cloud rollback path until the
 local service is confirmed stopped and the no-overlap procedure is reviewed.
+
+## Activation readiness and disabled rehearsal
+
+The ignored host wrapper must query the exact external Cloud Scheduler and
+Cloud Run Job immediately before audit and write a private schema-1 proof with
+only `cloud_schedule_paused=true`, `active_cloud_executions=0`, and
+`checked_at`. Tracked validation rejects unknown fields, unsafe permissions,
+future timestamps beyond bounded clock skew, and proof older than 15 minutes.
+It does not contain or print GCP resource identifiers.
+
+Run the read-only audit as the dedicated role while the fixed service is still
+loaded. It must report `ready=true`, effects false, schema 10, quick-check
+healthy, all three active/in-flight counts zero, both credentials present, the
+approved recipient count, sufficient disk, a safe source, cloud paused/drained,
+and `service_loaded=true`:
+
+```bash
+python -m automation.agent_activation audit \
+  --internal-root <private-root> --repository-root <installed-runtime> \
+  --execution-root <external-root> --state <control-state> \
+  --cloud-proof <fresh-private-cloud-proof>
+```
+
+Disabled rehearsal requires separate authorization, a freshly created backup
+path whose private parent is owned by the role, and a verified stopped fixed
+service. It replays and restores only the already-disabled v2 files and must
+finish with `external_effects_enabled=false`; it does not construct Gemini,
+Codex, Resend, scraper, or retention adapters. Restart the unchanged service
+and require a bounded disabled wake plus unchanged cloud/state/canary evidence.
+
+Actual `activate` is a different command and permission. It must re-run the
+same readiness checks with the service stopped, retain an exact disabled
+backup, and install the marker last. Do not run it under installation,
+refresh, rehearsal, or canary authorization. If transition/bootstrap/first
+wake fails, keep the service stopped and use the exact `rollback` authority to
+restore the retained disabled binding before reload. Rollback never authorizes
+or resumes the cloud writer.

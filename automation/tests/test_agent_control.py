@@ -10,10 +10,14 @@ from pathlib import Path
 from automation.local_service.agent_control import (
     AGENT_PRODUCTION_MARKER,
     InstalledAgentProductionEffect,
+    activate_agent_production_root,
+    create_agent_activation_backup,
     initialize_agent_production_root,
+    rehearse_disabled_agent_activation,
     replace_disabled_agent_production_root,
     replace_disabled_agent_resend,
     replace_disabled_agent_secrets,
+    restore_disabled_agent_production_root,
     validate_agent_production_root,
 )
 from automation.agent_credentials import prepare_agent_credential_context
@@ -331,6 +335,141 @@ class AgentControlTests(unittest.TestCase):
             secrets.email_to, ("second@example.test", "to@example.test")
         )
         self.assertNotIn("placeholder-key", repr(secrets))
+
+    def test_activation_is_marker_last_and_retains_disabled_backup(self):
+        secrets = {"schema_version": 2, "resend": {
+            "api_key": "placeholder-key",
+            "email_from": "from@example.test",
+            "email_to": "to@example.test",
+        }}
+        initialize_agent_production_root(
+            self.internal, self.repository, self._configuration(), secrets,
+        )
+        backup = self.root / "activation-backup"
+        calls = []
+
+        def replace(source, target):
+            calls.append(target.name)
+            os.replace(source, target)
+
+        activate_agent_production_root(
+            self.internal,
+            self.repository,
+            backup,
+            replace_file=replace,
+        )
+
+        self.assertEqual(calls[-1], AGENT_PRODUCTION_MARKER)
+        configuration, installed_secrets = validate_agent_production_root(
+            self.internal, self.repository
+        )
+        self.assertTrue(configuration.external_effects_enabled)
+        self.assertIsNotNone(installed_secrets)
+        self.assertTrue(backup.is_dir())
+
+    def test_interrupted_activation_restores_exact_disabled_files(self):
+        secrets = {"schema_version": 2, "resend": {
+            "api_key": "placeholder-key",
+            "email_from": "from@example.test",
+            "email_to": "to@example.test",
+        }}
+        initialize_agent_production_root(
+            self.internal, self.repository, self._configuration(), secrets,
+        )
+        names = (
+            ".agent-production-config.v2.json",
+            ".agent-production-secrets.v2.json",
+            ".agent-production-control.v2.json",
+        )
+        before = {name: (self.internal / name).read_bytes() for name in names}
+        calls = 0
+
+        def interrupt_once(source, target):
+            nonlocal calls
+            calls += 1
+            if calls == 2:
+                raise OSError("fixture interruption")
+            os.replace(source, target)
+
+        with self.assertRaisesRegex(ValueError, "activation failed"):
+            activate_agent_production_root(
+                self.internal,
+                self.repository,
+                self.root / "activation-backup",
+                replace_file=interrupt_once,
+            )
+
+        configuration, _ = validate_agent_production_root(
+            self.internal, self.repository
+        )
+        self.assertFalse(configuration.external_effects_enabled)
+        self.assertEqual(
+            before,
+            {name: (self.internal / name).read_bytes() for name in names},
+        )
+
+    def test_explicit_restore_recovers_invalid_partial_activation(self):
+        secrets = {"schema_version": 2, "resend": {
+            "api_key": "placeholder-key",
+            "email_from": "from@example.test",
+            "email_to": "to@example.test",
+        }}
+        initialize_agent_production_root(
+            self.internal, self.repository, self._configuration(), secrets,
+        )
+        backup = self.root / "activation-backup"
+        create_agent_activation_backup(
+            self.internal, self.repository, backup
+        )
+        config = self.internal / ".agent-production-config.v2.json"
+        payload = json.loads(config.read_text(encoding="utf-8"))
+        payload["external_effects_enabled"] = True
+        config.write_text(
+            json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n",
+            encoding="utf-8",
+        )
+        with self.assertRaisesRegex(ValueError, "marker is invalid"):
+            validate_agent_production_root(self.internal, self.repository)
+
+        restore_disabled_agent_production_root(
+            self.internal, self.repository, backup
+        )
+
+        configuration, _ = validate_agent_production_root(
+            self.internal, self.repository
+        )
+        self.assertFalse(configuration.external_effects_enabled)
+
+    def test_disabled_activation_rehearsal_is_byte_exact(self):
+        secrets = {"schema_version": 2, "resend": {
+            "api_key": "placeholder-key",
+            "email_from": "from@example.test",
+            "email_to": "to@example.test",
+        }}
+        initialize_agent_production_root(
+            self.internal, self.repository, self._configuration(), secrets,
+        )
+        names = (
+            ".agent-production-config.v2.json",
+            ".agent-production-secrets.v2.json",
+            ".agent-production-control.v2.json",
+        )
+        before = {name: (self.internal / name).read_bytes() for name in names}
+
+        rehearse_disabled_agent_activation(
+            self.internal,
+            self.repository,
+            self.root / "activation-rehearsal-backup",
+        )
+
+        configuration, _ = validate_agent_production_root(
+            self.internal, self.repository
+        )
+        self.assertFalse(configuration.external_effects_enabled)
+        self.assertEqual(
+            before,
+            {name: (self.internal / name).read_bytes() for name in names},
+        )
 
 
 if __name__ == "__main__":

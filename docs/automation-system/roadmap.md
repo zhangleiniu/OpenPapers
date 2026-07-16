@@ -19,6 +19,7 @@ graph.
 | Production composition | Explicit cohort/config plus one bounded agent wakeup effect | Implemented |
 | Installation | Private config v2, production backup/migration, and LaunchDaemon switch | Implemented |
 | Post-install operations | Private credentials, isolated live-canary commands, and disabled refresh | Implemented |
+| Activation and rollback | Read-only readiness, marker-last transition, exact recovery, and disabled rehearsal; external effects remain disabled | Implemented |
 | State simplification | Migrate away from vestigial verification/case/job/notification schema | Planned after target run state is fixed |
 
 Valid phase statuses are `Planned`, `In progress`, `Implemented`, and
@@ -292,6 +293,41 @@ A separately authorized installed Codex canary then completed with
 existing provisional OpenReview fallback, made no scraper-logic or readiness
 claim, and retained the isolated canary worktree. None of these results is
 permission for further actions.
+
+## Activation and rollback (Implemented; external effects disabled)
+
+`automation/agent_activation.py` adds four deliberately separate operator
+commands. `audit` is read-only. `rehearse-disabled` exercises exact backup,
+marker-last replay, and restore without setting the gate true. `activate`
+requires its own exact authorization plus a stopped fixed LaunchDaemon and
+changes only `external_effects_enabled`. `rollback` requires a stopped service
+and restores the retained exact disabled binding; it does not require a model,
+email provider, or resumed cloud path.
+
+Readiness requires schema 10 with quick-check healthy, local ownership, no
+active event-date or agent attempt and no in-flight report; private Codex and
+Google credentials; configured Resend secrets whose 1-10 recipients match the
+address-free policy fingerprints; the pinned clean no-remote source; configured
+minimum execution-volume free space; the expected fixed-service state; and a
+private cloud proof no more than 15 minutes old showing the exact external
+schedule paused and zero active executions. The ignored host wrapper owns the
+external GCP query and exact resource identifiers; tracked code validates only
+the bounded proof.
+
+`automation/local_service/agent_control.py` retains an exact private disabled
+backup before activation, stages config/secrets/marker privately, replaces the
+marker last, fsyncs the directory, and validates the result. In-process failure
+restores the backup. Explicit rollback can restore that backup even when a
+partial transition made the current marker invalid. Tests use temporary roots
+and injected service/disk evidence; they never construct a live adapter.
+
+Acceptance met in repository tests: safe audit output is address/path/secret
+free and leaves state/config bytes unchanged; stale/non-drained cloud,
+service-state mismatch, schema/active-state, credential, source, and disk
+defects block; activation authorization is checked before audit/replacement;
+the marker is last; interrupted replacement restores exact disabled bytes;
+and disabled rehearsal ends byte-equivalent with effects false. Installation
+refresh and rehearsal are operational acceptance steps, not activation.
 
 ## State simplification (Planned)
 
