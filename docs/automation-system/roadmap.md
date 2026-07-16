@@ -326,8 +326,12 @@ free and leaves state/config bytes unchanged; stale/non-drained cloud,
 service-state mismatch, schema/active-state, credential, source, and disk
 defects block; activation authorization is checked before audit/replacement;
 the marker is last; interrupted replacement restores exact disabled bytes;
-and disabled rehearsal ends byte-equivalent with effects false. Installation
-refresh and rehearsal are operational acceptance steps, not activation.
+and disabled rehearsal ends byte-equivalent with effects false. Operational
+acceptance also passed: the 203-file `a09aac9` runtime/source refresh completed,
+stopped-service rehearsal ended disabled, the reloaded service returned
+`no_due_work`, the loaded-service audit reported every readiness gate healthy,
+cloud remained paused/drained, and both canary worktrees were preserved. This
+is not activation.
 
 ## State simplification (Planned)
 

@@ -84,11 +84,13 @@ only its passing regression test for the existing provisional OpenReview
 fallback and retained the isolated canary worktree. It did not establish scrape
 readiness or change scraper logic.
 
-The repository now also implements a separate read-only activation audit,
+The installed runtime now includes the separate read-only activation audit,
 effects-disabled rehearsal, marker-last gate transition, and exact disabled
-rollback. These tools still require a disabled installation refresh before
-host use. Implementation and rehearsal do not authorize activation; the live
-gate remains false.
+rollback. Its authorized disabled rehearsal completed, followed by a loaded-
+service audit proving schema 10 healthy and idle, both credentials, two approved
+recipients, sufficient disk, the pinned source, and cloud paused with zero
+active executions. Effects remain false. Installation and rehearsal do not
+authorize activation.
 
 Schema version 10 adds event-date and agent schedule/attempt tables plus the
 new execution-artifact and agent-run-report records.

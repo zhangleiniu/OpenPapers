@@ -136,12 +136,13 @@ The following exists and runs today:
   provisioning. Either an enabled current configuration or an enabled
   candidate is rejected, and an interrupted replacement fails marker
   validation closed.
-- `automation/agent_activation.py`: a repository-implemented, fake-tested
+- `automation/agent_activation.py`: an installed-disabled, fake-tested
   read-only readiness audit plus separately authorized activation, disabled
   rehearsal, and rollback commands. It requires exact schema/idle,
   credential/allowlist, disk/source, fixed-service, and fresh paused/drained
-  cloud evidence before the gate can be opened. The installed gate remains
-  false; implementation or rehearsal permission is not activation permission.
+  cloud evidence before the gate can be opened. Its installed disabled
+  rehearsal completed and the read-only audit passed; the gate remains false,
+  and implementation or rehearsal permission is not activation permission.
 - `automation/control_state_migration.py`: a safe-summary read-only audit,
   new-file SQLite backup, and isolated-copy schema rehearsal command. Fixture
   rehearsal passed; the dedicated-role production database was migrated from

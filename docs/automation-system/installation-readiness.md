@@ -26,10 +26,13 @@ authorized canary made a single provider request, and the operator confirmed
 delivery to both approved recipients. These observations do not authorize
 another canary or activation.
 
-The repository now also contains an explicit activation/readiness/rollback
-boundary. It has not opened the installed gate. Before any future activation,
-install the exact committed implementation through the disabled refresh path
-and complete the disabled rehearsal below.
+The installed runtime now contains the explicit activation/readiness/rollback
+boundary from commit `a09aac9`. Its stopped-service disabled rehearsal and
+post-bootstrap read-only audit completed successfully. The audit proved schema
+10 healthy and idle, both credentials, two approved recipients, sufficient
+disk, the pinned source, the fixed service loaded, and cloud paused with zero
+active executions. The gate remains false; a future activation still requires
+separate authorization and fresh evidence.
 
 ## Installed automation dependency gate
 
