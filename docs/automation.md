@@ -71,8 +71,11 @@ Dedicated-role credential-path injection, three adapter-specific canary
 commands, and disabled-only marker-last refresh are implemented in the
 repository. The dedicated role now has private Codex device authentication and
 Google ADC backed by service-account impersonation; no service-account key was
-created. Resend is not configured, no new live canary has completed, and the
-installed global gate remains false until separately authorized activation.
+created. After repairing the fixed service venv from tracked automation
+requirements, the separately authorized installed Gemini canary completed and
+returned the ICML 2026 date hint `2026-07-07`. Resend is not configured, no
+Codex canary has run through the installed command, and the installed global
+gate remains false until separately authorized activation.
 
 Schema version 10 adds event-date and agent schedule/attempt tables plus the
 new execution-artifact and agent-run-report records.

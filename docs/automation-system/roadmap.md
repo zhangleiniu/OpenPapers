@@ -277,11 +277,14 @@ provisioning, and partial replacement.
 
 Acceptance met in repository tests. Dedicated-role Codex device authentication
 and impersonated Google ADC have now passed the private-file status gate;
-Resend configuration, every successful live canary, and activation remain
-separate operator actions. The first authorized Gemini canary attempt failed
-at the installed SDK import before any provider request, which exposed the
-need for an explicit installed-automation-dependency gate. The first authorized
-host refresh is operational evidence, not permission for further actions.
+Resend configuration, Codex and Resend live canaries, and activation remain
+separate operator actions. The first authorized installed Gemini canary attempt
+failed at the SDK import before any provider request, which exposed the need
+for an explicit installed-automation-dependency gate. After the fixed service
+venv was repaired from tracked requirements, a newly authorized installed
+Gemini canary completed and returned the ICML 2026 date hint `2026-07-07`.
+Neither that result nor the first authorized host refresh is permission for
+further actions.
 
 ## State simplification (Planned)
 
