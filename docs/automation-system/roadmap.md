@@ -68,8 +68,7 @@ field optional. The explicit venue cohort, independent monthly lookup ceiling,
 installed caller, and schema migration now exist. The repository target policy
 also adds the following year each October and advances the active window each
 January without expanding the venue allowlist or reopening durable old rows.
-That annual policy is fake-clock tested but has not yet been refreshed into the
-enabled installed runtime.
+That annual policy is fake-clock tested and installed in the enabled runtime.
 
 Deliverables:
 
@@ -164,8 +163,7 @@ checks during active or partial release, and explicitly says not to suppress
 normal use merely to save calls. The portable result schema documents that
 contract, and parsing rejects timezone-free suggestions before durable
 completion. Null and the existing fallback remain compatible when no credible
-time exists. This refinement is fake-tested but is not in the currently
-installed runtime until a separately authorized enabled-runtime upgrade.
+time exists. This refinement is fake-tested and installed.
 
 Deliverables:
 

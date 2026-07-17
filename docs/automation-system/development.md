@@ -85,9 +85,8 @@ JMLR because terminal `success` would miss later papers in the same year. Its
 America/Chicago rollover adds the next year in October and moves the active
 window in January while preserving all older durable state. Tests that
 exercise the boundary inject an explicit date; ordinary runtime loading uses
-the local calendar. The enabled installed runtime remains pinned to the
-previous three-venue explicit-2026 file until a separately authorized
-production upgrade.
+the local calendar. The enabled installed runtime uses this tracked 14-venue
+annual policy after the authorized production upgrade to `eb0e762`.
 
 Post-install credential preparation and safe status checks use the dedicated
 role and private internal root. These commands do not call a model or send

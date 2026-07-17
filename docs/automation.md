@@ -103,8 +103,11 @@ and the read-only dashboard described below. A report counts as the next
 development gate only when it says `Disposition: success`; a source change or
 `not_ready` report does not satisfy that gate.
 
-To resume development after a genuine success, start either the existing
-conversation or a new one with the success report and this instruction:
+For any new or resumed development task, begin with the zero-context reading
+order, deployed snapshot, next gates, and reusable prompt in
+[`automation-system/current-handoff.md`](./automation-system/current-handoff.md).
+After a genuine production success, attach its report and use this specialized
+instruction:
 
 > Continue OpenPapers agent-driven automation. Read `AGENTS.md`, the required
 > automation-system documents, current ExecPlans, and commits since the last

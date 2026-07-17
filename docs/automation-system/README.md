@@ -3,7 +3,10 @@
 This directory is the zero-context entry point for OpenPapers' optional
 automation control plane. Read this page before changing `automation/`, then
 [`architecture.md`](./architecture.md) for the safety boundaries and
-[`roadmap.md`](./roadmap.md) for implementation status.
+[`roadmap.md`](./roadmap.md) for implementation status. A returning agent reads
+[`development.md`](./development.md) next and then
+[`current-handoff.md`](./current-handoff.md) for the concise deployed snapshot,
+next gates, and reusable continuation prompt.
 
 The core scrapers remain independently installable and runnable. Prefect,
 GCP, an LLM provider, email, and a coding-agent CLI are never core
@@ -116,7 +119,7 @@ The following exists and runs today:
   with active/partial releases checked promptly and no artificial conservation
   of normal agent usage. It still permits null when no defensible time exists,
   and neither dates nor source changes become readiness proof. This prompt
-  refinement has not yet been refreshed into the installed runtime.
+  refinement is installed.
 - `automation/agent_worktree_retention.py`: an explicit, production-enabled retention
   effect that removes only terminal schema-10 worktrees beneath the exact
   configured runs root, using age and count bounds. Unregistered worktrees,
@@ -133,9 +136,8 @@ The following exists and runs today:
   semantics. A
   date lookup, agent run, report attempt, and retention cleanup are separately
   bounded; adapters are constructed only after the enabled configuration and
-  all credential/source gates validate. The annual cohort policy has not yet
-  been refreshed into the enabled installed runtime, which remains pinned to
-  the explicit AISTATS/ICML/IJCAI 2026 target file.
+  all credential/source gates validate. The enabled installed runtime now uses
+  this 14-venue annual cohort policy.
 - `automation/agent_credentials.py` and `automation/agent_canary.py`: private
   dedicated-role credential layout plus three mutually exclusive operator
   canaries. Codex receives an explicit private `CODEX_HOME`, Gemini loads an
@@ -144,11 +146,11 @@ The following exists and runs today:
   Gemini, Codex, and Resend canaries have completed. The Resend canary used one
   provider request addressed to the two approved recipients, and the operator
   confirmed delivery to both.
-- `automation/local_service/agent_control.py`: disabled-only marker-last
-  replacement primitives for runtime/source refresh and Resend secret
-  provisioning. Either an enabled current configuration or an enabled
-  candidate is rejected, and an interrupted replacement fails marker
-  validation closed.
+- `automation/local_service/agent_control.py`: marker-last replacement
+  primitives for disabled refresh/Resend provisioning and separately bounded
+  enabled runtime replacement. Disabled refresh rejects either enabled
+  endpoint. Enabled replacement requires both endpoints to remain enabled and
+  restores exact prior files on an in-process failure.
 - `automation/agent_activation.py`: an installed and exercised
   read-only readiness audit plus separately authorized activation, disabled
   rehearsal, and rollback commands. It requires exact schema/idle,
@@ -157,29 +159,28 @@ The following exists and runs today:
   restored its exact disabled backup, the source-layout repair was refreshed
   disabled and a newly authorized activation completed. The first successful
   bounded wake recorded one event-date attempt and no Codex or Resend attempt.
-- `automation/agent_status.py`: a repository-implemented, read-only safe-summary
+- `automation/agent_status.py`: an installed, read-only safe-summary
   CLI for enabled production. It combines schema/idle lifecycle state, the last
   three bounded service wakes, credential/recipient/source/disk readiness, a
   fresh paused/drained cloud proof, and a fresh two-canary drift proof without
   printing paths, addresses, explanations, changed filenames, receipts, or
   credentials. Canary comparison uses a private expected branch/HEAD/status
-  digest, so an intentionally dirty retained canary is not a false alarm. This
-  module has not yet been refreshed into the installed runtime.
-- `automation/agent_dashboard.py`: a repository-implemented local web view
+  digest, so an intentionally dirty retained canary is not a false alarm.
+- `automation/agent_dashboard.py`: an installed local web view
   built only from the immutable safe state summary and the validated catalog.
   It lists all catalog venues, deterministic-monitor registration, enrolled
   years, last schedule update, next attempt, disposition, and report state.
   The listener accepts only `127.0.0.1`, exposes no control methods or external
-  resources, and has not been installed.
-- `automation/source_change_hints.py`: a repository-implemented, durable
+  resources. The loopback backend is served through a separate authenticated
+  NIU-private HTTPS proxy with a manually renewed DigiCert certificate.
+- `automation/source_change_hints.py`: an installed, durable
   scheduling-only bridge from the trusted deterministic monitor. A changed,
   available source records only venue/year/time in the bounded production
   wakeup journal. After the wake's ordinary agent/report/retention work, the
   enabled composition may advance one existing future check to the configured
   cooldown boundary. It never creates a target, claims an agent, reactivates a
   terminal schedule, treats the change as readiness, or bypasses later budget,
-  concurrency, and circuit gates. This bridge has not yet been refreshed into
-  the installed runtime.
+  concurrency, and circuit gates.
 - `automation/control_state_migration.py`: a safe-summary read-only audit,
   new-file SQLite backup, and isolated-copy schema rehearsal command. Fixture
   rehearsal passed; the dedicated-role production database was migrated from
@@ -212,6 +213,8 @@ contract, fixture, or archived document exists.
 - [`architecture.md`](./architecture.md): target components and invariants.
 - [`roadmap.md`](./roadmap.md): current phase status and acceptance criteria.
 - [`development.md`](./development.md): development and validation workflow.
+- [`current-handoff.md`](./current-handoff.md): last verified deployment
+  boundary, next gates, safe pickup procedure, and continuation prompt.
 - [`installation-readiness.md`](./installation-readiness.md): read-only audit,
   isolated rehearsal, and separately authorized installation gates.
 - [`local-first-decision.md`](./local-first-decision.md): why the production
@@ -233,5 +236,8 @@ contain or be copied into tracked secrets or host identifiers.
 - Target automation behavior: this directory's non-archive documents.
 - Current deployed topology: [`../automation.md`](../automation.md), checked
   against the actual Mac/GCP state.
+- Last verified handoff and next gates:
+  [`current-handoff.md`](./current-handoff.md), treated as a dated snapshot
+  rather than live health proof.
 - Canonical dataset coverage: `statistics.md`.
 - Historical design only: `archive/`.
