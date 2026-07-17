@@ -14,7 +14,7 @@
         "module": "scrapers.neurips",
         "class_name": "NeurIPSScraper",
         "capabilities": ["metadata", "pdf", "archival_source"],
-        "monitor_registered": false
+        "monitor_registered": true
       }
     },
     {
@@ -46,7 +46,7 @@
         "module": "scrapers.iclr",
         "class_name": "ICLRScraper",
         "capabilities": ["metadata", "pdf", "provisional_source", "archival_source"],
-        "monitor_registered": false
+        "monitor_registered": true
       }
     },
     {
@@ -62,7 +62,7 @@
         "module": "scrapers.aaai",
         "class_name": "AAAIScraper",
         "capabilities": ["metadata", "pdf", "archival_source"],
-        "monitor_registered": false
+        "monitor_registered": true
       }
     },
     {
@@ -78,7 +78,7 @@
         "module": "scrapers.cvpr",
         "class_name": "CVPRScraper",
         "capabilities": ["metadata", "pdf", "archival_source"],
-        "monitor_registered": false
+        "monitor_registered": true
       }
     },
     {
@@ -88,13 +88,15 @@
       "official_domains": ["iccv.thecvf.com"],
       "archival_domains": ["openaccess.thecvf.com"],
       "lifecycle": {
-        "kind": "annual"
+        "kind": "annual",
+        "interval_years": 2,
+        "cycle_anchor_year": 2025
       },
       "scraper": {
         "module": "scrapers.iccv",
         "class_name": "ICCVScraper",
         "capabilities": ["metadata", "pdf", "archival_source"],
-        "monitor_registered": false
+        "monitor_registered": true
       }
     },
     {
@@ -110,7 +112,7 @@
         "module": "scrapers.colt",
         "class_name": "COLTScraper",
         "capabilities": ["metadata", "pdf", "archival_source"],
-        "monitor_registered": false
+        "monitor_registered": true
       }
     },
     {
@@ -126,7 +128,7 @@
         "module": "scrapers.uai",
         "class_name": "UAIScraper",
         "capabilities": ["metadata", "pdf", "archival_source"],
-        "monitor_registered": false
+        "monitor_registered": true
       }
     },
     {
@@ -158,7 +160,7 @@
         "module": "scrapers.jmlr",
         "class_name": "JMLRScraper",
         "capabilities": ["metadata", "pdf", "archival_source"],
-        "monitor_registered": false
+        "monitor_registered": true
       }
     },
     {
@@ -168,13 +170,15 @@
       "official_domains": ["eccv.ecva.net"],
       "archival_domains": ["ecva.net"],
       "lifecycle": {
-        "kind": "annual"
+        "kind": "annual",
+        "interval_years": 2,
+        "cycle_anchor_year": 2024
       },
       "scraper": {
         "module": "scrapers.eccv",
         "class_name": "ECCVScraper",
         "capabilities": ["metadata", "pdf", "archival_source"],
-        "monitor_registered": false
+        "monitor_registered": true
       }
     },
     {
@@ -190,7 +194,7 @@
         "module": "scrapers.acl",
         "class_name": "ACLScraper",
         "capabilities": ["metadata", "pdf", "archival_source"],
-        "monitor_registered": false
+        "monitor_registered": true
       }
     },
     {
@@ -206,7 +210,7 @@
         "module": "scrapers.emnlp",
         "class_name": "EMNLPScraper",
         "capabilities": ["metadata", "pdf", "archival_source"],
-        "monitor_registered": false
+        "monitor_registered": true
       }
     },
     {

@@ -10,13 +10,13 @@ from automation.agent_production import (
     AgentProductionConfigurationError,
     AgentProductionEffect,
     AgentProductionSecrets,
+    _cohort_year_applies,
     build_live_agent_production_effect,
     load_agent_production_configuration,
     load_agent_targets,
 )
 from automation.resend_notifications import recipient_fingerprints
 from automation.codex_agent import CodexProcessResult
-from automation.configuration import load_venue_catalog
 from automation.control_state import ControlStateRepository
 from automation.domain import Writer
 from automation.event_dates import EventDateEstimate
@@ -85,6 +85,23 @@ class TransportFactory:
         return transport
 
 
+class CohortYearApplicabilityTests(unittest.TestCase):
+    def test_default_annual_lifecycle_applies_every_year(self):
+        for year in (2025, 2026, 2027, 2100):
+            self.assertTrue(_cohort_year_applies({"kind": "annual"}, year))
+
+    def test_biennial_lifecycle_applies_only_on_the_anchored_parity(self):
+        iccv = {"kind": "annual", "interval_years": 2, "cycle_anchor_year": 2025}
+        eccv = {"kind": "annual", "interval_years": 2, "cycle_anchor_year": 2024}
+
+        self.assertFalse(_cohort_year_applies(iccv, 2026))
+        self.assertTrue(_cohort_year_applies(iccv, 2025))
+        self.assertTrue(_cohort_year_applies(iccv, 2027))
+        self.assertTrue(_cohort_year_applies(eccv, 2026))
+        self.assertFalse(_cohort_year_applies(eccv, 2025))
+        self.assertFalse(_cohort_year_applies(eccv, 2027))
+
+
 class AgentProductionTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -140,16 +157,19 @@ class AgentProductionTests(unittest.TestCase):
 
     def test_tracked_targets_and_strict_configuration_are_bounded(self):
         tracked = load_agent_targets(today=date(2026, 7, 16))
-        annual = {
-            venue["venue_id"] for venue in load_venue_catalog()["venues"]
-            if venue["lifecycle"]["kind"] == "annual"
-        }
+        cohort_venue_ids = set(
+            json.loads(TRACKED_TARGETS.read_text())["cohort"]["venue_ids"]
+        )
+        # ICCV is biennial (anchored on odd years) and does not occur in 2026;
+        # every other cohort venue does.
         self.assertEqual(
             {(item.venue_id, item.year) for item in tracked},
-            {(venue_id, 2026) for venue_id in annual},
+            {(venue_id, 2026) for venue_id in cohort_venue_ids - {"iccv"}},
         )
-        self.assertEqual(len(tracked), 14)
+        self.assertEqual(len(tracked), 12)
         self.assertNotIn("jmlr", {item.venue_id for item in tracked})
+        self.assertNotIn("naacl", {item.venue_id for item in tracked})
+        self.assertNotIn("iccv", {item.venue_id for item in tracked})
         invalid = dict(self.payload, resend_api_key="secret")
         with self.assertRaises(AgentProductionConfigurationError):
             load_agent_production_configuration(invalid, targets_path=self.targets)
@@ -183,15 +203,29 @@ class AgentProductionTests(unittest.TestCase):
         rollover = load_agent_targets(TRACKED_TARGETS, today=date(2026, 10, 1))
         next_year = load_agent_targets(TRACKED_TARGETS, today=date(2027, 1, 1))
 
-        self.assertEqual(len(before), 14)
+        cohort_venue_ids = set(
+            json.loads(TRACKED_TARGETS.read_text())["cohort"]["venue_ids"]
+        )
+        # ICCV (biennial, odd years) and ECCV (biennial, even years) each sit
+        # out one of the two rollover years; every other cohort venue appears
+        # in both.
+        self.assertEqual(len(before), 12)
         self.assertEqual({item.year for item in before}, {2026})
-        self.assertEqual(len(rollover), 28)
+        self.assertNotIn("iccv", {item.venue_id for item in before})
+        self.assertIn("eccv", {item.venue_id for item in before})
+        self.assertEqual(len(rollover), 24)
         self.assertEqual({item.year for item in rollover}, {2026, 2027})
-        self.assertEqual(len(next_year), 14)
+        self.assertEqual(len(next_year), 12)
         self.assertEqual({item.year for item in next_year}, {2027})
+        self.assertIn("iccv", {item.venue_id for item in next_year})
+        self.assertNotIn("eccv", {item.venue_id for item in next_year})
+        # No target ever exceeds the tracked cohort's venue allowlist, and no
+        # target is ever generated for the excluded NAACL/JMLR venues.
+        self.assertTrue(
+            {item.venue_id for item in rollover} <= cohort_venue_ids
+        )
         self.assertEqual(
-            {item.venue_id for item in rollover},
-            {item.venue_id for item in before},
+            {item.venue_id for item in rollover}, cohort_venue_ids
         )
 
     def test_rollover_registers_all_targets_but_attempts_one_date(self):
@@ -223,7 +257,7 @@ class AgentProductionTests(unittest.TestCase):
             state, writer=Writer.LOCAL_CONTROL_PLANE, clock=lambda: NOW
         ) as repository:
             schedules = repository.list_event_date_schedules()
-        self.assertEqual(len(schedules), 28)
+        self.assertEqual(len(schedules), 24)
         self.assertEqual(len(provider.calls), 1)
 
     def test_configuration_accepts_legacy_single_and_v3_recipient_allowlist(self):

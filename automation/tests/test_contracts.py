@@ -173,14 +173,29 @@ class ConfigurationTests(unittest.TestCase):
         }
         self.assertEqual(venues["jmlr"]["lifecycle"]["kind"], "continuous")
         self.assertEqual(venues["jmlr"]["lifecycle"], {"kind": "continuous"})
+        # ICCV/ECCV are annual-lifecycle (discrete, non-continuous) venues
+        # that additionally carry a periodic-cadence modifier; every other
+        # venue's lifecycle is still exactly {"kind"}.
+        self.assertEqual(
+            venues["iccv"]["lifecycle"],
+            {"kind": "annual", "interval_years": 2, "cycle_anchor_year": 2025},
+        )
+        self.assertEqual(
+            venues["eccv"]["lifecycle"],
+            {"kind": "annual", "interval_years": 2, "cycle_anchor_year": 2024},
+        )
         self.assertTrue(all(
             set(venue["lifecycle"]) == {"kind"}
-            for venue in venues.values()))
+            for venue_id, venue in venues.items()
+            if venue_id not in {"iccv", "eccv"}))
         monitored = {
             venue_id for venue_id, venue in venues.items()
             if venue["scraper"]["monitor_registered"]
         }
-        self.assertEqual(monitored, {"icml", "aistats", "ijcai"})
+        self.assertEqual(monitored, {
+            "icml", "aistats", "ijcai", "iclr", "neurips", "colt", "uai",
+            "cvpr", "iccv", "eccv", "aaai", "jmlr", "acl", "emnlp",
+        })
 
         legacy = load_venue_catalog()
         legacy["venues"][0]["lifecycle"]["expected_check_months"] = [12]

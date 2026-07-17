@@ -187,12 +187,21 @@ command rejects enabled production and must not be used for future upgrades.
 
 The venue dashboard is a narrower scheduling view and does not need cloud or
 canary proofs. Run it as the account that can read the schema-10 database from
-the installed runtime directory:
+the installed runtime directory and, for the "Last downloaded" column, the
+core scraper's `$SCRAPER_DATA_ROOT/metadata/` tree:
 
 ```bash
 <installed-python> -m automation.agent_dashboard \
-  --state <control-state> --bind 127.0.0.1 --port 8765
+  --state <control-state> --bind 127.0.0.1 --port 8765 \
+  --metadata-root <scraper-data-root>/metadata
 ```
+
+`--metadata-root` defaults to the core `config.METADATA_DIR` resolved from
+`SCRAPER_DATA_ROOT`/`.env`, so it is normally omitted; pass it explicitly only
+when the dashboard role's environment does not already resolve that path. A
+missing or unreadable metadata root degrades the "Last downloaded" column to
+`—` for every venue rather than failing the page, since it is supplementary
+dataset evidence, not authoritative control state.
 
 It refuses any bind other than `127.0.0.1`, rereads state immutably on each
 page request, and has no mutation endpoint. Production manages that backend as
@@ -200,8 +209,12 @@ a LaunchDaemon. A separate `_openpapers` Caddy LaunchDaemon exposes only the
 fixed NIU private interface with NIU-issued DigiCert HTTPS and Basic Auth. From
 the NIU network or VPN, open `https://archer.cs.niu.edu:8443/`.
 
-The page shows all catalog venues even when not enrolled, and distinguishes
-deterministic monitor registration from coding-agent schedule state. The
+The page shows one row per catalog venue even when not enrolled — the
+highest-year persisted schedule stands in for the venue when more than one
+year exists — ordered so the venue closest to producing new data sorts
+first, with a colored progress indicator next to its phase. It distinguishes
+deterministic monitor registration (a small warning badge on the venue
+abbreviation when unconfigured) from coding-agent schedule state. The
 username is `openpapers`. The manually installed leaf certificate expires on
 2026-12-03 and is not eligible for Caddy automatic renewal. Renewal requires a
 replacement NIU DoIT certificate, matching private key, complete intermediate

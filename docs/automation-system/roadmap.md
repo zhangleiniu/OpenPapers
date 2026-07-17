@@ -230,12 +230,24 @@ were added later under separate operational authorities.
 
 `automation/agent_production.py` composes the target path behind injected
 provider, Codex, and notification boundaries. The tracked
-`automation/config/agent_targets.v1.json` keeps an explicit allowlist of all 14
-annual catalog venues and is deliberately independent of the deterministic
-monitor registry. JMLR remains visible in the catalog but is excluded because
-continuous publication needs recurring, non-terminal success semantics.
-Starting from 2026, October includes the following year for one-time date
-initialization and January moves the active window forward.
+`automation/config/agent_targets.v1.json` keeps an explicit allowlist of the
+13 catalog venues with a reliable annual or fixed-period cadence and is
+deliberately independent of the deterministic monitor registry. JMLR remains
+visible in the catalog but is excluded because continuous publication needs
+recurring, non-terminal success semantics; NAACL is excluded the same way
+because its actual cadence is irregular with no reliable formula (see
+`docs/naacl.md`) rather than annual or a fixed period. Starting from 2026,
+October includes the following year for one-time date initialization and
+January moves the active window forward. Two allowlisted venues carry a
+periodic-cadence modifier on their catalog `lifecycle`
+(`interval_years`/`cycle_anchor_year`) rather than occurring every rollover
+year: ICCV (anchored 2025, interval 2 — held in odd years) and ECCV
+(anchored 2024, interval 2 — held in even years). `load_agent_targets` only
+emits a target for a rollover year that satisfies `(year -
+cycle_anchor_year) % interval_years == 0` for those two venues, so the
+cohort no longer generates, for example, an `(iccv, 2026)` target for a
+conference that does not occur that year; every other allowlisted venue is
+still treated as occurring every rollover year.
 Existing persisted rows remain authoritative and are not deleted or
 reactivated by the calendar. Private configuration pins the cohort fingerprint,
 Gemini identity, absolute Codex binary, separate monthly date-lookup and
@@ -270,10 +282,20 @@ Fake monitor/composition/state tests cover these properties. The enabled
 production runtime now contains this bridge.
 
 Annual cohort expansion is installed in enabled production.
-Fake-date tests cover exact equality with the catalog's 14 annual venues,
+Fake-date tests cover exact equality with the catalog's tracked cohort,
 continuous-JMLR exclusion, the September/October/January boundary,
 registration of the full expanded cohort, and the one-date-attempt-per-wake
 bound.
+
+The periodic-cadence correction above (ICCV/ECCV interval filtering, NAACL
+removed from the tracked allowlist) is implemented and tested in the
+repository but has not yet been deployed to the installed production role;
+the last authorized production upgrade remains commit `eb0e762`'s uniform
+14-venue allowlist, which still includes NAACL and still treats ICCV/ECCV as
+occurring every year. Deploying this correction to production requires the
+same stopped-service, marker-last configuration-replacement procedure used
+for prior enabled-runtime upgrades, and is a separate authorized operational
+step from this repository change.
 
 The installed filesystem layout keeps the validated no-remote source at
 `<external>/agent-source` and managed worktrees at the sibling

@@ -103,15 +103,30 @@ estimate sleeps without periodic refresh. When it becomes due, the coding
 agent—not the discovery provider—checks actual publication readiness.
 
 The tracked cohort policy preserves an explicit allowlist containing every
-annual venue currently in the catalog. It does not infer enrollment from
-deterministic monitor coverage and does not force the continuous JMLR journal
-through a terminal conference-success lifecycle. In the America/Chicago
-calendar, October adds the following year to initialization; January advances
-the active window to that year. Expansion registers all targets idempotently
-but still attempts at most one missing date per wake. Durable rows for earlier
-years are neither deleted nor reopened: their persisted terminal or retry
-state continues to govern them. Calendar dates and the rollover remain
-scheduling hints, never readiness evidence.
+venue in the catalog with a reliable annual or fixed-period cadence. It does
+not infer enrollment from deterministic monitor coverage and does not force
+the continuous JMLR journal through a terminal conference-success lifecycle.
+In the America/Chicago calendar, October adds the following year to
+initialization; January advances the active window to that year. Expansion
+registers all targets idempotently but still attempts at most one missing
+date per wake. Durable rows for earlier years are neither deleted nor
+reopened: their persisted terminal or retry state continues to govern them.
+Calendar dates and the rollover remain scheduling hints, never readiness
+evidence.
+
+A venue whose catalog `lifecycle` carries an `interval_years`/
+`cycle_anchor_year` pair only receives a target for a rollover year that
+satisfies `(year - cycle_anchor_year) % interval_years == 0`; every other
+allowlisted venue is treated as occurring every year, exactly as before. ICCV
+(anchored on 2025, interval 2) and ECCV (anchored on 2024, interval 2) are
+the catalog's only two periodic venues today, reflecting that ICCV is held
+in odd years and ECCV in even years — the cohort no longer schedules a
+Codex run against a year in which one of these conferences does not occur.
+NAACL is excluded from the tracked allowlist entirely, the same treatment
+JMLR already receives: NAACL's actual cadence is irregular with no reliable
+formula (see `docs/naacl.md`), so it remains visible in the catalog and
+dashboard but requires a deliberate future enrollment decision rather than
+automatic calendar-driven scheduling.
 
 A new discovery call is justified only when the estimate is absent or invalid,
 the venue/year was explicitly rescheduled, or an agent result reports that the

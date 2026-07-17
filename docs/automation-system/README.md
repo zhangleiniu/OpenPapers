@@ -166,13 +166,23 @@ The following exists and runs today:
   printing paths, addresses, explanations, changed filenames, receipts, or
   credentials. Canary comparison uses a private expected branch/HEAD/status
   digest, so an intentionally dirty retained canary is not a false alarm.
-- `automation/agent_dashboard.py`: an installed local web view
-  built only from the immutable safe state summary and the validated catalog.
-  It lists all catalog venues, deterministic-monitor registration, enrolled
-  years, last schedule update, next attempt, disposition, and report state.
-  The listener accepts only `127.0.0.1`, exposes no control methods or external
-  resources. The loopback backend is served through a separate authenticated
-  NIU-private HTTPS proxy with a manually renewed DigiCert certificate.
+- `automation/agent_dashboard.py`: an installed local web view built from the
+  immutable safe state summary, the validated catalog, and a read-only,
+  non-authoritative scan of the core scraper's own
+  `$SCRAPER_DATA_ROOT/metadata/<venue>/` tree (filenames and file
+  modification times only, never file contents) for a "last downloaded" date
+  per venue. It shows one row per catalog venue — the venue's current
+  (highest-year) schedule state collapses multiple persisted years into a
+  single row — ordered so the venue likely to produce new data soonest sorts
+  first, with a colored progress indicator summarizing phase and time
+  elapsed toward the next attempt. The listener accepts only `127.0.0.1`,
+  exposes no control methods or external resources. The loopback backend is
+  served through a separate authenticated NIU-private HTTPS proxy with a
+  manually renewed DigiCert certificate. This one-row-per-venue,
+  urgency-ordered layout and the metadata-tree read are implemented and
+  tested in the repository but have not yet been deployed to the installed
+  production role, which still serves the prior one-row-per-venue-year,
+  alphabetically-sorted layout without a metadata-tree read.
 - `automation/source_change_hints.py`: an installed, durable
   scheduling-only bridge from the trusted deterministic monitor. A changed,
   available source records only venue/year/time in the bounded production

@@ -7,7 +7,7 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 import main
-from automation.monitor import StateStore, load_registry, save_snapshot
+from automation.monitor import Monitor, StateStore, load_registry, save_snapshot
 from scrapers.base import BaseScraper
 from scrapers.icml import ICMLScraper
 from scrapers.ijcai import IJCAIScraper
@@ -323,7 +323,41 @@ class MonitorTests(unittest.TestCase):
             "automation" / "conferences.json")
         self.assertEqual(
             {(entry["venue"], entry["year"]) for entry in entries},
-            {("icml", 2026), ("aistats", 2026), ("ijcai", 2026)})
+            {
+                ("icml", 2026), ("aistats", 2026), ("ijcai", 2026),
+                ("iclr", 2026), ("neurips", 2026), ("colt", 2026),
+                ("uai", 2026), ("cvpr", 2026), ("iccv", 2027),
+                ("eccv", 2026), ("aaai", 2026), ("jmlr", 2026),
+                ("acl", 2026), ("emnlp", 2026),
+            })
+
+    def test_official_html_soup_contains_isolates_year(self):
+        # Regression coverage for the ":-soup-contains()" pattern used to
+        # target one year's entry inside a multi-year listing page (e.g.
+        # ECCV's papers.php, AAAI's OJS issue archive) without matching
+        # older years also present on the same page.
+        source = {
+            "type": "official_html",
+            "url": "https://example.invalid/papers.php",
+            "item_selector": 'button.accordion:-soup-contains("ECCV 2026")',
+            "minimum_count": 1,
+        }
+        session = Mock()
+        monitor = Monitor(session=session)
+
+        session.get.return_value = Mock(content=(
+            b'<button class="accordion">ECCV 2024 Papers</button>'
+            b'<button class="accordion">ECCV 2022 Papers</button>'
+        ))
+        status, count, _, _ = monitor.check("eccv", 2026, source)
+        self.assertEqual((status, count), ("unavailable", 0))
+
+        session.get.return_value = Mock(content=(
+            b'<button class="accordion">ECCV 2026 Papers</button>'
+            b'<button class="accordion">ECCV 2024 Papers</button>'
+        ))
+        status, count, _, _ = monitor.check("eccv", 2026, source)
+        self.assertEqual((status, count), ("available", 1))
 
     def test_state_is_separate_and_upserted(self):
         with tempfile.TemporaryDirectory() as temp_dir:

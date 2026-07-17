@@ -634,7 +634,7 @@ class ProductionControlTests(LocalServiceFixture):
             "registry_sha256": sha256(self.registry.read_bytes()).hexdigest(),
             "backup_sha256": "a" * 64,
             "remote_state_generation": "123456789",
-            "expected_source_count": 6,
+            "expected_source_count": 17,
             "smtp_host": "smtp.example.test",
             "smtp_port": 465,
             "smtp_username": "openpapers",
@@ -666,14 +666,14 @@ class ProductionControlTests(LocalServiceFixture):
                         "2026-07-14T12:00:00Z", "available", "hash", index,
                         "", "snapshot",
                     )
-                    for index in range(6)
+                    for index in range(17)
                 ],
             )
         self.monitor_state.chmod(0o600)
 
     def _events(self, *, changed=True, error=False):
         events = []
-        for index in range(6):
+        for index in range(17):
             events.append(
                 {
                     "venue": "icml",
@@ -690,7 +690,7 @@ class ProductionControlTests(LocalServiceFixture):
 
     def test_private_configuration_is_exact_and_shadow_conflicts(self):
         configuration, secrets = validate_production_root(self.internal)
-        self.assertEqual(configuration.expected_source_count, 6)
+        self.assertEqual(configuration.expected_source_count, 17)
         self.assertEqual(secrets.smtp_password, "smtp-password")
         marker = self.internal / PRODUCTION_MARKER
         self.assertEqual(marker.stat().st_mode & 0o777, 0o600)

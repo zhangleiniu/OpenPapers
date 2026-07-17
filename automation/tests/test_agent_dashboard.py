@@ -1,4 +1,5 @@
 import copy
+import os
 import sqlite3
 import tempfile
 import threading
@@ -40,6 +41,7 @@ class AgentDashboardTests(unittest.TestCase):
                 "0, NULL, NULL, ?)",
                 (next_check, self._time(NOW - timedelta(hours=1))),
             )
+        self.metadata_root = self.root / "metadata"
 
     def tearDown(self):
         self.temp.cleanup()
@@ -47,6 +49,16 @@ class AgentDashboardTests(unittest.TestCase):
     @staticmethod
     def _time(value):
         return value.isoformat().replace("+00:00", "Z")
+
+    def _write_metadata(self, venue_id, year, *, mtime=None):
+        directory = self.metadata_root / venue_id
+        directory.mkdir(parents=True, exist_ok=True)
+        path = directory / f"{venue_id}_{year}.json"
+        path.write_text("[]", encoding="utf-8")
+        if mtime is not None:
+            os_mtime = mtime.timestamp()
+            os.utime(path, (os_mtime, os_mtime))
+        return path
 
     def test_model_lists_every_catalog_venue_and_safe_schedule_times(self):
         targets = read_agent_state_summary(self.state)
@@ -59,7 +71,7 @@ class AgentDashboardTests(unittest.TestCase):
         self.assertEqual(model["enrolled_venue_count"], 1)
         self.assertEqual(model["target_count"], 1)
         venues = {venue["venue_id"]: venue for venue in model["venues"]}
-        self.assertEqual(venues["icml"]["targets"][0], {
+        self.assertEqual(venues["icml"]["current_target"], {
             "year": 2026,
             "phase": "Waiting for date",
             "last_updated_at": self._time(NOW - timedelta(hours=1)),
@@ -69,8 +81,106 @@ class AgentDashboardTests(unittest.TestCase):
         })
         self.assertFalse(venues["jmlr"]["enrolled"])
         self.assertEqual(venues["jmlr"]["lifecycle_kind"], "continuous")
-        self.assertEqual(venues["jmlr"]["source_monitor"], "Not configured")
+        self.assertEqual(venues["jmlr"]["source_monitor"], "Configured")
         self.assertEqual(venues["icml"]["source_monitor"], "Configured")
+        self.assertEqual(venues["naacl"]["source_monitor"], "Not configured")
+        self.assertIsNone(venues["icml"]["last_downloaded"])
+
+    def test_current_target_selects_the_maximum_enrolled_year(self):
+        base_targets = read_agent_state_summary(self.state)
+        extra = dict(base_targets[0])
+        extra["year"] = 2025
+        extra["event_date"] = dict(extra["event_date"])
+
+        model = build_dashboard_model(
+            load_venue_catalog(), [extra, base_targets[0]], observed_at=NOW
+        )
+
+        venues = {venue["venue_id"]: venue for venue in model["venues"]}
+        self.assertEqual(venues["icml"]["current_target"]["year"], 2026)
+        self.assertTrue(venues["icml"]["enrolled"])
+
+    def test_last_downloaded_reads_the_highest_year_file_and_degrades_safely(self):
+        self._write_metadata(
+            "icml", 2025, mtime=datetime(2025, 6, 1, tzinfo=timezone.utc)
+        )
+        self._write_metadata(
+            "icml", 2026, mtime=datetime(2026, 7, 12, 9, 0, tzinfo=timezone.utc)
+        )
+        # A malformed filename (no trailing _<year>) must be ignored, not raise.
+        (self.metadata_root / "icml" / "notes.json").write_text("{}", encoding="utf-8")
+        targets = read_agent_state_summary(self.state)
+
+        model = build_dashboard_model(
+            load_venue_catalog(), targets, observed_at=NOW,
+            metadata_root=self.metadata_root,
+        )
+
+        venues = {venue["venue_id"]: venue for venue in model["venues"]}
+        self.assertEqual(venues["icml"]["last_downloaded"], {
+            "year": 2026,
+            "observed_at": "2026-07-12T09:00:00Z",
+        })
+        # A venue with no metadata directory at all degrades to None, not an error.
+        self.assertIsNone(venues["neurips"]["last_downloaded"])
+
+    def test_last_downloaded_is_none_when_metadata_root_is_unreadable(self):
+        targets = read_agent_state_summary(self.state)
+
+        model = build_dashboard_model(
+            load_venue_catalog(), targets, observed_at=NOW,
+            metadata_root=self.root / "does-not-exist",
+        )
+
+        venues = {venue["venue_id"]: venue for venue in model["venues"]}
+        self.assertIsNone(venues["icml"]["last_downloaded"])
+        self.assertEqual(model["venue_count"], 15)
+
+    def test_urgency_rank_orders_active_before_waiting_before_unenrolled(self):
+        with sqlite3.connect(self.state) as connection:
+            connection.execute(
+                "INSERT INTO event_date_schedule VALUES "
+                "('aistats', 2026, 'active', ?, NULL, NULL, NULL, NULL, NULL, "
+                "1, ?, NULL, ?)",
+                (
+                    self._time(NOW + timedelta(days=30)),
+                    "attempt:1",
+                    self._time(NOW - timedelta(minutes=5)),
+                ),
+            )
+        targets = read_agent_state_summary(self.state)
+
+        model = build_dashboard_model(
+            load_venue_catalog(), targets, observed_at=NOW
+        )
+
+        order = [venue["venue_id"] for venue in model["venues"]]
+        # "Date lookup running" (aistats) outranks "Waiting for date" (icml),
+        # which outranks every unenrolled venue.
+        self.assertEqual(order[0], "aistats")
+        self.assertEqual(order[1], "icml")
+        self.assertTrue(set(order[2:]) == {
+            venue["venue_id"] for venue in model["venues"]
+        } - {"aistats", "icml"})
+        unenrolled_ranks = {
+            venue["venue_id"]: venue["urgency_rank"][0]
+            for venue in model["venues"] if venue["venue_id"] not in {"aistats", "icml"}
+        }
+        self.assertTrue(all(rank == 4 for rank in unenrolled_ranks.values()))
+
+    def test_progress_fraction_is_bounded_and_categorized(self):
+        targets = read_agent_state_summary(self.state)
+
+        model = build_dashboard_model(
+            load_venue_catalog(), targets, observed_at=NOW
+        )
+
+        venues = {venue["venue_id"]: venue for venue in model["venues"]}
+        waiting = venues["icml"]["progress"]
+        self.assertEqual(waiting["category"], "waiting")
+        self.assertTrue(0.0 <= waiting["fraction"] <= 1.0)
+        unenrolled = venues["neurips"]["progress"]
+        self.assertEqual(unenrolled, {"fraction": 0.0, "category": "none"})
 
     def test_renderer_escapes_catalog_text_and_contains_no_external_resource(self):
         catalog = copy.deepcopy(load_venue_catalog())
@@ -85,10 +195,27 @@ class AgentDashboardTests(unittest.TestCase):
         self.assertNotIn("https://", document)
         self.assertIn("This page performs no action", document)
 
+    def test_renderer_shows_venue_abbreviation_and_no_monitor_badge(self):
+        targets = read_agent_state_summary(self.state)
+        model = build_dashboard_model(
+            load_venue_catalog(), targets, observed_at=NOW
+        )
+
+        document = render_dashboard(model)
+
+        self.assertIn(">ICML<", document)
+        self.assertIn(">NAACL", document)
+        self.assertIn("No deterministic monitor source configured", document)
+        self.assertNotIn("<th>Name</th>", document)
+        self.assertNotIn("<th>Lifecycle</th>", document)
+        self.assertNotIn("<th>Source monitor</th>", document)
+        self.assertNotIn("<th>Year</th>", document)
+
     def test_loopback_server_rereads_without_mutating_state(self):
         before = self.state.read_bytes()
         server = create_dashboard_server(
-            self.state, port=0, clock=lambda: NOW
+            self.state, port=0, clock=lambda: NOW,
+            metadata_root=self.metadata_root,
         )
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()

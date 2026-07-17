@@ -63,8 +63,31 @@
       "additionalProperties": false,
       "required": ["kind"],
       "properties": {
-        "kind": {"enum": ["annual", "continuous"]}
-      }
+        "kind": {"enum": ["annual", "continuous"]},
+        "interval_years": {"type": "integer", "minimum": 1, "maximum": 10},
+        "cycle_anchor_year": {"type": "integer", "minimum": 2000, "maximum": 2200}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"kind": {"const": "continuous"}}},
+          "then": {
+            "not": {
+              "anyOf": [
+                {"required": ["interval_years"]},
+                {"required": ["cycle_anchor_year"]}
+              ]
+            }
+          }
+        },
+        {
+          "if": {"required": ["interval_years"]},
+          "then": {"required": ["cycle_anchor_year"]}
+        },
+        {
+          "if": {"required": ["cycle_anchor_year"]},
+          "then": {"required": ["interval_years"]}
+        }
+      ]
     },
     "scraper": {
       "type": "object",

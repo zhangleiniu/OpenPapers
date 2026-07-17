@@ -53,6 +53,14 @@ class AgentProductionConfigurationError(ValueError):
     """Raised when uninstalled production inputs are not exact and bounded."""
 
 
+def _cohort_year_applies(lifecycle: Mapping[str, Any], year: int) -> bool:
+    """Return whether a periodic venue (e.g. biennial ICCV/ECCV) occurs in year."""
+    interval = lifecycle.get("interval_years")
+    if interval is None:
+        return True
+    return (year - lifecycle["cycle_anchor_year"]) % interval == 0
+
+
 @dataclass(frozen=True)
 class AgentProductionConfiguration:
     targets: tuple[EventDateTarget, ...]
@@ -126,6 +134,7 @@ def load_agent_targets(
         raise AgentProductionConfigurationError("agent targets are not canonical")
     catalog = load_venue_catalog()
     known = {item["venue_id"] for item in catalog["venues"]}
+    lifecycle_by_id = {item["venue_id"]: item["lifecycle"] for item in catalog["venues"]}
     targets: list[EventDateTarget] = []
     if isinstance(payload, dict) and set(payload) == {"schema_version", "targets"} \
             and payload.get("schema_version") == 1 \
@@ -177,6 +186,7 @@ def load_agent_targets(
             EventDateTarget(venue_id, year)
             for venue_id in venue_ids
             for year in range(active_year, final_year + 1)
+            if _cohort_year_applies(lifecycle_by_id[venue_id], year)
         )
     else:
         raise AgentProductionConfigurationError("agent targets are invalid")

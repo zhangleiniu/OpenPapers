@@ -7,6 +7,7 @@ import html
 import json
 import os
 import stat
+import sys
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
@@ -16,9 +17,21 @@ from urllib.parse import urlsplit
 from automation.agent_status import AgentStatusError, read_agent_state_summary
 from automation.configuration import load_venue_catalog
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from config import METADATA_DIR  # noqa: E402
+
 
 _BIND = "127.0.0.1"
 _MAX_TARGETS = 100
+_ACTIVE_PHASES = frozenset({"Agent running", "Date lookup running"})
+_ATTENTION_PHASES = frozenset({"Needs human", "Paused"})
+_PROGRESS_COLORS = {
+    "active": "#a78bfa",
+    "waiting": "#f2c14e",
+    "attention": "#f87171",
+    "done": "#4ade80",
+    "none": "#3a4763",
+}
 
 
 class AgentDashboardError(ValueError):
@@ -79,11 +92,92 @@ def _target_phase(target: Mapping[str, object]) -> str:
     raise AgentDashboardError("dashboard target has no lifecycle state")
 
 
+def _scan_last_downloaded(metadata_root: Path, venue_id: str) -> dict[str, object] | None:
+    """Return the most recent scraped year and its file mtime, or None.
+
+    Reads only directory entries and ``stat()`` mtimes under
+    ``metadata_root/<venue_id>/`` (never file contents), mirroring the glob
+    pattern ``postprocessing/generate_statistics.py::scan`` already uses.
+    Any filesystem problem degrades to ``None`` rather than raising, since
+    this is supplementary dataset evidence, not authoritative control state.
+    """
+    try:
+        candidates = list((Path(metadata_root) / venue_id).glob("*.json"))
+    except OSError:
+        return None
+    best_year: int | None = None
+    best_mtime: float | None = None
+    for path in candidates:
+        try:
+            year = int(path.stem.rsplit("_", 1)[-1])
+        except ValueError:
+            continue
+        try:
+            mtime = path.stat().st_mtime
+        except OSError:
+            continue
+        if best_year is None or year > best_year:
+            best_year, best_mtime = year, mtime
+    if best_year is None or best_mtime is None:
+        return None
+    return {
+        "year": best_year,
+        "observed_at": datetime.fromtimestamp(best_mtime, tz=timezone.utc)
+        .isoformat().replace("+00:00", "Z"),
+    }
+
+
+def _urgency_rank(current_target: Mapping[str, object] | None) -> tuple[int, str]:
+    """Rank rows so the venue closest to producing new data sorts first."""
+    if current_target is None:
+        return (4, "")
+    phase = str(current_target["phase"])
+    next_attempt = current_target.get("next_attempt_at")
+    if phase in _ACTIVE_PHASES:
+        return (0, "")
+    if next_attempt is not None:
+        return (1, str(next_attempt))
+    if phase in _ATTENTION_PHASES:
+        return (2, "")
+    if phase == "Completed":
+        return (3, "")
+    return (4, "")
+
+
+def _progress(
+    current_target: Mapping[str, object] | None, observed_at: datetime,
+) -> dict[str, object]:
+    """Compute a bounded 0..1 fill fraction and color category for a row."""
+    if current_target is None:
+        return {"fraction": 0.0, "category": "none"}
+    phase = str(current_target["phase"])
+    if phase in _ACTIVE_PHASES:
+        return {"fraction": 1.0, "category": "active"}
+    if phase in _ATTENTION_PHASES:
+        return {"fraction": 1.0, "category": "attention"}
+    if phase == "Completed":
+        return {"fraction": 1.0, "category": "done"}
+    next_attempt = current_target.get("next_attempt_at")
+    last_updated = current_target.get("last_updated_at")
+    if not isinstance(next_attempt, str) or not isinstance(last_updated, str):
+        return {"fraction": 0.0, "category": "waiting"}
+    start = datetime.fromisoformat(last_updated.replace("Z", "+00:00"))
+    end = datetime.fromisoformat(next_attempt.replace("Z", "+00:00"))
+    total = (end - start).total_seconds()
+    if total <= 0:
+        fraction = 1.0
+    else:
+        elapsed = (observed_at - start).total_seconds()
+        fraction = max(0.0, min(1.0, elapsed / total))
+    return {"fraction": fraction, "category": "waiting"}
+
+
 def build_dashboard_model(
     catalog: Mapping[str, object],
     targets: Sequence[Mapping[str, object]],
     *,
     observed_at: datetime,
+    metadata_root: Path | None = None,
 ) -> dict[str, object]:
     """Join bounded state to every catalog venue without adding authority."""
     venues = catalog.get("venues") if isinstance(catalog, Mapping) else None
@@ -136,8 +230,13 @@ def build_dashboard_model(
                 raise AgentDashboardError("dashboard target state is invalid")
         next_attempt = None
         if isinstance(agent, Mapping):
+            # Once an agent schedule exists, its next_check_at is the sole
+            # executable clock (may legitimately be None: active/completed/
+            # needs_human/paused all mean "no automatic next check"). Only
+            # fall back to the immutable pre-handoff event-date schedule when
+            # no agent schedule has been created yet.
             next_attempt = agent.get("next_check_at")
-        if next_attempt is None and isinstance(event_date, Mapping):
+        elif isinstance(event_date, Mapping):
             next_attempt = event_date.get("next_check_at")
         last_updated = _latest_timestamp(
             event_date.get("updated_at") if isinstance(event_date, Mapping) else None,
@@ -172,11 +271,18 @@ def build_dashboard_model(
     resolved = []
     for venue_id in sorted(by_id):
         venue = by_id[venue_id]
-        venue["targets"] = sorted(
-            venue["targets"], key=lambda item: int(item["year"])
+        target_rows = sorted(venue.pop("targets"), key=lambda item: int(item["year"]))
+        current = target_rows[-1] if target_rows else None
+        venue["enrolled"] = bool(target_rows)
+        venue["current_target"] = current
+        venue["last_downloaded"] = (
+            _scan_last_downloaded(metadata_root, venue_id)
+            if metadata_root is not None else None
         )
-        venue["enrolled"] = bool(venue["targets"])
+        venue["urgency_rank"] = _urgency_rank(current)
+        venue["progress"] = _progress(current, observed_at)
         resolved.append(venue)
+    resolved.sort(key=lambda venue: venue["urgency_rank"])
     return {
         "observed_at": _utc_text(observed_at),
         "venue_count": len(resolved),
@@ -192,6 +298,31 @@ def _cell(value: object, *, css: str = "") -> str:
     return f"<td{class_name}>{html.escape(text)}</td>"
 
 
+def _date_cell(value_iso: object, *, tooltip_prefix: str = "") -> str:
+    if not isinstance(value_iso, str):
+        return "<td>—</td>"
+    text = html.escape(value_iso[:10])
+    tooltip = html.escape(f"{tooltip_prefix}{value_iso}", quote=True)
+    return f'<td title="{tooltip}">{text}</td>'
+
+
+def _progress_cell(progress: Mapping[str, object], phase_label: str) -> str:
+    category = str(progress.get("category", "none"))
+    color = _PROGRESS_COLORS.get(category, _PROGRESS_COLORS["none"])
+    try:
+        fraction = float(progress.get("fraction", 0.0))
+    except (TypeError, ValueError):
+        fraction = 0.0
+    width = round(max(0.0, min(1.0, fraction)) * 100, 1)
+    bar = (
+        '<div class="bar-track">'
+        f'<div class="bar-fill" style="width:{width}%;background:{color};"></div>'
+        "</div>"
+    )
+    label = f'<div class="phase-label">{html.escape(phase_label)}</div>'
+    return f"<td>{bar}{label}</td>"
+
+
 def render_dashboard(model: Mapping[str, object]) -> str:
     """Render one standalone escaped document with no external resources."""
     venues = model.get("venues")
@@ -199,31 +330,54 @@ def render_dashboard(model: Mapping[str, object]) -> str:
         raise AgentDashboardError("dashboard model is invalid")
     rows: list[str] = []
     for venue in venues:
-        if not isinstance(venue, Mapping) or not isinstance(venue.get("targets"), list):
+        if not isinstance(venue, Mapping):
             raise AgentDashboardError("dashboard model is invalid")
-        targets = venue["targets"] or [None]
-        for target in targets:
-            if target is not None and not isinstance(target, Mapping):
-                raise AgentDashboardError("dashboard model is invalid")
-            phase = target.get("phase") if isinstance(target, Mapping) \
-                else "Not enrolled"
-            row = "".join((
-                _cell(venue.get("venue_id"), css="venue"),
-                _cell(venue.get("display_name")),
-                _cell(venue.get("lifecycle_kind")),
-                _cell(venue.get("source_monitor")),
-                _cell(target.get("year") if isinstance(target, Mapping) else None),
-                _cell(phase, css="phase"),
-                _cell(target.get("last_updated_at")
-                      if isinstance(target, Mapping) else None),
-                _cell(target.get("next_attempt_at")
-                      if isinstance(target, Mapping) else None),
-                _cell(target.get("last_disposition")
-                      if isinstance(target, Mapping) else None),
-                _cell(target.get("report_status")
-                      if isinstance(target, Mapping) else None),
-            ))
-            rows.append(f"<tr>{row}</tr>")
+        current = venue.get("current_target")
+        if current is not None and not isinstance(current, Mapping):
+            raise AgentDashboardError("dashboard model is invalid")
+        progress = venue.get("progress")
+        if not isinstance(progress, Mapping):
+            raise AgentDashboardError("dashboard model is invalid")
+        last_downloaded = venue.get("last_downloaded")
+        if last_downloaded is not None and not isinstance(last_downloaded, Mapping):
+            raise AgentDashboardError("dashboard model is invalid")
+
+        venue_id = str(venue.get("venue_id"))
+        display_name = str(venue.get("display_name"))
+        phase = str(current["phase"]) if isinstance(current, Mapping) else "Not enrolled"
+        badge = (
+            ' <span class="badge-warn" '
+            'title="No deterministic monitor source configured">&#9888;</span>'
+            if venue.get("source_monitor") == "Not configured" else ""
+        )
+        venue_cell = (
+            f'<td class="venue" title="{html.escape(display_name, quote=True)}">'
+            f"{html.escape(venue_id.upper())}{badge}</td>"
+        )
+        last_downloaded_at = (
+            last_downloaded.get("observed_at") if isinstance(last_downloaded, Mapping)
+            else None
+        )
+        last_downloaded_prefix = (
+            f"{venue_id.upper()} {last_downloaded.get('year')} — "
+            if isinstance(last_downloaded, Mapping) else ""
+        )
+        next_attempt_at = (
+            current.get("next_attempt_at") if isinstance(current, Mapping) else None
+        )
+        next_attempt_prefix = (
+            f"{venue_id.upper()} {current.get('year')} — "
+            if isinstance(current, Mapping) else ""
+        )
+        row = "".join((
+            venue_cell,
+            _progress_cell(progress, phase),
+            _date_cell(last_downloaded_at, tooltip_prefix=last_downloaded_prefix),
+            _date_cell(next_attempt_at, tooltip_prefix=next_attempt_prefix),
+            _cell(current.get("last_disposition") if isinstance(current, Mapping) else None),
+            _cell(current.get("report_status") if isinstance(current, Mapping) else None),
+        ))
+        rows.append(f"<tr>{row}</tr>")
     observed_at = html.escape(str(model.get("observed_at", "unknown")))
     counts = (
         f"{int(model.get('enrolled_venue_count', 0))} enrolled venues · "
@@ -240,7 +394,7 @@ def render_dashboard(model: Mapping[str, object]) -> str:
 <style>
 :root {{ color-scheme: light dark; font-family: ui-sans-serif, system-ui, sans-serif; }}
 body {{ margin: 0; background: #0b1020; color: #e8edf7; }}
-main {{ max-width: 1500px; margin: auto; padding: 32px 24px; }}
+main {{ max-width: 1100px; margin: auto; padding: 32px 24px; }}
 h1 {{ margin: 0 0 8px; font-size: 28px; }}
 .meta {{ color: #aab6ca; margin-bottom: 24px; }}
 .notice {{ border: 1px solid #334363; background: #111a30; border-radius: 10px;
@@ -252,8 +406,12 @@ th, td {{ text-align: left; padding: 11px 12px; border-bottom: 1px solid #26344f
 th {{ color: #aab6ca; font-size: 12px; text-transform: uppercase;
   letter-spacing: .05em; background: #151f36; position: sticky; top: 0; }}
 tr:last-child td {{ border-bottom: 0; }}
-.venue {{ font-weight: 700; color: #8bc6ff; }}
-.phase {{ font-weight: 600; }}
+.venue {{ font-weight: 700; color: #8bc6ff; font-size: 15px; letter-spacing: .02em; }}
+.badge-warn {{ color: #f2c14e; cursor: help; }}
+.bar-track {{ width: 130px; height: 6px; border-radius: 3px; background: #202b46;
+  overflow: hidden; }}
+.bar-fill {{ height: 100%; border-radius: 3px; }}
+.phase-label {{ margin-top: 5px; font-size: 12px; color: #aab6ca; white-space: nowrap; }}
 footer {{ color: #8491a8; margin-top: 18px; font-size: 13px; }}
 </style>
 </head>
@@ -261,14 +419,15 @@ footer {{ color: #8491a8; margin-top: 18px; font-size: 13px; }}
 <h1>OpenPapers automation status</h1>
 <div class="meta">{html.escape(counts)} · observed {observed_at}</div>
 <div class="notice">Read-only local view. Dates are scheduling hints; only the
-coding agent decides publication readiness. This page performs no action.</div>
+coding agent decides publication readiness. Rows are ordered by which venue is
+likely to produce new data soonest. This page performs no action.</div>
 <div class="table-wrap"><table>
-<thead><tr><th>Venue</th><th>Name</th><th>Lifecycle</th><th>Source monitor</th><th>Year</th>
-<th>Phase</th><th>Last update (UTC)</th><th>Next attempt (UTC)</th>
-<th>Disposition</th><th>Report</th></tr></thead>
+<thead><tr><th>Venue</th><th>Progress</th><th>Last downloaded (UTC)</th>
+<th>Next attempt (UTC)</th><th>Disposition</th><th>Report</th></tr></thead>
 <tbody>{''.join(rows)}</tbody>
 </table></div>
-<footer>Refreshes every 60 seconds from immutable SQLite reads.</footer>
+<footer>Refreshes every 60 seconds from immutable SQLite reads plus a
+read-only scan of the local scraped-dataset tree.</footer>
 </main></body></html>"""
 
 
@@ -276,12 +435,14 @@ def build_dashboard_document(
     state_path: Path,
     *,
     clock: Callable[[], datetime] = lambda: datetime.now(timezone.utc),
+    metadata_root: Path = METADATA_DIR,
 ) -> bytes:
     """Build the current page from catalog plus one immutable state read."""
     model = build_dashboard_model(
         load_venue_catalog(),
         read_agent_state_summary(Path(state_path)),
         observed_at=clock(),
+        metadata_root=metadata_root,
     )
     return render_dashboard(model).encode("utf-8")
 
@@ -289,6 +450,7 @@ def build_dashboard_document(
 class _DashboardServer(HTTPServer):
     state_path: Path
     clock: Callable[[], datetime]
+    metadata_root: Path
 
 
 class _DashboardHandler(BaseHTTPRequestHandler):
@@ -320,7 +482,8 @@ class _DashboardHandler(BaseHTTPRequestHandler):
             return
         try:
             body = build_dashboard_document(
-                self.server.state_path, clock=self.server.clock
+                self.server.state_path, clock=self.server.clock,
+                metadata_root=self.server.metadata_root,
             )
         except (AgentDashboardError, AgentStatusError, OSError, ValueError):
             self._send(503, b"status unavailable\n", "text/plain; charset=utf-8")
@@ -343,6 +506,7 @@ def create_dashboard_server(
     bind: str = _BIND,
     port: int = 8765,
     clock: Callable[[], datetime] = lambda: datetime.now(timezone.utc),
+    metadata_root: Path = METADATA_DIR,
 ) -> HTTPServer:
     """Create a loopback-only reader; no request can mutate scheduler state."""
     path = Path(state_path)
@@ -360,6 +524,7 @@ def create_dashboard_server(
     server = _DashboardServer((bind, port), _DashboardHandler)
     server.state_path = path
     server.clock = clock
+    server.metadata_root = Path(metadata_root)
     return server
 
 
@@ -368,10 +533,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--state", required=True, type=Path)
     parser.add_argument("--bind", default=_BIND)
     parser.add_argument("--port", default=8765, type=int)
+    parser.add_argument("--metadata-root", default=METADATA_DIR, type=Path)
     args = parser.parse_args(argv)
     try:
         server = create_dashboard_server(
-            args.state, bind=args.bind, port=args.port
+            args.state, bind=args.bind, port=args.port,
+            metadata_root=args.metadata_root,
         )
     except AgentDashboardError:
         print(json.dumps({"dashboard": "blocked", "reason": "unsafe_configuration"}))
