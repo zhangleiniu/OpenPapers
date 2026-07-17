@@ -127,12 +127,18 @@ persisted agent target years, the last schedule update, next attempt, latest
 disposition, and report state. It does not expose paths, explanations,
 addresses, receipts, credentials, or production control methods. A separate
 LaunchDaemon runs a root-owned Caddy copy as `_openpapers`, binds only the
-fixed NIU private address, terminates local-CA HTTPS, requires Basic Auth, and
+fixed NIU private address, terminates institution-issued DigiCert HTTPS,
+requires Basic Auth, and
 proxies to `127.0.0.1:8765`. On the NIU network or VPN, open
 `https://archer.cs.niu.edu:8443/`. The username is `openpapers`; the password
-is operator-held and not stored in documentation. The public CA certificate is
-exported at `/Users/Shared/OpenPapers-dashboard-local-ca.crt` for explicit
-client trust.
+is operator-held and not stored in documentation. The installed wildcard leaf
+certificate matches `archer.cs.niu.edu`, chains to DigiCert Global Root G2,
+and expires at 2026-12-03 23:59:59 UTC. Caddy uses this manually supplied
+certificate and does not renew it automatically. Before expiry, obtain a
+replacement leaf/intermediate chain from NIU DoIT using a matching CSR, verify
+the hostname, chain, validity, and private-key public key, then perform another
+stopped-proxy atomic TLS replacement. The retained local-CA configuration is a
+private rollback artifact, not the active client trust path.
 
 The installed external volume intentionally holds a validated `agent-source`
 and the managed `agent-runs` root as siblings. One authorized activation

@@ -345,8 +345,10 @@ no overall production-health claim. Every request reopens SQLite immutable and
 read-only; fake state/HTTP tests prove all-catalog rendering, escaped content,
 security headers, method rejection, non-loopback refusal, and unchanged state
 bytes. The backend is installed as a loopback LaunchDaemon. A separate
-unprivileged Caddy LaunchDaemon provides local-CA HTTPS and Basic Auth on the
-host's fixed NIU private address; unauthenticated requests return 401.
+unprivileged Caddy LaunchDaemon provides NIU-issued DigiCert HTTPS and Basic
+Auth on the host's fixed private address; unauthenticated requests return 401.
+The manually supplied leaf expires on 2026-12-03 and requires operator renewal;
+Caddy does not manage that certificate automatically.
 
 `replace_disabled_agent_production_root` stages canonical private files,
 fsyncs them, and replaces the marker last. It rejects enabled current or

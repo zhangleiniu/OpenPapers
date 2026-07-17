@@ -198,15 +198,18 @@ the installed runtime directory:
 It refuses any bind other than `127.0.0.1`, rereads state immutably on each
 page request, and has no mutation endpoint. Production manages that backend as
 a LaunchDaemon. A separate `_openpapers` Caddy LaunchDaemon exposes only the
-fixed NIU private interface with local-CA HTTPS and Basic Auth. From the NIU
-network or VPN, open `https://archer.cs.niu.edu:8443/`.
+fixed NIU private interface with NIU-issued DigiCert HTTPS and Basic Auth. From
+the NIU network or VPN, open `https://archer.cs.niu.edu:8443/`.
 
 The page shows all catalog venues even when not enrolled, and distinguishes
 deterministic monitor registration from coding-agent schedule state. The
-username is `openpapers`. Copy
-`/Users/Shared/OpenPapers-dashboard-local-ca.crt` from the server and explicitly
-trust it on the client; never move the Caddy private key or password verifier.
-Do not weaken SQLite permissions or expose the application listener directly.
+username is `openpapers`. The manually installed leaf certificate expires on
+2026-12-03 and is not eligible for Caddy automatic renewal. Renewal requires a
+replacement NIU DoIT certificate, matching private key, complete intermediate
+chain, hostname/validity verification, and an atomic proxy-only swap retaining
+the prior Caddyfile as rollback. Never move the Caddy private key or password
+verifier. Do not weaken SQLite permissions or expose the application listener
+directly.
 
 ## Checks
 
