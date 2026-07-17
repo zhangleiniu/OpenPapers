@@ -119,12 +119,76 @@ class NotificationTransportFactory(Protocol):
     def __call__(self) -> NotificationTransport: ...
 
 
+def _parse_explicit_targets(
+    items: object, known: set[str],
+) -> list[EventDateTarget]:
+    """Validate a flat ``[{"venue_id": ..., "year": ...}, ...]`` list."""
+    if not isinstance(items, list):
+        raise AgentProductionConfigurationError("agent target list is invalid")
+    targets: list[EventDateTarget] = []
+    for item in items:
+        if not isinstance(item, dict) or set(item) != {"venue_id", "year"}:
+            raise AgentProductionConfigurationError("agent target fields are invalid")
+        venue_id, year = item["venue_id"], item["year"]
+        if venue_id not in known or not isinstance(year, int) \
+                or isinstance(year, bool) or not 2020 <= year <= 2200:
+            raise AgentProductionConfigurationError(
+                "agent target identity is invalid"
+            )
+        targets.append(EventDateTarget(venue_id, year))
+    return targets
+
+
+def _expand_cohort(
+    cohort: object,
+    known: set[str],
+    lifecycle_by_id: Mapping[str, Mapping[str, object]],
+    today: date | None,
+) -> list[EventDateTarget]:
+    """Validate and expand one bounded annual/periodic cohort policy."""
+    if not isinstance(cohort, dict) or set(cohort) != {
+        "venue_ids", "initial_year", "rollover_month",
+        "years_ahead_after_rollover",
+    }:
+        raise AgentProductionConfigurationError("agent cohort fields are invalid")
+    venue_ids = cohort["venue_ids"]
+    initial_year = cohort["initial_year"]
+    rollover_month = cohort["rollover_month"]
+    years_ahead = cohort["years_ahead_after_rollover"]
+    resolved_today = today or datetime.now(_COHORT_TIMEZONE).date()
+    if not isinstance(resolved_today, date) or isinstance(resolved_today, datetime) \
+            or not isinstance(venue_ids, list) or not 1 <= len(venue_ids) <= 100 \
+            or any(not isinstance(venue, str) or venue not in known
+                   for venue in venue_ids) \
+            or venue_ids != sorted(set(venue_ids)) \
+            or not isinstance(initial_year, int) or isinstance(initial_year, bool) \
+            or not 2020 <= initial_year <= 2200 \
+            or not isinstance(rollover_month, int) \
+            or isinstance(rollover_month, bool) \
+            or not 1 <= rollover_month <= 12 \
+            or not isinstance(years_ahead, int) or isinstance(years_ahead, bool) \
+            or not 1 <= years_ahead <= 3:
+        raise AgentProductionConfigurationError("agent cohort policy is invalid")
+    active_year = max(initial_year, resolved_today.year)
+    final_year = active_year + (
+        years_ahead if resolved_today.month >= rollover_month else 0
+    )
+    if final_year > 2200:
+        raise AgentProductionConfigurationError("agent cohort year is invalid")
+    return [
+        EventDateTarget(venue_id, year)
+        for venue_id in venue_ids
+        for year in range(active_year, final_year + 1)
+        if _cohort_year_applies(lifecycle_by_id[venue_id], year)
+    ]
+
+
 def load_agent_targets(
     path: Path = DEFAULT_AGENT_TARGETS,
     *,
     today: date | None = None,
 ) -> tuple[EventDateTarget, ...]:
-    """Load explicit targets or expand one bounded annual cohort policy."""
+    """Load explicit targets, or expand a cohort with optional manual extras."""
     try:
         raw = Path(path).read_bytes()
         payload = json.loads(raw)
@@ -139,55 +203,30 @@ def load_agent_targets(
     if isinstance(payload, dict) and set(payload) == {"schema_version", "targets"} \
             and payload.get("schema_version") == 1 \
             and isinstance(payload.get("targets"), list) and payload["targets"]:
-        for item in payload["targets"]:
-            if not isinstance(item, dict) or set(item) != {"venue_id", "year"}:
-                raise AgentProductionConfigurationError("agent target fields are invalid")
-            venue_id, year = item["venue_id"], item["year"]
-            if venue_id not in known or not isinstance(year, int) \
-                    or isinstance(year, bool) or not 2020 <= year <= 2200:
-                raise AgentProductionConfigurationError(
-                    "agent target identity is invalid"
-                )
-            targets.append(EventDateTarget(venue_id, year))
+        targets.extend(_parse_explicit_targets(payload["targets"], known))
     elif isinstance(payload, dict) and set(payload) == {"schema_version", "cohort"} \
             and payload.get("schema_version") == 2 \
             and isinstance(payload.get("cohort"), dict):
-        cohort = payload["cohort"]
-        if set(cohort) != {
-            "venue_ids", "initial_year", "rollover_month",
-            "years_ahead_after_rollover",
-        }:
-            raise AgentProductionConfigurationError("agent cohort fields are invalid")
-        venue_ids = cohort["venue_ids"]
-        initial_year = cohort["initial_year"]
-        rollover_month = cohort["rollover_month"]
-        years_ahead = cohort["years_ahead_after_rollover"]
-        resolved_today = today or datetime.now(_COHORT_TIMEZONE).date()
-        if not isinstance(resolved_today, date) or isinstance(resolved_today, datetime) \
-                or not isinstance(venue_ids, list) or not 1 <= len(venue_ids) <= 100 \
-                or any(not isinstance(venue, str) or venue not in known
-                       for venue in venue_ids) \
-                or venue_ids != sorted(set(venue_ids)) \
-                or not isinstance(initial_year, int) or isinstance(initial_year, bool) \
-                or not 2020 <= initial_year <= 2200 \
-                or not isinstance(rollover_month, int) \
-                or isinstance(rollover_month, bool) \
-                or not 1 <= rollover_month <= 12 \
-                or not isinstance(years_ahead, int) or isinstance(years_ahead, bool) \
-                or not 1 <= years_ahead <= 3:
-            raise AgentProductionConfigurationError("agent cohort policy is invalid")
-        active_year = max(initial_year, resolved_today.year)
-        final_year = active_year + (
-            years_ahead if resolved_today.month >= rollover_month else 0
-        )
-        if final_year > 2200:
-            raise AgentProductionConfigurationError("agent cohort year is invalid")
         targets.extend(
-            EventDateTarget(venue_id, year)
-            for venue_id in venue_ids
-            for year in range(active_year, final_year + 1)
-            if _cohort_year_applies(lifecycle_by_id[venue_id], year)
+            _expand_cohort(payload["cohort"], known, lifecycle_by_id, today)
         )
+    elif isinstance(payload, dict) \
+            and set(payload) == {"schema_version", "cohort", "extra_targets"} \
+            and payload.get("schema_version") == 3 \
+            and isinstance(payload.get("cohort"), dict):
+        # A cohort of formulaic (annual/periodic) venues plus a small,
+        # manually curated list of confirmed one-off editions for venues
+        # with no reliable formula (e.g. an irregular-cadence venue once its
+        # next edition's date is independently confirmed).
+        targets.extend(
+            _expand_cohort(payload["cohort"], known, lifecycle_by_id, today)
+        )
+        targets.extend(_parse_explicit_targets(payload["extra_targets"], known))
+        # extra_targets is naturally authored in confirmation order (e.g.
+        # append the next irregular edition as it becomes known), not
+        # alphabetical venue order, so only this branch sorts before the
+        # shared canonical-order/uniqueness check below.
+        targets.sort()
     else:
         raise AgentProductionConfigurationError("agent targets are invalid")
     resolved = tuple(targets)

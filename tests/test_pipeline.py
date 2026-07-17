@@ -328,7 +328,7 @@ class MonitorTests(unittest.TestCase):
                 ("iclr", 2026), ("neurips", 2026), ("colt", 2026),
                 ("uai", 2026), ("cvpr", 2026), ("iccv", 2027),
                 ("eccv", 2026), ("aaai", 2026), ("jmlr", 2026),
-                ("acl", 2026), ("emnlp", 2026),
+                ("acl", 2026), ("emnlp", 2026), ("naacl", 2027),
             })
 
     def test_official_html_soup_contains_isolates_year(self):

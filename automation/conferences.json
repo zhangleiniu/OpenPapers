@@ -185,6 +185,19 @@
           "optional_until_available": true
         }
       ]
+    },
+    {
+      "venue": "naacl",
+      "year": 2027,
+      "sources": [
+        {
+          "type": "official_html",
+          "url": "https://aclanthology.org/events/naacl-2027/",
+          "item_selector": "strong a.align-middle[href]",
+          "minimum_count": 500,
+          "optional_until_available": true
+        }
+      ]
     }
   ]
 }

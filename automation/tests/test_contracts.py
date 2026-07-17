@@ -194,7 +194,7 @@ class ConfigurationTests(unittest.TestCase):
         }
         self.assertEqual(monitored, {
             "icml", "aistats", "ijcai", "iclr", "neurips", "colt", "uai",
-            "cvpr", "iccv", "eccv", "aaai", "jmlr", "acl", "emnlp",
+            "cvpr", "iccv", "eccv", "aaai", "jmlr", "acl", "emnlp", "naacl",
         })
 
         legacy = load_venue_catalog()

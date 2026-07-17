@@ -83,7 +83,7 @@ class AgentDashboardTests(unittest.TestCase):
         self.assertEqual(venues["jmlr"]["lifecycle_kind"], "continuous")
         self.assertEqual(venues["jmlr"]["source_monitor"], "Configured")
         self.assertEqual(venues["icml"]["source_monitor"], "Configured")
-        self.assertEqual(venues["naacl"]["source_monitor"], "Not configured")
+        self.assertEqual(venues["naacl"]["source_monitor"], "Configured")
         self.assertIsNone(venues["icml"]["last_downloaded"])
 
     def test_current_target_selects_the_maximum_enrolled_year(self):
@@ -195,7 +195,7 @@ class AgentDashboardTests(unittest.TestCase):
         self.assertNotIn("https://", document)
         self.assertIn("This page performs no action", document)
 
-    def test_renderer_shows_venue_abbreviation_and_no_monitor_badge(self):
+    def test_renderer_shows_venue_abbreviation_and_columns(self):
         targets = read_agent_state_summary(self.state)
         model = build_dashboard_model(
             load_venue_catalog(), targets, observed_at=NOW
@@ -204,12 +204,19 @@ class AgentDashboardTests(unittest.TestCase):
         document = render_dashboard(model)
 
         self.assertIn(">ICML<", document)
-        self.assertIn(">NAACL", document)
-        self.assertIn("No deterministic monitor source configured", document)
         self.assertNotIn("<th>Name</th>", document)
         self.assertNotIn("<th>Lifecycle</th>", document)
         self.assertNotIn("<th>Source monitor</th>", document)
         self.assertNotIn("<th>Year</th>", document)
+
+    def test_renderer_badges_a_venue_with_no_monitor_source(self):
+        catalog = copy.deepcopy(load_venue_catalog())
+        catalog["venues"][0]["scraper"]["monitor_registered"] = False
+        model = build_dashboard_model(catalog, [], observed_at=NOW)
+
+        document = render_dashboard(model)
+
+        self.assertIn("No deterministic monitor source configured", document)
 
     def test_loopback_server_rereads_without_mutating_state(self):
         before = self.state.read_bytes()

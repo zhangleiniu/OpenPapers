@@ -234,20 +234,38 @@ provider, Codex, and notification boundaries. The tracked
 13 catalog venues with a reliable annual or fixed-period cadence and is
 deliberately independent of the deterministic monitor registry. JMLR remains
 visible in the catalog but is excluded because continuous publication needs
-recurring, non-terminal success semantics; NAACL is excluded the same way
-because its actual cadence is irregular with no reliable formula (see
-`docs/naacl.md`) rather than annual or a fixed period. Starting from 2026,
-October includes the following year for one-time date initialization and
-January moves the active window forward. Two allowlisted venues carry a
-periodic-cadence modifier on their catalog `lifecycle`
-(`interval_years`/`cycle_anchor_year`) rather than occurring every rollover
-year: ICCV (anchored 2025, interval 2 — held in odd years) and ECCV
-(anchored 2024, interval 2 — held in even years). `load_agent_targets` only
-emits a target for a rollover year that satisfies `(year -
-cycle_anchor_year) % interval_years == 0` for those two venues, so the
-cohort no longer generates, for example, an `(iccv, 2026)` target for a
+recurring, non-terminal success semantics — no calendar formula or
+independent confirmation changes that. Starting from 2026, October includes
+the following year for one-time date initialization and January moves the
+active window forward. Two allowlisted venues carry a periodic-cadence
+modifier on their catalog `lifecycle` (`interval_years`/`cycle_anchor_year`)
+rather than occurring every rollover year: ICCV (anchored 2025, interval 2 —
+held in odd years) and ECCV (anchored 2024, interval 2 — held in even years).
+`load_agent_targets` only emits a target for a rollover year that satisfies
+`(year - cycle_anchor_year) % interval_years == 0` for those two venues, so
+the cohort no longer generates, for example, an `(iccv, 2026)` target for a
 conference that does not occur that year; every other allowlisted venue is
 still treated as occurring every rollover year.
+
+NAACL has no reliable calendar formula either (see `docs/naacl.md`) and
+stays outside the cohort allowlist — but unlike JMLR it does have discrete,
+independently confirmable editions, so `agent_targets.v1.json` is now schema
+version 3: the cohort payload is joined by an `extra_targets` list of
+manually curated `{venue_id, year}` entries for exactly this situation. The
+tracked file's current `extra_targets` contains one entry,
+`{"venue_id": "naacl", "year": 2027}`, added after independently confirming
+NAACL 2027 is scheduled for San Francisco, June 1-5, 2027. `load_agent_targets`
+combines the cohort expansion and `extra_targets` unconditionally (not
+gated by the rollover calendar) and sorts the combined result before its
+uniqueness/canonical-order check; a duplicate `(venue_id, year)` between the
+two is rejected exactly like a duplicate within either list alone. Once
+listed, `(naacl, 2027)` flows through the identical downstream pipeline as
+every cohort target: Gemini still independently confirms the specific date,
+Codex still independently decides readiness. Extending this to a future
+irregular NAACL edition remains a deliberate manual step — the tracked file
+must be edited by a maintainer who has confirmed the next edition through
+some means outside the calendar formula (e.g. a search); there is no
+automatic "keep probing years until one confirms" mechanism.
 Existing persisted rows remain authoritative and are not deleted or
 reactivated by the calendar. Private configuration pins the cohort fingerprint,
 Gemini identity, absolute Codex binary, separate monthly date-lookup and
@@ -288,10 +306,11 @@ registration of the full expanded cohort, and the one-date-attempt-per-wake
 bound.
 
 The periodic-cadence correction above (ICCV/ECCV interval filtering, NAACL
-removed from the tracked allowlist) is implemented and tested in the
-repository but has not yet been deployed to the installed production role;
-the last authorized production upgrade remains commit `eb0e762`'s uniform
-14-venue allowlist, which still includes NAACL and still treats ICCV/ECCV as
+moved from the cohort allowlist to a schema-3 `extra_targets` entry for its
+confirmed 2027 edition) is implemented and tested in the repository but has
+not yet been deployed to the installed production role; the last authorized
+production upgrade remains commit `eb0e762`'s uniform 14-venue allowlist,
+which still includes NAACL in the cohort itself and still treats ICCV/ECCV as
 occurring every year. Deploying this correction to production requires the
 same stopped-service, marker-last configuration-replacement procedure used
 for prior enabled-runtime upgrades, and is a separate authorized operational

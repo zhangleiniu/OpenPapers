@@ -226,7 +226,7 @@
         "module": "scrapers.naacl",
         "class_name": "NAACLScraper",
         "capabilities": ["metadata", "pdf", "archival_source"],
-        "monitor_registered": false
+        "monitor_registered": true
       }
     },
     {

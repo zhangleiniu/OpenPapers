@@ -19,7 +19,7 @@ from automation.resend_notifications import recipient_fingerprints
 from automation.codex_agent import CodexProcessResult
 from automation.control_state import ControlStateRepository
 from automation.domain import Writer
-from automation.event_dates import EventDateEstimate
+from automation.event_dates import EventDateEstimate, EventDateTarget
 from automation.local_service.service import LocalEffectStatus
 from automation.notifications import FailureCategory, TransportFailure, TransportReceipt
 
@@ -157,19 +157,25 @@ class AgentProductionTests(unittest.TestCase):
 
     def test_tracked_targets_and_strict_configuration_are_bounded(self):
         tracked = load_agent_targets(today=date(2026, 7, 16))
-        cohort_venue_ids = set(
-            json.loads(TRACKED_TARGETS.read_text())["cohort"]["venue_ids"]
-        )
+        tracked_payload = json.loads(TRACKED_TARGETS.read_text())
+        cohort_venue_ids = set(tracked_payload["cohort"]["venue_ids"])
+        extra_targets = {
+            (item["venue_id"], item["year"])
+            for item in tracked_payload["extra_targets"]
+        }
         # ICCV is biennial (anchored on odd years) and does not occur in 2026;
-        # every other cohort venue does.
+        # every other cohort venue does. NAACL has no formula and is not in
+        # the cohort at all — it only appears via the manually confirmed
+        # extra_targets entry (naacl, 2027), regardless of "today".
         self.assertEqual(
             {(item.venue_id, item.year) for item in tracked},
-            {(venue_id, 2026) for venue_id in cohort_venue_ids - {"iccv"}},
+            {(venue_id, 2026) for venue_id in cohort_venue_ids - {"iccv"}}
+            | extra_targets,
         )
-        self.assertEqual(len(tracked), 12)
+        self.assertEqual(len(tracked), 13)
         self.assertNotIn("jmlr", {item.venue_id for item in tracked})
-        self.assertNotIn("naacl", {item.venue_id for item in tracked})
         self.assertNotIn("iccv", {item.venue_id for item in tracked})
+        self.assertIn(("naacl", 2027), {(item.venue_id, item.year) for item in tracked})
         invalid = dict(self.payload, resend_api_key="secret")
         with self.assertRaises(AgentProductionConfigurationError):
             load_agent_production_configuration(invalid, targets_path=self.targets)
@@ -198,6 +204,40 @@ class AgentProductionTests(unittest.TestCase):
                 credentials=None,
             )
 
+    def test_schema_3_combines_cohort_and_manually_confirmed_extra_targets(self):
+        combined = self.root / "combined.json"
+        payload = {
+            "schema_version": 3,
+            "cohort": {
+                "venue_ids": ["icml"],
+                "initial_year": 2026,
+                "rollover_month": 10,
+                "years_ahead_after_rollover": 1,
+            },
+            "extra_targets": [{"venue_id": "naacl", "year": 2027}],
+        }
+        combined.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+
+        targets = load_agent_targets(combined, today=date(2026, 7, 16))
+
+        self.assertEqual(
+            set(targets),
+            {EventDateTarget("icml", 2026), EventDateTarget("naacl", 2027)},
+        )
+        # extra_targets need not be pre-sorted relative to the cohort (naacl
+        # sorts before icml alphabetically, yet is listed second in the
+        # file) — the loader is responsible for the combined canonical order.
+        self.assertEqual(tuple(sorted(targets)), targets)
+
+        # A duplicate between the cohort expansion and extra_targets is
+        # still rejected, exactly like a duplicate within a single list.
+        duplicate = dict(
+            payload, extra_targets=[{"venue_id": "icml", "year": 2026}],
+        )
+        combined.write_text(json.dumps(duplicate, indent=2) + "\n", encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "unique"):
+            load_agent_targets(combined, today=date(2026, 7, 16))
+
     def test_annual_cohort_rolls_forward_without_expanding_venue_scope(self):
         before = load_agent_targets(TRACKED_TARGETS, today=date(2026, 9, 30))
         rollover = load_agent_targets(TRACKED_TARGETS, today=date(2026, 10, 1))
@@ -208,25 +248,29 @@ class AgentProductionTests(unittest.TestCase):
         )
         # ICCV (biennial, odd years) and ECCV (biennial, even years) each sit
         # out one of the two rollover years; every other cohort venue appears
-        # in both.
-        self.assertEqual(len(before), 12)
-        self.assertEqual({item.year for item in before}, {2026})
+        # in both. The manually confirmed (naacl, 2027) extra target is
+        # unconditional — present regardless of "today" or the rollover
+        # window, since it isn't governed by the calendar formula at all.
+        self.assertEqual(len(before), 13)
+        self.assertEqual({item.year for item in before} - {2027}, {2026})
         self.assertNotIn("iccv", {item.venue_id for item in before})
         self.assertIn("eccv", {item.venue_id for item in before})
-        self.assertEqual(len(rollover), 24)
+        self.assertIn(("naacl", 2027), {(i.venue_id, i.year) for i in before})
+        self.assertEqual(len(rollover), 25)
         self.assertEqual({item.year for item in rollover}, {2026, 2027})
-        self.assertEqual(len(next_year), 12)
+        self.assertEqual(len(next_year), 13)
         self.assertEqual({item.year for item in next_year}, {2027})
         self.assertIn("iccv", {item.venue_id for item in next_year})
         self.assertNotIn("eccv", {item.venue_id for item in next_year})
-        # No target ever exceeds the tracked cohort's venue allowlist, and no
-        # target is ever generated for the excluded NAACL/JMLR venues.
-        self.assertTrue(
-            {item.venue_id for item in rollover} <= cohort_venue_ids
-        )
+        self.assertIn(("naacl", 2027), {(i.venue_id, i.year) for i in next_year})
+        # Every cohort-formula venue appears at least once across the
+        # rollover window; NAACL sits outside the cohort by design (it comes
+        # from extra_targets, not the calendar formula) and JMLR never
+        # appears at all (continuous, excluded entirely).
         self.assertEqual(
-            {item.venue_id for item in rollover}, cohort_venue_ids
+            {item.venue_id for item in rollover} - {"naacl"}, cohort_venue_ids
         )
+        self.assertNotIn("jmlr", {item.venue_id for item in rollover})
 
     def test_rollover_registers_all_targets_but_attempts_one_date(self):
         payload = dict(
@@ -257,7 +301,7 @@ class AgentProductionTests(unittest.TestCase):
             state, writer=Writer.LOCAL_CONTROL_PLANE, clock=lambda: NOW
         ) as repository:
             schedules = repository.list_event_date_schedules()
-        self.assertEqual(len(schedules), 24)
+        self.assertEqual(len(schedules), 25)
         self.assertEqual(len(provider.calls), 1)
 
     def test_configuration_accepts_legacy_single_and_v3_recipient_allowlist(self):

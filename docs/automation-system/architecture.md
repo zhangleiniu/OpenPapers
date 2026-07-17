@@ -122,11 +122,21 @@ allowlisted venue is treated as occurring every year, exactly as before. ICCV
 the catalog's only two periodic venues today, reflecting that ICCV is held
 in odd years and ECCV in even years — the cohort no longer schedules a
 Codex run against a year in which one of these conferences does not occur.
-NAACL is excluded from the tracked allowlist entirely, the same treatment
-JMLR already receives: NAACL's actual cadence is irregular with no reliable
-formula (see `docs/naacl.md`), so it remains visible in the catalog and
-dashboard but requires a deliberate future enrollment decision rather than
-automatic calendar-driven scheduling.
+NAACL has no reliable calendar formula (see `docs/naacl.md`) and stays
+outside the cohort allowlist entirely, the same treatment JMLR receives for
+the same underlying reason. Unlike JMLR, NAACL is a discrete annual-lifecycle
+venue that does eventually get a real, independently confirmable next
+edition — `agent_targets.v1.json` may additionally carry a small
+`extra_targets` list (schema version 3) of manually curated
+`{venue_id, year}` entries for exactly this case: once a venue's next edition
+is confirmed by some means external to the calendar formula (a web search, an
+official announcement), it is added there and flows through the identical
+downstream pipeline as any cohort target — Gemini still confirms the specific
+date, Codex still independently decides readiness. `extra_targets` is not a
+weaker or shortcut path; it only changes how the `(venue_id, year)` pair
+enters the target list, never what happens to it afterward. A future
+irregular edition still requires a new entry to be added deliberately; there
+is no automatic "keep probing years until one confirms" mechanism.
 
 A new discovery call is justified only when the estimate is absent or invalid,
 the venue/year was explicitly rescheduled, or an agent result reports that the
