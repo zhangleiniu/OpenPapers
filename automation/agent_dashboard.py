@@ -27,11 +27,39 @@ _ACTIVE_PHASES = frozenset({"Agent running", "Date lookup running"})
 _ATTENTION_PHASES = frozenset({"Needs human", "Paused"})
 _PROGRESS_COLORS = {
     "active": "#a78bfa",
-    "waiting": "#f2c14e",
+    "due": "#fb923c",
+    "soon": "#f2c14e",
+    "later": "#60a5fa",
+    "far": "#64748b",
     "attention": "#f87171",
     "done": "#4ade80",
     "none": "#3a4763",
 }
+
+
+def _remaining_label(next_attempt: datetime, observed_at: datetime) -> tuple[str, str]:
+    """Return (human countdown text, urgency color category) for a next check."""
+    remaining = next_attempt - observed_at
+    seconds = remaining.total_seconds()
+    if seconds <= 0:
+        return "due now", "due"
+    days = remaining.days
+    hours = int(seconds // 3600)
+    if days >= 60:
+        text = f"in {days // 30}mo"
+    elif days >= 2:
+        text = f"in {days}d"
+    elif hours >= 1:
+        text = f"in {hours}h"
+    else:
+        text = "in <1h"
+    if days < 1:
+        return text, "due"
+    if days < 7:
+        return text, "soon"
+    if days < 30:
+        return text, "later"
+    return text, "far"
 
 
 class AgentDashboardError(ValueError):
@@ -147,29 +175,41 @@ def _urgency_rank(current_target: Mapping[str, object] | None) -> tuple[int, str
 def _progress(
     current_target: Mapping[str, object] | None, observed_at: datetime,
 ) -> dict[str, object]:
-    """Compute a bounded 0..1 fill fraction and color category for a row."""
+    """Summarize a row as a countdown to its next check plus a color category.
+
+    ``label`` is what the bar's caption shows: the time remaining until the
+    next check for waiting rows ("in 3d" / "due now"), or the phase itself
+    for rows with no future check (running, completed, needs human, paused,
+    not enrolled). ``category`` picks the bar color: urgency buckets for
+    waiting rows (due <1d, soon <7d, later <30d, far beyond), fixed colors
+    otherwise. ``fraction`` still fills as the check approaches.
+    """
     if current_target is None:
-        return {"fraction": 0.0, "category": "none"}
+        return {"fraction": 0.0, "category": "none", "label": "Not enrolled"}
     phase = str(current_target["phase"])
     if phase in _ACTIVE_PHASES:
-        return {"fraction": 1.0, "category": "active"}
+        return {"fraction": 1.0, "category": "active", "label": phase}
     if phase in _ATTENTION_PHASES:
-        return {"fraction": 1.0, "category": "attention"}
+        return {"fraction": 1.0, "category": "attention", "label": phase}
     if phase == "Completed":
-        return {"fraction": 1.0, "category": "done"}
+        return {"fraction": 1.0, "category": "done", "label": phase}
     next_attempt = current_target.get("next_attempt_at")
     last_updated = current_target.get("last_updated_at")
-    if not isinstance(next_attempt, str) or not isinstance(last_updated, str):
-        return {"fraction": 0.0, "category": "waiting"}
-    start = datetime.fromisoformat(last_updated.replace("Z", "+00:00"))
+    if not isinstance(next_attempt, str):
+        return {"fraction": 0.0, "category": "none", "label": phase}
     end = datetime.fromisoformat(next_attempt.replace("Z", "+00:00"))
-    total = (end - start).total_seconds()
-    if total <= 0:
-        fraction = 1.0
+    text, category = _remaining_label(end, observed_at)
+    if isinstance(last_updated, str):
+        start = datetime.fromisoformat(last_updated.replace("Z", "+00:00"))
+        total = (end - start).total_seconds()
+        if total <= 0:
+            fraction = 1.0
+        else:
+            elapsed = (observed_at - start).total_seconds()
+            fraction = max(0.0, min(1.0, elapsed / total))
     else:
-        elapsed = (observed_at - start).total_seconds()
-        fraction = max(0.0, min(1.0, elapsed / total))
-    return {"fraction": fraction, "category": "waiting"}
+        fraction = 0.0
+    return {"fraction": fraction, "category": category, "label": text}
 
 
 def build_dashboard_model(
@@ -319,7 +359,14 @@ def _progress_cell(progress: Mapping[str, object], phase_label: str) -> str:
         f'<div class="bar-fill" style="width:{width}%;background:{color};"></div>'
         "</div>"
     )
-    label = f'<div class="phase-label">{html.escape(phase_label)}</div>'
+    text = str(progress.get("label") or phase_label)
+    # The countdown carries the urgency color; a phase-only label stays muted.
+    styled = f' style="color:{color};"' if text != phase_label else ""
+    label = (
+        f'<div class="phase-label"{styled} '
+        f'title="{html.escape(phase_label, quote=True)}">'
+        f"{html.escape(text)}</div>"
+    )
     return f"<td>{bar}{label}</td>"
 
 
@@ -422,7 +469,7 @@ footer {{ color: #8491a8; margin-top: 18px; font-size: 13px; }}
 coding agent decides publication readiness. Rows are ordered by which venue is
 likely to produce new data soonest. This page performs no action.</div>
 <div class="table-wrap"><table>
-<thead><tr><th>Venue</th><th>Progress</th><th>Last downloaded (UTC)</th>
+<thead><tr><th>Venue</th><th>Next check</th><th>Last downloaded (UTC)</th>
 <th>Next attempt (UTC)</th><th>Disposition</th><th>Report</th></tr></thead>
 <tbody>{''.join(rows)}</tbody>
 </table></div>

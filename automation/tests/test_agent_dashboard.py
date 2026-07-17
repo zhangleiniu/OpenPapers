@@ -176,11 +176,35 @@ class AgentDashboardTests(unittest.TestCase):
         )
 
         venues = {venue["venue_id"]: venue for venue in model["venues"]}
+        # The icml fixture's next check is NOW + 2 days: within the <7d
+        # "soon" urgency bucket, with a countdown label rather than a phase.
         waiting = venues["icml"]["progress"]
-        self.assertEqual(waiting["category"], "waiting")
+        self.assertEqual(waiting["category"], "soon")
+        self.assertEqual(waiting["label"], "in 2d")
         self.assertTrue(0.0 <= waiting["fraction"] <= 1.0)
         unenrolled = venues["neurips"]["progress"]
-        self.assertEqual(unenrolled, {"fraction": 0.0, "category": "none"})
+        self.assertEqual(
+            unenrolled,
+            {"fraction": 0.0, "category": "none", "label": "Not enrolled"},
+        )
+
+    def test_remaining_label_buckets_by_urgency(self):
+        from automation.agent_dashboard import _remaining_label
+
+        cases = [
+            (timedelta(minutes=-5), "due now", "due"),
+            (timedelta(minutes=30), "in <1h", "due"),
+            (timedelta(hours=5), "in 5h", "due"),
+            (timedelta(days=3), "in 3d", "soon"),
+            (timedelta(days=12), "in 12d", "later"),
+            (timedelta(days=45), "in 45d", "far"),
+            (timedelta(days=90), "in 3mo", "far"),
+        ]
+        for delta, text, category in cases:
+            with self.subTest(delta=delta):
+                self.assertEqual(
+                    _remaining_label(NOW + delta, NOW), (text, category)
+                )
 
     def test_renderer_escapes_catalog_text_and_contains_no_external_resource(self):
         catalog = copy.deepcopy(load_venue_catalog())
