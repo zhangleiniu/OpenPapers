@@ -307,14 +307,24 @@ bound.
 
 The periodic-cadence correction above (ICCV/ECCV interval filtering, NAACL
 moved from the cohort allowlist to a schema-3 `extra_targets` entry for its
-confirmed 2027 edition) is implemented and tested in the repository but has
-not yet been deployed to the installed production role; the last authorized
-production upgrade remains commit `eb0e762`'s uniform 14-venue allowlist,
-which still includes NAACL in the cohort itself and still treats ICCV/ECCV as
-occurring every year. Deploying this correction to production requires the
-same stopped-service, marker-last configuration-replacement procedure used
-for prior enabled-runtime upgrades, and is a separate authorized operational
-step from this repository change.
+confirmed 2027 edition) is implemented, tested, and installed in production
+via an authorized marker-last enabled upgrade to commit `898a3e0`, which
+superseded the prior `eb0e762` uniform 14-venue allowlist. The upgrade's
+first bounded wake completed with `selection_count=1`, retained exact
+rollback packages for the previous runtime/source/control-state, and left
+cloud paused with the co-resident services and canaries unchanged. That same
+upgrade window also registered a deterministic monitor source for all 15
+catalog venues (`automation/conferences.json`) and updated the private
+production monitor configuration's `registry_sha256`/`expected_source_count`
+to match. Diagnosing the upgrade's first attempts also surfaced and fixed an
+unrelated, pre-existing problem: the dedicated role had no OpenReview
+credentials in its runtime environment, so OpenReview-based monitor checks
+were failing anonymous-access challenges, and the monitor effect's
+"any source reported an error" guard was failing every hourly production
+wake as a result. Role credentials were placed at
+`/opt/openpapers-shadow/runtime/.env`, which is **not** part of the
+versioned runtime and will not survive the next enabled-runtime upgrade —
+moving these credentials to a persistent location remains an open follow-up.
 
 The installed filesystem layout keeps the validated no-remote source at
 `<external>/agent-source` and managed worktrees at the sibling
@@ -344,7 +354,13 @@ an initial failed activation/rollback, the `a17f9c5` source-layout repair, and
 a disabled refresh, a newly authorized activation enabled the installed gate.
 An authorized marker-last enabled upgrade later installed commit `eb0e762`,
 registered all 14 annual venues in one transaction, and passed its bounded
-one-selection first wake while retaining exact rollback packages.
+one-selection first wake while retaining exact rollback packages. A
+subsequent authorized marker-last enabled upgrade installed commit `898a3e0`
+(monitor coverage for all 15 venues, the ICCV/ECCV periodic-cadence
+correction, NAACL's manually confirmed `extra_targets` enrollment, and the
+redesigned dashboard), again passing its bounded one-selection first wake
+with exact rollback packages retained; see `current-handoff.md` for the
+current installed revision.
 
 ## Post-install operations (Implemented; credentials provisioned)
 

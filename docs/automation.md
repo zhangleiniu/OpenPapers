@@ -75,23 +75,30 @@ hourly wakes still perform external work only when persisted due state and the
 separate date/agent budgets, cooldowns, concurrency slot, and failure circuit
 permit it. See the [`roadmap`](./automation-system/roadmap.md).
 
-The installed target policy uses an explicit allowlist
-of all 14 annual catalog venues plus an annual cohort policy: October adds the
-following year for bounded date initialization and January advances the active
-window. Continuous JMLR remains outside this conference-success state machine.
-The policy does not delete or reactivate older durable rows or make a date into
-readiness proof. The authorized enabled-runtime upgrade to commit `eb0e762`
-registered all 14 current-year targets and its first wake selected exactly one
-date lookup while preserving enabled effects.
+The installed target policy uses an explicit allowlist of 13 formulaic
+(annual or fixed-period) catalog venues plus an annual cohort policy: October
+adds the following year for bounded date initialization and January advances
+the active window. ICCV and ECCV each carry a periodic-cadence modifier so
+they are only scheduled for a year they actually occur in, rather than every
+year. NAACL, which has no reliable calendar formula, is enrolled separately
+via a manually confirmed one-off `extra_targets` entry for its 2027 edition,
+not the calendar-driven cohort. Continuous JMLR remains outside this
+conference-success state machine entirely. The policy does not delete or
+reactivate older durable rows or make a date into readiness proof. The
+authorized enabled-runtime upgrade to commit `898a3e0` (superseding the
+earlier `eb0e762` upgrade) installed this policy, registered the current-year
+targets, and its first wake selected exactly one date lookup while preserving
+enabled effects.
 
 ## Current scope, visibility, and development handoff
 
-The enabled coding-agent cohort covers all 14 annual catalog venues. The
-deterministic source monitor remains the narrower independent registry with
-the three explicitly configured 2026 sources: AISTATS, ICML, and IJCAI.
-Enrolling an agent target does not invent a trusted deterministic source.
-JMLR is displayed but remains outside annual scheduling because continuous
-publication needs recurring-success semantics. A source-monitor email is an
+The enabled coding-agent cohort covers 13 formulaic catalog venues plus
+NAACL's manually confirmed 2027 edition. The deterministic source monitor is
+now a registered source for all 15 catalog venues (JMLR's is a loose
+continuous-volume-size proxy, not a discrete availability signal), matching
+the agent cohort's coverage for the first time. JMLR is displayed but remains
+outside annual scheduling because continuous publication needs
+recurring-success semantics. A source-monitor email is an
 observation, not proof of archival readiness; Codex independently decides
 readiness and reports `not_ready`, `needs_human`, `failed`, or `success`.
 

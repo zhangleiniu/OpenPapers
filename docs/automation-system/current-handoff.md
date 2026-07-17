@@ -26,17 +26,44 @@ As of 2026-07-17, production has these properties:
   `org.openpapers.local-control`. Its external-effects gate is enabled and its
   private SQLite database is schema 10.
 - The installed runtime and pinned no-remote agent source are commit
-  `eb0e762`. Repository commits after that revision are documentation only at
-  this handoff; always confirm with `git log eb0e762..HEAD`.
-- The coding-agent cohort contains all 14 annual catalog venues. October adds
-  the following year and January advances the active window. Each wake still
+  `898a3e0` (an authorized marker-last enabled upgrade from the prior
+  `eb0e762`). Repository commits after that revision are documentation only
+  at this handoff; always confirm with `git log 898a3e0..HEAD`. The upgrade's
+  first bounded wake completed with `selection_count=1` and retained an exact
+  backup of the pre-upgrade runtime, source, and control state.
+- The coding-agent cohort's tracked allowlist now has 13 formulaic venues
+  (annual or fixed-period) plus one manually confirmed one-off edition:
+  ICCV and ECCV each carry a periodic-cadence modifier
+  (`interval_years`/`cycle_anchor_year`) so they are only scheduled for a
+  year they actually occur in, and NAACL — which has no reliable calendar
+  formula — is enrolled via a schema-3 `extra_targets` entry for its
+  independently confirmed 2027 edition (San Francisco, June 1-5) rather than
+  the calendar-driven cohort. October adds the following year and January
+  advances the active window for the 13 formulaic venues; each wake still
   initializes at most one date or runs at most one due agent.
 - Continuous JMLR is visible in the catalog/dashboard but is deliberately not
   enrolled. Terminal annual `success` semantics would miss later JMLR papers
   in the same year.
-- The independent deterministic source monitor still has only the three
-  configured 2026 sources: AISTATS, ICML, and IJCAI. Agent enrollment does not
-  invent a deterministic monitor source.
+- The independent deterministic source monitor now has a registered source
+  for all 15 catalog venues (JMLR's is a loose continuous-volume-size proxy,
+  not a discrete availability signal). The private production
+  `registry_sha256`/`expected_source_count` config was updated to match
+  (18 total sources) as part of this same upgrade window.
+- The dedicated role's OpenReview access was anonymous (no
+  `OPENREVIEW_USERNAME`/`OPENREVIEW_PASSWORD` in its runtime environment),
+  which made the ICML/AISTATS/ICLR/NeurIPS OpenReview-based monitor checks
+  fail with an anonymous-access challenge and, since the monitor effect
+  raises when any source reports an error, silently failed every hourly
+  production wake for at least several hours before this was diagnosed and
+  fixed by placing role credentials at `/opt/openpapers-shadow/runtime/.env`.
+  That file is **not** part of the versioned runtime and will be lost on the
+  next enabled-runtime upgrade unless it is re-created or the credentials are
+  moved to a persistent location (e.g. the LaunchDaemon plist's
+  `EnvironmentVariables`) — this is an open follow-up, not yet done.
+- The dashboard backend LaunchDaemon (`org.openpapers.agent-dashboard`) is a
+  persistent process that does not restart automatically when the runtime is
+  swapped; it must be `launchctl kickstart -k`'d after an enabled-runtime
+  upgrade to serve the newly deployed `agent_dashboard.py`.
 - Codex device authentication, impersonated Google ADC, the Resend sender, and
   a two-recipient allowlist are configured for the dedicated role. Do not copy
   their values into a prompt, log, document, fixture, or commit.
@@ -97,7 +124,7 @@ Start every continuation with read-only repository inspection:
 ```bash
 git status --short
 git log --oneline --decorate -12
-git log --oneline eb0e762..HEAD
+git log --oneline 898a3e0..HEAD
 python postprocessing/generate_statistics.py --check
 ```
 
@@ -122,7 +149,7 @@ from history:
 > Read `AGENTS.md`, then
 > `docs/automation-system/README.md`, `architecture.md`, `roadmap.md`,
 > `development.md`, and `current-handoff.md` in order. Inspect the working
-> tree, commits since installed revision `eb0e762`, executable behavior, and
+> tree, commits since installed revision `898a3e0`, executable behavior, and
 > only the relevant ExecPlan. Preserve the current agent-driven design: dates
 > are scheduling hints, Codex decides readiness and scraper actions, and the
 > retired strict verification/job/case architecture stays retired. Proceed in
