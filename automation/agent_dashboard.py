@@ -182,7 +182,9 @@ def _progress(
     for rows with no future check (running, completed, needs human, paused,
     not enrolled). ``category`` picks the bar color: urgency buckets for
     waiting rows (due <1d, soon <7d, later <30d, far beyond), fixed colors
-    otherwise. ``fraction`` still fills as the check approaches.
+    otherwise. ``fraction`` is the remaining time itself on a 30-day scale
+    (full = a month or more away, empty = due now), so the bar drains as
+    the check approaches, like a countdown.
     """
     if current_target is None:
         return {"fraction": 0.0, "category": "none", "label": "Not enrolled"}
@@ -194,21 +196,12 @@ def _progress(
     if phase == "Completed":
         return {"fraction": 1.0, "category": "done", "label": phase}
     next_attempt = current_target.get("next_attempt_at")
-    last_updated = current_target.get("last_updated_at")
     if not isinstance(next_attempt, str):
         return {"fraction": 0.0, "category": "none", "label": phase}
     end = datetime.fromisoformat(next_attempt.replace("Z", "+00:00"))
     text, category = _remaining_label(end, observed_at)
-    if isinstance(last_updated, str):
-        start = datetime.fromisoformat(last_updated.replace("Z", "+00:00"))
-        total = (end - start).total_seconds()
-        if total <= 0:
-            fraction = 1.0
-        else:
-            elapsed = (observed_at - start).total_seconds()
-            fraction = max(0.0, min(1.0, elapsed / total))
-    else:
-        fraction = 0.0
+    remaining = (end - observed_at).total_seconds()
+    fraction = max(0.0, min(1.0, remaining / (30 * 86400)))
     return {"fraction": fraction, "category": category, "label": text}
 
 

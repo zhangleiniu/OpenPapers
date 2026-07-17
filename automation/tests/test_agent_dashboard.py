@@ -177,11 +177,12 @@ class AgentDashboardTests(unittest.TestCase):
 
         venues = {venue["venue_id"]: venue for venue in model["venues"]}
         # The icml fixture's next check is NOW + 2 days: within the <7d
-        # "soon" urgency bucket, with a countdown label rather than a phase.
+        # "soon" urgency bucket, with a countdown label rather than a phase,
+        # and a bar showing the remaining time on the 30-day scale (2/30).
         waiting = venues["icml"]["progress"]
         self.assertEqual(waiting["category"], "soon")
         self.assertEqual(waiting["label"], "in 2d")
-        self.assertTrue(0.0 <= waiting["fraction"] <= 1.0)
+        self.assertAlmostEqual(waiting["fraction"], 2 / 30, places=3)
         unenrolled = venues["neurips"]["progress"]
         self.assertEqual(
             unenrolled,
