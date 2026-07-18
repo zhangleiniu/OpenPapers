@@ -23,26 +23,34 @@ As of 2026-07-18, production has these properties:
 
 - The sole writer is the hourly system LaunchDaemon
   `org.openpapers.local-control` (role `_openpapers`). Its external-effects
-  gate is enabled and its private SQLite database is schema 11. The migration
-  preserved 15 event-date schedules, 16 date attempts, 13 agent schedules,
-  and five each of run, artifact, report, and report-attempt records.
-- The local-control runtime is the manifest-verified 167-file candidate
-  (`candidate-20260718T133609Z`, inventory sha256 `366e83ab…`). Its code and
-  config files byte-match commit `383bee3` — not the `0389f5e89db8` its
-  manifest records: the candidate was built from the then-uncommitted working
-  tree that was committed as `383bee3` later that morning, so the manifest
-  captured the build-time HEAD. Only the runtime-embedded documentation is a
-  pre-commit snapshot; `automation/upgrade_safety.py` postdates the build and
-  is not installed. A 2026-07-18 read-only installed-runtime audit
-  (`verify-installed-revision.py`) confirmed the hash, file count, schema-11
-  code, absent legacy modules, and database `user_version` 11. The pinned
-  no-remote agent source is a separate component and remains a clean checkout
-  of `0389f5e89db8`. The next candidate must be built from a clean committed
-  snapshot and bound with `upgrade_safety candidate --expected-commit`. The
-  dashboard was restarted on the same runtime; it remains a separately managed
-  persistent service and may be upgraded independently. Confirm each installed
-  component rather than treating one Git revision as proof for all services;
-  repository commits are not deployed merely by existing on `main`.
+  gate is enabled and its private SQLite database is schema 11 (no schema
+  change in this upgrade; the pre-flight audit required the same version
+  going in as coming out).
+- The local-control runtime is the manifest-verified 153-file candidate
+  (`candidate-20260718T215017Z`), installed via `upgrade-enabled.zsh` at
+  2026-07-18T21:5x UTC. Code and config byte-match commit `95a6b7c` exactly —
+  built from a clean committed snapshot (working tree was clean at build
+  time) and bound with `upgrade_safety candidate --expected-commit`, so
+  unlike the prior candidate there is no manifest/commit mismatch. The
+  upgrade ran end to end with no rollback: services stopped, backup created
+  and schema-11-rehearsed, runtime/source swapped, bindings replaced, one
+  bounded first wake completed (`no_due_work`, as expected — nothing was due
+  at that exact instant), canaries unchanged, both services restarted
+  (`agent_enabled_upgrade=complete`). The pinned no-remote agent source is a
+  clean, remote-stripped checkout of the same commit. The dashboard was
+  restarted on the same runtime; it remains a separately managed persistent
+  service. Confirm each installed component rather than treating one Git
+  revision as proof for all services; repository commits are not deployed
+  merely by existing on `main`.
+- This upgrade also shipped the dashboard's last/next-edition redesign: a
+  year with an open `agent_schedule` row (not yet `"Collected"`) no longer
+  reads as a finished "last edition" just because its calendar date has
+  passed, and pre-empts the cadence guess as "next edition" instead — a
+  loopback probe immediately after install confirmed AISTATS/IJCAI 2026 show
+  "next edition: 2026" (not a fabricated `~2027`) with a waiting-for-PDF
+  badge (`--metadata-root` was already being passed by the installed plist
+  for an earlier, removed feature; this reuses that same flag), while ICML
+  2026 — fully downloaded per the metadata scan — gets no false badge.
 - The deterministic monitor registry covers all 15 catalog venues (18
   sources); the private monitor configuration matches
   (`expected_source_count=18`).
@@ -50,8 +58,15 @@ As of 2026-07-18, production has these properties:
   cadence) plus the manually confirmed `extra_targets` entry NAACL 2027.
   ICLR/AAAI/CVPR/COLT/ACL 2026 were operator-marked completed (canonical
   scrapes predate enrollment); ICML/AISTATS/IJCAI 2026 remain active with
-  `not_ready` rechecks pending archival proceedings. JMLR is visible but
-  unenrolled.
+  `not_ready` rechecks pending archival proceedings. JMLR is now enrolled
+  under recurring non-terminal success semantics (`continuous_targets.v1.json`
+  → `agent_production.py::_register_continuous_targets`): the installed
+  LaunchDaemon's own post-restart wake (independent of the upgrade script's
+  manual verification wake, which itself saw `no_due_work`) already claimed
+  and completed one full JMLR cycle — the live dashboard shows
+  `status=Scheduled, last try: success` with `next_check_at` ≈ 30 days out,
+  confirming the recurring-success path (status never reaches `"completed"`)
+  works in production, not just in tests.
 - OpenReview credentials for the role live in the local-control plist's
   `EnvironmentVariables` (plist is 0600 for that reason). Codex/ADC/Resend
   credentials live in the dedicated role's private credential root. Do not
@@ -93,17 +108,14 @@ verification/job/case design stays retired.
 
 Known follow-up gates:
 
-1. **Review the upgrade hardening.** Schema 11 state simplification is now
-   installed and verified. The working tree adds tracked, fault-injected
-   upgrade safety checks and the operator-owned wrapper delegates to them, but
-   this hardening change has not itself been installed as a new runtime and
-   the wrapper has not been rerun. Review it with the rest of the current
-   working tree before the next upgrade.
-2. **Continuous JMLR enrollment.** Recurring non-terminal success semantics
-   are designed and implemented in the working tree (commit `302df18`) — see
-   `.agent/plans/perpetual-scheduling-and-jmlr.md` — but not yet installed as
-   a new runtime.
-3. **Certificate renewal** (operator maintenance; see `operations.md`).
+1. **Certificate renewal** (operator maintenance; see `operations.md`).
+
+Resolved this cycle: the upgrade-safety hardening (`upgrade_safety.py`, the
+operator wrapper's fault-injected gates) and continuous JMLR enrollment
+(`.agent/plans/perpetual-scheduling-and-jmlr.md`, commit `302df18`) are both
+now installed and running in the runtime described above — the wrapper ran
+them for real during this upgrade, and JMLR's first live cycle already
+completed successfully.
 
 ## Safe pickup procedure
 

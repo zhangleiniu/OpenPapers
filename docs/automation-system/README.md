@@ -102,9 +102,9 @@ tests, not this list.
   `automation/config/agent_targets.v1.json`: the production composition and
   target policy — a 13-venue annual/periodic cohort (ICCV/ECCV carry
   `interval_years`/`cycle_anchor_year`) plus manually confirmed
-  `extra_targets`. JMLR's recurring-success enrollment (see
-  `automation/config/continuous_targets.v1.json`) is designed and
-  implemented in the working tree (commit `302df18`) but not yet installed.
+  `extra_targets`. JMLR is enrolled under recurring non-terminal success
+  semantics (see `automation/config/continuous_targets.v1.json`), installed
+  2026-07-18.
 - `automation/agent_credentials.py`, `automation/agent_canary.py`,
   `automation/agent_activation.py`: private credential layout, three
   separately authorized live canaries, and the read-only
