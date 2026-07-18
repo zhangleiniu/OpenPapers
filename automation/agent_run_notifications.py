@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -37,6 +38,9 @@ class AgentRunEmailOutcome:
     receipt_id: str | None
 
 
+_NOTIFICATION_NAMESPACE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{2,63}$")
+
+
 def _utc(value: datetime) -> datetime:
     if not isinstance(value, datetime) or value.tzinfo is None \
             or value.utcoffset() is None:
@@ -44,15 +48,29 @@ def _utc(value: datetime) -> datetime:
     return value.astimezone(timezone.utc)
 
 
-def _notification_id(run_id: str) -> str:
-    digest = hashlib.sha256(run_id.encode("utf-8")).hexdigest()
+def _notification_sources(
+    run_id: str, namespace: str | None = None,
+) -> tuple[str, ...]:
+    if namespace is not None and (
+        not isinstance(namespace, str)
+        or _NOTIFICATION_NAMESPACE.fullmatch(namespace) is None
+    ):
+        raise AgentRunReportError("agent report namespace is invalid")
+    if namespace is None:
+        return (run_id,)
+    return tuple(sorted((run_id, f"agent-report-scope:{namespace}")))
+
+
+def _notification_id(source_ids: tuple[str, ...]) -> str:
+    digest = hashlib.sha256("\0".join(source_ids).encode("utf-8")).hexdigest()
     return f"notification:immediate:{digest}"
 
 
 def build_agent_run_email(
-    repository: ControlStateRepository, run_id: str
+    repository: ControlStateRepository, run_id: str,
+    *, notification_namespace: str | None = None,
 ) -> NotificationIntent:
-    """Compose one bounded report from immutable schema-10 run state."""
+    """Compose one bounded report from immutable agent-run state."""
     attempt = repository.get_agent_run_attempt(run_id)
     artifact = repository.get_agent_execution_artifact(run_id)
     report = repository.get_agent_run_report(run_id)
@@ -84,10 +102,11 @@ def build_agent_run_email(
     evidence_id = "agent-artifact:" + hashlib.sha256(
         run_id.encode("utf-8")
     ).hexdigest()
+    sources = _notification_sources(run_id, notification_namespace)
     intent = NotificationIntent(
-        notification_id=_notification_id(run_id),
+        notification_id=_notification_id(sources),
         kind=NotificationKind.IMMEDIATE,
-        source_ids=(run_id,),
+        source_ids=sources,
         created_at=report.created_at,
         subject=f"OpenPapers agent: {attempt.venue_id.upper()} {attempt.year} "
         f"{attempt.disposition}",
@@ -106,6 +125,8 @@ def deliver_agent_run_email(
     *,
     clock: Callable[[], datetime],
     lease_ttl_seconds: int = DEFAULT_LEASE_TTL_SECONDS,
+    notification_namespace: str | None = None,
+    retry_permanent_protocol_error: bool = False,
 ) -> AgentRunEmailOutcome:
     """Attempt one pending/retryable report; terminal replays do no I/O."""
     now = _utc(clock())
@@ -116,9 +137,13 @@ def deliver_agent_run_email(
             "agent-run-email", ttl_seconds=lease_ttl_seconds
         )
         try:
-            intent = build_agent_run_email(repository, run_id)
+            intent = build_agent_run_email(
+                repository, run_id,
+                notification_namespace=notification_namespace,
+            )
             delivery = repository.prepare_agent_run_report_delivery(
-                run_id, started_at=now, lease=lease
+                run_id, started_at=now, lease=lease,
+                retry_permanent_protocol_error=retry_permanent_protocol_error,
             )
             if delivery is None:
                 report = repository.get_agent_run_report(run_id)

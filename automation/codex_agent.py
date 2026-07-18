@@ -15,6 +15,7 @@ from automation.control_state import (
     AgentRunClaim,
     ControlStateRepository,
 )
+from automation.configuration import load_venue_catalog
 from automation.domain import Writer
 from automation.due_policy import AgentRunResult, DuePolicy, complete_agent_run
 
@@ -86,6 +87,24 @@ class CodexExecutionOutcome:
     changed_files: tuple[str, ...]
     returncode: int | None
     timed_out: bool
+
+
+def _network_arguments(venue_id: str) -> tuple[str, ...]:
+    """Return a workspace-sandbox network allowlist for one catalog venue."""
+    catalog = load_venue_catalog()
+    venue = next(
+        (item for item in catalog["venues"] if item["venue_id"] == venue_id),
+        None,
+    )
+    if venue is None:
+        raise ValueError("agent venue is not in the catalog")
+    domains = sorted(set(venue["official_domains"] + venue["archival_domains"]))
+    rules = ", ".join(f'"{domain}"="allow"' for domain in domains)
+    return (
+        "--config", "sandbox_workspace_write.network_access=true",
+        "--config", "features.network_proxy.enabled=true",
+        "--config", f"features.network_proxy.domains={{ {rules} }}",
+    )
 
 
 def _git(root: Path, *args: str) -> str:
@@ -210,6 +229,7 @@ def run_claimed_codex_agent(
             "--ephemeral", "--ignore-user-config", "--ignore-rules",
             "--sandbox", "workspace-write", "--cd", str(worktree),
             "--config", 'mcp_servers={}', "--config", 'web_search="cached"',
+            *_network_arguments(claim.venue_id),
             "--output-schema", str(RESULT_SCHEMA), _prompt(claim, policy),
         ),
         worktree,

@@ -60,7 +60,7 @@ date used when appropriate. It may still return null; the controller then uses
 its configured fallback. Tests must not infer a retry from explanation text.
 
 Monitor-change hint tests use sanitized event mappings and temporary journal /
-schema-10 databases. A changed available event is de-identified to venue/year,
+current-schema databases. A changed available event is de-identified to venue/year,
 advances at most one existing future schedule after the wake's ordinary work,
 and creates no attempt. Replay, missing schedules, unconfigured targets, and a
 newer agent run are deterministic; the next wake still owns every due-policy
@@ -160,6 +160,31 @@ Run those commands as the dedicated service role for production evidence.
 They do not authorize installation or production migration. See
 [`installation-readiness.md`](./installation-readiness.md).
 
+Runtime-upgrade safety logic is tracked and independently testable even though
+the host wrapper and private paths remain ignored. It is read-only: these
+commands validate artifacts, service-role permission bits, fresh bounded-wake
+evidence, or rollback phase ordering; they do not stop services or alter
+production:
+
+```bash
+python -m unittest automation.tests.test_upgrade_safety -v
+python -m automation.upgrade_safety candidate \
+  --runtime <candidate-runtime> --manifest <manifest> \
+  --expected-commit <40-character-commit>
+python -m automation.upgrade_safety staged-runtime \
+  --runtime <staged-runtime> --manifest <manifest>
+python -m automation.upgrade_safety fresh-record \
+  --records <runs.v1.json> --started-at <canonical-UTC-time>
+python -m automation.upgrade_safety rollback-plan \
+  --stage <phase> [--backup-exists]
+```
+
+Tests cover immutable manifests, bytecode/symlink contamination, the
+non-owner permissions needed by the service role, capped run histories, stale
+or unhealthy wake records, every rollback phase, and failure before a complete
+backup. See [`operations.md`](./operations.md) for the only supported live
+sequence.
+
 Enabled production status is also read-only. Exact canary paths and expected
 Git identities stay in a private schema-1 baseline; the tracked command emits
 only booleans for branch, HEAD, status-digest, and remote-count matches. An
@@ -188,22 +213,22 @@ fresh private proofs remains an operator action. The disabled-only refresh
 command rejects enabled production and must not be used for future upgrades.
 
 The venue dashboard is a narrower scheduling view and does not need cloud or
-canary proofs. Run it as the account that can read the schema-10 database from
-the installed runtime directory and, for the "Last downloaded" column, the
-core scraper's `$SCRAPER_DATA_ROOT/metadata/` tree:
+canary proofs. Run it as the account that can read the installed database from
+the installed runtime directory:
 
 ```bash
 <installed-python> -m automation.agent_dashboard \
-  --state <control-state> --bind 127.0.0.1 --port 8765 \
-  --metadata-root <scraper-data-root>/metadata
+  --state <control-state> --bind 127.0.0.1 --port 8765
 ```
 
-`--metadata-root` defaults to the core `config.METADATA_DIR` resolved from
-`SCRAPER_DATA_ROOT`/`.env`, so it is normally omitted; pass it explicitly only
-when the dashboard role's environment does not already resolve that path. A
-missing or unreadable metadata root degrades the "Last downloaded" column to
-`—` for every venue rather than failing the page, since it is supplementary
-dataset evidence, not authoritative control state.
+The schema-2 tracked edition calendar supplies reproducibly verified dates;
+every entry records its official HTTPS source, verification date, and whether
+the value starts the whole event, main program, or a journal volume. These
+provenance fields are validated but never rendered or fetched by the
+dashboard. The control state's own estimates fill future editions that are not
+yet curated.
+The dashboard does not inspect canonical metadata or claim dataset quality —
+`statistics.md` remains the source of truth for downloaded coverage.
 
 It refuses any bind other than `127.0.0.1`, rereads state immutably on each
 page request, and has no mutation endpoint. Production manages that backend as
@@ -211,12 +236,12 @@ a LaunchDaemon. A separate `_openpapers` Caddy LaunchDaemon exposes only the
 fixed NIU private interface with NIU-issued DigiCert HTTPS and Basic Auth. From
 the NIU network or VPN, open `https://archer.cs.niu.edu:8443/`.
 
-The page shows one row per catalog venue even when not enrolled — the
-highest-year persisted schedule stands in for the venue when more than one
-year exists — ordered so the venue closest to producing new data sorts
-first, with a colored progress indicator next to its phase. It distinguishes
-deterministic monitor registration (a small warning badge on the venue
-abbreviation when unconfigured) from coding-agent schedule state. The
+The page shows one row per catalog venue even when not enrolled. When multiple
+years exist, actionable or attention-required work takes precedence over a
+newer sleeping or terminal target; year is only a tie-breaker. Rows are ordered
+so the venue closest to producing new data sorts first, with a colored progress
+indicator next to its phase. The monitor badge represents static registry
+configuration, not live monitor health. The
 username is `openpapers`. The manually installed leaf certificate expires on
 2026-12-03 and is not eligible for Caddy automatic renewal. Renewal requires a
 replacement NIU DoIT certificate, matching private key, complete intermediate
@@ -248,6 +273,19 @@ Use saved sanitized fixtures for tests. A live network call, live agent
 invocation, or Mac installation requires the package to state that
 explicitly and the operator to authorize it separately — no package inherits
 that permission by default.
+
+The production runner sets `sandbox_workspace_write.network_access=true`
+together with Codex's network proxy and an exact allowlist for the claimed
+venue's cataloged official and archival domains. Preserve both assertions in
+`test_codex_agent.py`: removing the toggle prevents real scrapes, while
+removing the proxy broadens every run beyond its venue scope.
+
+Isolated success rehearsals namespace report source identity with their
+create-once authorization ID. For an older rehearsal already retained as
+`permanent_failure/protocol_error` because of a cross-database idempotency-key
+collision, `automation.agent_report_recovery` revalidates the worktree and can
+make one separately authorized namespaced report attempt. It does not rerun
+Codex or the scraper and cannot reopen another permanent category.
 
 ## Change workflow
 

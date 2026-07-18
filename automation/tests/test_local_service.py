@@ -6,7 +6,6 @@ import sqlite3
 import tempfile
 import unittest
 from hashlib import sha256
-from types import SimpleNamespace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
@@ -16,7 +15,6 @@ from automation.local_service import (
     HealthCheckCode,
     HealthCheckName,
     HealthCheckStatus,
-    ISOLATED_SHADOW_MARKER,
     LocalEffectOutcome,
     LocalEffectStatus,
     LocalMountProbe,
@@ -27,12 +25,9 @@ from automation.local_service import (
     ProductionMonitorEffect,
     build_rollback_scope,
     collect_local_service_health,
-    initialize_isolated_shadow_root,
     render_launchdaemon,
-    render_isolated_shadow_launchdaemon,
     render_production_launchdaemon,
     run_local_service_once,
-    validate_isolated_shadow_root,
     initialize_production_root,
     validate_production_root,
 )
@@ -535,16 +530,6 @@ class LocalServiceLaunchdAndCommandTests(LocalServiceFixture):
         ):
             self.assertNotIn(forbidden, lowered)
 
-        shadow_document = plistlib.loads(
-            render_isolated_shadow_launchdaemon(self.config)
-        )
-        self.assertEqual(
-            shadow_document["ProgramArguments"][:-1],
-            document["ProgramArguments"],
-        )
-        self.assertEqual(
-            shadow_document["ProgramArguments"][-1], "--isolated-shadow"
-        )
         production_document = plistlib.loads(
             render_production_launchdaemon(self.config)
         )
@@ -599,74 +584,10 @@ class LocalServiceLaunchdAndCommandTests(LocalServiceFixture):
         self.assertNotIn(str(self.internal), output)
         self.assertFalse(self.config.state_path.exists())
 
-    def test_isolated_shadow_requires_marker_then_replays_empty_scheduler(self):
-        args = [
-            "--repository-root", str(self.repository),
-            "--python-executable", str(self.python),
-            "--internal-root", str(self.internal),
-            "--external-volume-root", str(self.external),
-            "--role-user", "openpapers-test",
-            "--schedule-minute", "17",
-            "--record-limit", "4",
-            "--isolated-shadow",
-        ]
-        with patch("builtins.print") as printed:
-            missing = main(
-                args,
-                volume_probe=FakeVolumeProbe(),
-                clock=MutableClock(),
-                platform_name="Darwin",
-            )
-        self.assertEqual(missing, 3)
-        self.assertIn('"code": "effect_failed"', printed.call_args.args[0])
-        self.assertFalse(self.config.state_path.exists())
-
-        marker = initialize_isolated_shadow_root(self.internal)
-        self.assertEqual(marker.name, ISOLATED_SHADOW_MARKER)
-        self.assertEqual(marker.stat().st_mode & 0o777, 0o600)
-        self.assertEqual(initialize_isolated_shadow_root(self.internal), marker)
-        validate_isolated_shadow_root(self.internal)
-
-        with patch("builtins.print") as printed:
-            first = main(
-                args,
-                volume_probe=FakeVolumeProbe(),
-                clock=MutableClock(),
-                platform_name="Darwin",
-            )
-            second = main(
-                args,
-                volume_probe=FakeVolumeProbe(),
-                clock=MutableClock(),
-                platform_name="Darwin",
-            )
-        self.assertEqual((first, second), (0, 0))
-        self.assertIn('"code": "no_due_work"', printed.call_args.args[0])
-        with sqlite3.connect(self.config.state_path) as connection:
-            owner = connection.execute(
-                "SELECT owner_kind FROM control_ownership WHERE ownership_id = 1"
-            ).fetchone()
-            wakeups = connection.execute(
-                "SELECT status, COUNT(*) FROM scheduler_wakeup GROUP BY status"
-            ).fetchall()
-        self.assertEqual(owner, ("local_control_plane",))
-        self.assertEqual(wakeups, [("completed", 1)])
-
-        marker.write_text('{"mode":"production"}\n', encoding="utf-8")
-        with self.assertRaisesRegex(ValueError, "marker is invalid"):
-            validate_isolated_shadow_root(self.internal)
-        with self.assertRaisesRegex(ValueError, "marker is invalid"):
-            initialize_isolated_shadow_root(self.internal)
-
-        marker.unlink()
-        self.internal.chmod(0o755)
-        with self.assertRaisesRegex(ValueError, "directory is unsafe"):
-            initialize_isolated_shadow_root(self.internal)
-
     def test_package_has_no_network_or_effect_adapter_dependency(self):
         imported = set()
         source = ""
-        for name in ("service.py", "records.py", "shadow.py", "launchd.py"):
+        for name in ("service.py", "records.py", "launchd.py"):
             module = PACKAGE / name
             text = module.read_text(encoding="utf-8")
             source += text
@@ -777,7 +698,9 @@ class ProductionControlTests(LocalServiceFixture):
             validate_production_root(self.internal)
 
         marker.unlink()
-        (self.internal / ISOLATED_SHADOW_MARKER).write_text("{}\n", encoding="utf-8")
+        (self.internal / ".isolated-shadow.v1.json").write_text(
+            "{}\n", encoding="utf-8"
+        )
         with self.assertRaisesRegex(ValueError, "cannot coexist"):
             initialize_production_root(
                 self.internal, self.configuration, self.secrets
@@ -806,25 +729,19 @@ class ProductionControlTests(LocalServiceFixture):
         self.assertNotIn(str(self.internal), serialized)
         self.assertNotIn("smtp-password", serialized)
 
-    def test_monitor_notification_scheduler_and_exact_replay(self):
+    def test_monitor_notification_and_exact_replay(self):
         monitor_calls = []
         notifier = FakeNotifier()
-        scheduler_calls = []
 
         def monitor(registry_path, state_path):
             monitor_calls.append((registry_path, state_path))
             self.assertEqual(os.environ["OPENREVIEW_USERNAME"], "review-user")
             return self._events()
 
-        def scheduler(state_path, *, scheduled_for, clock):
-            scheduler_calls.append((state_path, scheduled_for, clock()))
-            return SimpleNamespace(selections=())
-
         effect = ProductionMonitorEffect(
             repository_root=ROOT,
             monitor=monitor,
             notifier=notifier,
-            scheduler=scheduler,
         )
         previous_username = os.environ.get("OPENREVIEW_USERNAME")
         first = effect.run(
@@ -846,7 +763,6 @@ class ProductionControlTests(LocalServiceFixture):
         self.assertEqual(monitor_calls[0][1], self.monitor_state)
         self.assertEqual(len(notifier.calls), 1)
         self.assertEqual(notifier.calls[0][2], "smtp-password")
-        self.assertEqual(len(scheduler_calls), 2)
         self.assertEqual(os.environ.get("OPENREVIEW_USERNAME"), previous_username)
         journal = self.internal / "monitor" / "production-wakeups.sqlite3"
         self.assertEqual(journal.stat().st_mode & 0o777, 0o600)
@@ -856,17 +772,12 @@ class ProductionControlTests(LocalServiceFixture):
             ).fetchall()
         self.assertEqual(hints, [("icml", 2026, "pending")])
 
-    def test_monitor_waits_for_daily_chicago_slot_while_scheduler_runs(self):
+    def test_monitor_waits_for_daily_chicago_slot(self):
         monitor_calls = []
-        scheduler_calls = []
         effect = ProductionMonitorEffect(
             repository_root=ROOT,
             monitor=lambda *args: monitor_calls.append(args) or self._events(),
             notifier=FakeNotifier(),
-            scheduler=lambda *args, **kwargs: (
-                scheduler_calls.append((args, kwargs))
-                or SimpleNamespace(selections=())
-            ),
         )
         before_daily_slot = datetime(2026, 7, 14, 12, 30, tzinfo=timezone.utc)
         result = effect.run(
@@ -877,7 +788,6 @@ class ProductionControlTests(LocalServiceFixture):
         )
         self.assertEqual(result.status, LocalEffectStatus.NO_DUE_WORK)
         self.assertEqual(monitor_calls, [])
-        self.assertEqual(len(scheduler_calls), 1)
 
     def test_failure_retains_ambiguity_and_blocks_effect_replay(self):
         calls = []
@@ -890,7 +800,6 @@ class ProductionControlTests(LocalServiceFixture):
             repository_root=ROOT,
             monitor=monitor,
             notifier=FakeNotifier(),
-            scheduler=lambda *args, **kwargs: SimpleNamespace(selections=()),
         )
         with self.assertRaisesRegex(ValueError, "source errors"):
             effect.run(
@@ -916,7 +825,6 @@ class ProductionControlTests(LocalServiceFixture):
             repository_root=ROOT,
             monitor=lambda *args: calls.append(args) or self._events(),
             notifier=FakeNotifier(),
-            scheduler=lambda *args, **kwargs: SimpleNamespace(selections=()),
         )
         with self.assertRaisesRegex(ValueError, "state is incomplete"):
             effect.run(
@@ -949,15 +857,6 @@ class ProductionControlTests(LocalServiceFixture):
             )
         self.assertEqual(code, 3)
         self.assertIn('"code": "effect_failed"', printed.call_args.args[0])
-
-        args.append("--isolated-shadow")
-        with self.assertRaisesRegex(ValueError, "mutually exclusive"):
-            main(
-                args,
-                volume_probe=FakeVolumeProbe(),
-                clock=MutableClock(),
-                platform_name="Darwin",
-            )
 
 
 if __name__ == "__main__":

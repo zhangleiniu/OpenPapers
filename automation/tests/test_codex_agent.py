@@ -7,6 +7,7 @@ from pathlib import Path
 
 from automation.codex_agent import (
     CodexProcessResult,
+    _network_arguments,
     parse_codex_result,
     run_claimed_codex_agent,
 )
@@ -91,6 +92,14 @@ class CodexAgentTests(unittest.TestCase):
                      "workspace-write", "never", "--output-schema"):
             self.assertIn(flag, argv)
         self.assertIn('mcp_servers={}', argv)
+        self.assertIn("sandbox_workspace_write.network_access=true", argv)
+        self.assertIn("features.network_proxy.enabled=true", argv)
+        network_policy = next(
+            item for item in argv if item.startswith("features.network_proxy.domains=")
+        )
+        self.assertIn('"icml.cc"="allow"', network_policy)
+        self.assertIn('"proceedings.mlr.press"="allow"', network_policy)
+        self.assertNotIn('"*"="allow"', network_policy)
         self.assertLess(argv.index("--ask-for-approval"), argv.index("exec"))
         self.assertEqual(outcome.result.disposition, "success")
         with ControlStateRepository(
@@ -103,6 +112,15 @@ class CodexAgentTests(unittest.TestCase):
         self.assertEqual(artifact.retention_status, "retained")
         self.assertEqual(report.status, "pending")
         self.assertEqual(report.schedule_status, "completed")
+
+    def test_network_allowlist_is_exactly_scoped_to_claimed_venue(self):
+        arguments = _network_arguments("colt")
+        policy = arguments[-1]
+        self.assertIn('"learningtheory.org"="allow"', policy)
+        self.assertIn('"proceedings.mlr.press"="allow"', policy)
+        self.assertNotIn("openreview.net", policy)
+        with self.assertRaisesRegex(ValueError, "not in the catalog"):
+            _network_arguments("unknown")
 
     def test_prompt_requests_bounded_evidence_based_not_ready_retry(self):
         invoker = FakeInvoker()

@@ -78,10 +78,10 @@ tests, not this list.
   guards the marker-bound private monitor configuration;
   `agent_control.py` guards the v2 agent configuration and the
   external-effects gate.
-- `automation/local_scheduler.py` + `automation/control_state.py`:
-  lease-protected due selection over versioned SQLite (schema 10). Old
-  verification/case/job/notification tables remain as vestigial
-  compatibility surface only.
+- `automation/control_state.py` + `automation/event_dates.py` +
+  `automation/due_policy.py`: lease-protected due selection over schema-11
+  SQLite. Schema 11 retains only ownership/lease, event-date, agent-run,
+  artifact, and report state.
 - `automation/event_dates.py` + `providers/gemini.py
   ::GeminiEventDateProvider`: one-time approximate-date initialization with
   bounded retries and a monthly ceiling.
@@ -114,10 +114,11 @@ tests, not this list.
   and the private two-canary proof format.
 - `automation/agent_dashboard.py`: the loopback read-only venue dashboard —
   one perpetual-cycle row per venue (last/next edition from the curated
-  `config/venue_editions.v1.json` merged with the control state's own date
+  `config/venue_editions.v2.json` merged with the control state's own date
   estimates, next attempt, color-coded countdown), timestamps in
   America/Chicago with a client-side timezone selector — served through an
-  authenticated NIU-private HTTPS proxy.
+  authenticated NIU-private HTTPS proxy. The schema-2 provenance upgrade is a
+  repository capability until a separately authorized dashboard refresh.
 - `automation/source_change_hints.py`: the scheduling-only bridge from
   monitor changes to an advanced future check.
 - `automation/control_state_migration.py`: read-only audit, backup, and
@@ -126,9 +127,9 @@ tests, not this list.
   `automation/deployment/`: the paused Cloud Run monitor, retained solely
   as a rollback path.
 
-Not yet built: migration of `control_state.py` away from its vestigial old
-schema (planned after the target run state is proven by real successes),
-and JMLR recurring-success enrollment.
+Schema-11 simplification is implemented and isolated-copy tested but is not
+installed merely because it exists in this working tree. JMLR recurring-
+success enrollment is not yet built.
 
 ## Documentation map
 

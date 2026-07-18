@@ -66,6 +66,13 @@ the agent may choose. The agent can use the repository's existing OpenReview,
 official-site, PMLR, and other scraper patterns, browse for a new source, and
 implement a venue-specific repair inside its worktree.
 
+The Codex process keeps the `workspace-write` sandbox while enabling command
+network only through a per-venue proxy allowlist derived from
+`venue_catalog.v1.json` (`official_domains` plus `archival_domains`). It gets
+no global wildcard, local/private-network access, MCP server, or write access
+outside the managed worktree. Cached web search alone does not let scraper
+subprocesses fetch proceedings or PDFs.
+
 The result boundary should remain small:
 
 | Disposition | Meaning | Scheduling consequence |
@@ -173,11 +180,19 @@ forward or require intervention; they must not create a tight retry loop.
 - **Local state has one writer.** `automation/control_state.py` remains under
   its expiring lease. No GCS job queue, Prefect work pool, or second scheduler
   may coordinate target-system work.
-- **Persisted schemas are versioned.** Replacing the old schema requires a
-  migration or backwards-compatible read and tests for replay, partial
-  failure, and recovery.
+- **Persisted schemas are versioned.** Schema 11 deliberately drops the
+  retired verification/case/job/scheduler tables while preserving all active
+  rows. Any future replacement likewise requires a migration or compatible
+  read plus replay, partial-failure, and recovery tests.
 - **Email is a report, not an authority path.** A notification failure cannot
   change a run disposition or cause the agent's worktree to be promoted.
+- **Cross-database report identity is explicitly scoped.** Production uses one
+  state database, but isolated rehearsals add their authorization namespace to
+  notification sources so identical venue/year/attempt identities cannot
+  collide in Resend's global idempotency scope. Permanent failures remain
+  closed by default; explicit recovery is limited to `protocol_error` with a
+  fresh bounded namespace and cannot reopen delivered, in-flight,
+  authentication, recipient, or payload outcomes.
 - **Documents do not prove deployment.** Only executable wiring and an
   authorized live check establish that a component is active.
 - **Status evidence is non-authoritative and secret-free.** Read-only status
@@ -196,6 +211,11 @@ forward or require intervention; they must not create a tight retry loop.
   image, and connection. The installed remote endpoint is a separate
   authenticated HTTPS proxy bound only to the host's fixed private address;
   it adds no control route.
+- **Curated dashboard dates are auditable data.** Each tracked date records an
+  official HTTPS source, the date it was verified, and whether it represents
+  an event, main-program, or journal-volume start. The dashboard validates but
+  never fetches or renders this provenance. Control-state estimates remain
+  scheduling hints and cannot overwrite a curated date for the same year.
 - **Canary authority is adapter-specific.** Gemini, Codex, and Resend live
   canaries are distinct commands and permissions. No canary permission enables
   the automatic production composition or another adapter.

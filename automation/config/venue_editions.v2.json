@@ -1,0 +1,142 @@
+{
+  "schema_version": 2,
+  "editions": [
+    {
+      "venue_id": "neurips",
+      "year": 2025,
+      "start_date": "2025-12-02",
+      "date_scope": "event_start",
+      "source_url": "https://neurips.cc/Conferences/2025/Dates",
+      "verified_on": "2026-07-18"
+    },
+    {
+      "venue_id": "icml",
+      "year": 2026,
+      "start_date": "2026-07-07",
+      "date_scope": "main_program_start",
+      "source_url": "https://icml.cc/Conferences/2026/Dates",
+      "verified_on": "2026-07-18"
+    },
+    {
+      "venue_id": "iclr",
+      "year": 2026,
+      "start_date": "2026-04-23",
+      "date_scope": "main_program_start",
+      "source_url": "https://iclr.cc/Conferences/2026/Dates",
+      "verified_on": "2026-07-18"
+    },
+    {
+      "venue_id": "aaai",
+      "year": 2026,
+      "start_date": "2026-01-20",
+      "date_scope": "event_start",
+      "source_url": "https://aaai.org/conference/aaai/aaai-26/",
+      "verified_on": "2026-07-18"
+    },
+    {
+      "venue_id": "cvpr",
+      "year": 2026,
+      "start_date": "2026-06-03",
+      "date_scope": "event_start",
+      "source_url": "https://cvpr.thecvf.com/Conferences/2026/Dates",
+      "verified_on": "2026-07-18"
+    },
+    {
+      "venue_id": "iccv",
+      "year": 2025,
+      "start_date": "2025-10-19",
+      "date_scope": "event_start",
+      "source_url": "https://iccv.thecvf.com/Conferences/2025/Dates",
+      "verified_on": "2026-07-18"
+    },
+    {
+      "venue_id": "eccv",
+      "year": 2024,
+      "start_date": "2024-09-29",
+      "date_scope": "event_start",
+      "source_url": "https://eccv.ecva.net/Conferences/2024",
+      "verified_on": "2026-07-18"
+    },
+    {
+      "venue_id": "colt",
+      "year": 2026,
+      "start_date": "2026-06-29",
+      "date_scope": "event_start",
+      "source_url": "https://learningtheory.org/colt2026/",
+      "verified_on": "2026-07-18"
+    },
+    {
+      "venue_id": "uai",
+      "year": 2025,
+      "start_date": "2025-07-21",
+      "date_scope": "event_start",
+      "source_url": "https://www.auai.org/uai2025/",
+      "verified_on": "2026-07-18"
+    },
+    {
+      "venue_id": "aistats",
+      "year": 2026,
+      "start_date": "2026-05-02",
+      "date_scope": "event_start",
+      "source_url": "https://virtual.aistats.org/Conferences/2026",
+      "verified_on": "2026-07-18"
+    },
+    {
+      "venue_id": "ijcai",
+      "year": 2025,
+      "start_date": "2025-08-16",
+      "date_scope": "event_start",
+      "source_url": "https://2025.ijcai.org/",
+      "verified_on": "2026-07-18"
+    },
+    {
+      "venue_id": "ijcai",
+      "year": 2026,
+      "start_date": "2026-08-15",
+      "date_scope": "event_start",
+      "source_url": "https://2026.ijcai.org/",
+      "verified_on": "2026-07-18"
+    },
+    {
+      "venue_id": "acl",
+      "year": 2026,
+      "start_date": "2026-07-02",
+      "date_scope": "event_start",
+      "source_url": "https://2026.aclweb.org/program/",
+      "verified_on": "2026-07-18"
+    },
+    {
+      "venue_id": "emnlp",
+      "year": 2025,
+      "start_date": "2025-11-04",
+      "date_scope": "event_start",
+      "source_url": "https://2025.emnlp.org/",
+      "verified_on": "2026-07-18"
+    },
+    {
+      "venue_id": "naacl",
+      "year": 2025,
+      "start_date": "2025-04-29",
+      "date_scope": "event_start",
+      "source_url": "https://2025.naacl.org/",
+      "verified_on": "2026-07-18"
+    },
+    {
+      "venue_id": "naacl",
+      "year": 2027,
+      "start_date": "2027-06-01",
+      "date_scope": "event_start",
+      "source_url": "https://2027.naacl.org/",
+      "verified_on": "2026-07-18"
+    },
+    {
+      "venue_id": "jmlr",
+      "year": 2026,
+      "start_date": "2026-01-01",
+      "date_scope": "volume_start",
+      "source_url": "https://www.jmlr.org/papers/v27/",
+      "verified_on": "2026-07-18",
+      "label": "v27"
+    }
+  ]
+}

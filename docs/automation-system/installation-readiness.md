@@ -8,8 +8,9 @@ binary, ADC, or Resend recipient are ready.
 ## Current boundary
 
 Installation, credential provisioning, all three live canaries, and
-activation completed; the production external-effects gate is enabled with
-schema-10 state and private agent-control v2 configuration. The checklist
+activation and the schema-11 runtime migration completed; the production
+external-effects gate is enabled with schema-11 state and private agent-control
+v2 configuration. The checklist
 below is retained as the prerequisite set for rollback or any future
 replacement — live canaries and activation each remain separate authorities,
 and refresh through the disabled-only path first requires an explicit
@@ -119,8 +120,9 @@ A later refresh must use a fresh candidate runtime and clean no-remote source,
 retain byte-exact rollback copies, and replace v2 bindings marker-last through
 `replace_disabled_agent_production_root`. Both installed and candidate
 configuration must remain `external_effects_enabled=false`; refresh permission
-cannot be reused for activation. The production database is already schema 10
-and must not be migrated or downgraded during refresh.
+cannot be reused for activation. A schema-11 runtime refresh must include the
+separately authorized stopped-service backup and isolated-copy migration;
+ordinary refresh authority cannot migrate or downgrade the schema.
 
 If any step fails, stop the service. Restore the pre-migration database and
 private config/marker/plist as one set before restarting; never attempt an
@@ -137,7 +139,8 @@ future timestamps beyond bounded clock skew, and proof older than 15 minutes.
 It does not contain or print GCP resource identifiers.
 
 Run the read-only audit as the dedicated role while the fixed service is still
-loaded. It must report `ready=true`, effects false, schema 10, quick-check
+loaded. It must report `ready=true`, effects false, the exact schema expected
+by that candidate runtime, quick-check
 healthy, all three active/in-flight counts zero, both credentials present, the
 approved recipient count, sufficient disk, a safe source, cloud paused/drained,
 and `service_loaded=true`:

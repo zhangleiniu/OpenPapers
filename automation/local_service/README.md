@@ -2,8 +2,8 @@
 
 This package renders and runs the marker-gated macOS LaunchDaemon used by the
 current local-first automation deployment. It provides bounded health/run
-records, an external-volume safety gate, a local SQLite due-selector effect,
-and the production deterministic monitor effect.
+records, an external-volume safety gate, and the production deterministic
+monitor plus agent-control effects.
 
 An authorized no-overlap cutover completed on 2026-07-14. The Mac
 LaunchDaemon became the sole production writer and the retained Cloud
@@ -46,21 +46,17 @@ rendered service:
 The ordinary unconfigured mode records `effect_unconfigured`, returns nonzero,
 and does not open control state.
 
-`--isolated-shadow` requires an exact private marker and invokes only
-`run_scheduler_wakeup` against isolated local-owned SQLite. It has no network,
-notification, scraper, agent, cloud, or production authority.
-
 `--production-control` requires separately bound private marker,
 configuration, and secret files. It validates the restored legacy monitor
 state before mutable work. At or after 08:00 America/Chicago it durably claims
 one daily monitor run, checks the registered sources, and sends change/error
-notifications through TLS SMTP. Every hourly wake also runs the local due
-selector against a separate control database. Exact replay does not repeat the
+notifications through TLS SMTP. The agent composition separately applies its
+event-date and run due policies against control state. Exact replay does not repeat the
 daily monitor or its emails; an interrupted active claim remains ambiguous and
 blocks work.
 
 The production command now validates the retained baseline v1 boundary plus an
-agent-control v2 marker/config, schema-10 state, a pinned clean no-remote
+agent-control v2 marker/config, the exact current control schema, a pinned clean no-remote
 `agent-source`, and the installed Codex executable. The installed v2 config has
 `external_effects_enabled=true`; date discovery, Codex agent execution,
 retention, and Resend delivery are active only behind their persisted due,
@@ -80,7 +76,7 @@ is stopped. That boundary rejects enabled state on either side; it is not an
 activation interface.
 
 `automation.agent_activation` is the separate activation boundary. Its
-read-only audit combines the exact v1/v2 files with schema-10 idle state,
+read-only audit combines the exact v1/v2 files with exact-schema idle state,
 credential/recipient/source/disk checks, the fixed LaunchDaemon probe, and a
 fresh paused/drained cloud proof. `rehearse-disabled` backs up, replays, and
 restores the disabled binding. `activate` changes only the gate bit after its
@@ -91,7 +87,7 @@ authorize activation; the current enabled state came from a separate explicit
 production activation and retains its exact disabled rollback backup.
 
 `automation.agent_status` is the separate enabled-state diagnostic boundary.
-It reads schema-10 state and bounded service records without preparing a writer,
+It reads exact-version state and bounded service records without preparing a writer,
 requires fresh cloud and two-canary proofs, and emits only secret/path-free
 lifecycle evidence. Its canary proof compares against an explicit private Git
 baseline, so a reviewed dirty canary remains healthy until its status digest,
@@ -100,8 +96,10 @@ that the installed runtime has been refreshed to include it.
 
 `automation.agent_dashboard` is a narrower loopback-only scheduling view. It
 uses the immutable safe target summary, lists every catalog venue, and exposes
-no service, cloud, credential, or mutation interface. It is repository-only
-until an enabled-runtime upgrade is separately authorized.
+no service, cloud, credential, or mutation interface. Its persistent backend
+has a separate restart/deployment lifecycle from the bounded local-control
+service; use `docs/automation-system/current-handoff.md` plus a live read-only
+probe rather than inferring its installed revision from repository code.
 
 `automation.source_change_hints` is the scheduling-only bridge from a validated
 baseline monitor change to an existing configured agent schedule. The baseline

@@ -153,17 +153,19 @@ Prefect, container, and cloud deployment support is an optional component kept
 under [`automation/deployment`](./automation/deployment/README.md). The core
 scrapers do not require those dependencies.
 
-The target local-first control plane estimates each venue/year's event date
-once, sleeps until that date, and then gives the venue/year to Codex or Claude
-Code in an isolated worktree. The agent decides readiness, investigates
+The local-first control plane estimates each venue/year's event date once,
+sleeps until that date, and then gives the venue/year to Codex in an isolated
+worktree. The agent decides readiness, investigates
 sources, and may repair and run the scraper; the maintainer reviews and commits
-manually. The local LaunchDaemon now has schema-10 state, private configuration
+manually. The local LaunchDaemon now has schema-11 state, private configuration
 v2, a clean no-remote agent source, bounded production composition, durable
-artifacts, worktree retention, and replay-safe Resend report wiring. All new
-external effects remain explicitly disabled: no automatic Gemini lookup,
-Codex run, or Resend email occurs until its separate live canary and activation
-are authorized. The baseline deterministic monitor remains active. See the
-[automation system development guide](./docs/automation-system/README.md).
+artifacts, worktree retention, and replay-safe Resend report wiring. Its
+external-effects gate is enabled in production, subject to persisted due,
+budget, cooldown, concurrency, and replay gates. Live canaries, deployment,
+activation, rollback, and provider calls still require their own explicit
+operator authority. The baseline deterministic monitor remains active. See the
+[automation system overview](./docs/automation-system/README.md) and dated
+[deployment handoff](./docs/automation-system/current-handoff.md).
 
 
 ## Data Structure

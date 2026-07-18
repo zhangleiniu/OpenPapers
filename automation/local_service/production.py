@@ -18,7 +18,6 @@ from pathlib import Path
 from typing import Any, Callable, Mapping, Protocol, Sequence
 from zoneinfo import ZoneInfo
 
-from automation.local_scheduler import run_scheduler_wakeup
 from automation.source_change_hints import (
     prepare_source_change_hint_journal,
     record_source_change_hints,
@@ -42,7 +41,7 @@ _SECRET_KEYS = (
     "OPENREVIEW_USERNAME",
     "OPENREVIEW_PASSWORD",
 )
-_ISOLATED_SHADOW_MARKER = ".isolated-shadow.v1.json"
+_RETIRED_SHADOW_MARKER = ".isolated-shadow.v1.json"
 _MONITOR_TIMEZONE = ZoneInfo("America/Chicago")
 _MONITOR_HOUR = 8
 
@@ -240,7 +239,7 @@ def validate_production_root(
     _private_directory(root)
     _private_directory(root / "control")
     _private_directory(root / "monitor")
-    if (root / _ISOLATED_SHADOW_MARKER).exists():
+    if (root / _RETIRED_SHADOW_MARKER).exists():
         raise ProductionControlError("production and shadow markers cannot coexist")
     marker = _json_file(root / PRODUCTION_MARKER)
     configuration_bytes = _private_file(root / PRODUCTION_CONFIG)
@@ -275,7 +274,7 @@ def initialize_production_root(
     _private_directory(root)
     _private_directory(root / "control")
     _private_directory(root / "monitor")
-    if (root / _ISOLATED_SHADOW_MARKER).exists():
+    if (root / _RETIRED_SHADOW_MARKER).exists():
         raise ProductionControlError("production and shadow markers cannot coexist")
     config = _configuration(configuration)
     _secrets(secrets)
@@ -493,7 +492,7 @@ def _validate_monitor_state(path: Path, expected_source_count: int) -> None:
 
 
 class ProductionMonitorEffect:
-    """Run one exactly-claimed legacy monitor plus local scheduler wakeup."""
+    """Run one exactly claimed deterministic monitor wakeup."""
 
     def __init__(
         self,
@@ -501,12 +500,10 @@ class ProductionMonitorEffect:
         repository_root: Path,
         monitor: SourceMonitor = _default_monitor,
         notifier: SourceNotifier | None = None,
-        scheduler: Callable[..., Any] = run_scheduler_wakeup,
     ) -> None:
         self._repository_root = Path(repository_root)
         self._monitor = monitor
         self._notifier = notifier or SmtpSourceNotifier()
-        self._scheduler = scheduler
 
     def run(
         self,
@@ -516,7 +513,7 @@ class ProductionMonitorEffect:
         scheduled_for: datetime,
         observed_at: datetime,
     ) -> LocalEffectOutcome:
-        del execution_root
+        del execution_root, scheduled_for
         state = Path(state_path)
         internal_root = state.parent.parent
         if state != internal_root / "control" / "state.sqlite3":
@@ -598,12 +595,7 @@ class ProductionMonitorEffect:
                 journal_path, events, observed_at=observed_at
             )
 
-        scheduler = self._scheduler(
-            state,
-            scheduled_for=scheduled_for,
-            clock=lambda: observed_at,
-        )
-        selection_count = len(scheduler.selections)
+        selection_count = 0
         if monitor_due:
             with sqlite3.connect(journal_path) as journal:
                 cursor = journal.execute(

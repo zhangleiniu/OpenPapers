@@ -46,10 +46,11 @@ An authorized no-overlap cutover completed on 2026-07-14:
 - a timed rollback proved local could be stopped before cloud was resumed;
 - the cloud job, monitor state, and credentials were retained for rollback.
 
-The installed service currently performs the daily baseline monitor and local
-due selection only. It does not call discovery, a coding agent, or a run-report
-notification path. Actual external state must be checked before relying on
-this recorded topology.
+The original cutover enabled only the daily baseline monitor and local due
+selection. Later separately authorized phases enabled date discovery, Codex,
+and run-report delivery without changing this local-first topology. The dated
+installed boundary now lives only in [`current-handoff.md`](./current-handoff.md);
+actual external state must still be checked before an operational change.
 
 Host-specific cutover and rollback evidence lives in the maintainer's ignored
 `docs/local-p4lc-operations.md`. Earlier ignored `local-p4o` and `local-p4ls`

@@ -21,47 +21,19 @@ class ContractName(str, Enum):
     """Stable names for artifacts crossing automation component boundaries."""
 
     DISCOVERY_RESULT = "discovery_result"
-    VERIFICATION_REQUEST = "verification_request"
-    VERIFICATION_RESULT = "verification_result"
-    CONFERENCE_STATE = "conference_state"
-    CASE_STATE = "case_state"
     NOTIFICATION_INTENT = "notification_intent"
-    JOB = "job"
-    JOB_QUEUE_ENVELOPE = "job_queue_envelope"
-    JOB_MANIFEST = "job_manifest"
-    JOB_RESULT = "job_result"
-    VALIDATION_REPORT = "validation_report"
-    CODEX_RESULT = "codex_result"
     VENUE_CATALOG = "venue_catalog"
     POLICY_CONFIG = "policy_config"
 
 
 _SCHEMA_FILES = {
     ContractName.DISCOVERY_RESULT: "discovery-result.json",
-    ContractName.VERIFICATION_REQUEST: "verification-request.json",
-    ContractName.VERIFICATION_RESULT: "verification-result.json",
-    ContractName.CONFERENCE_STATE: "conference-state.json",
-    ContractName.CASE_STATE: "case-state.json",
     ContractName.NOTIFICATION_INTENT: "notification-intent.json",
-    ContractName.JOB: "job.json",
-    ContractName.JOB_QUEUE_ENVELOPE: "job-queue-envelope.json",
-    ContractName.JOB_MANIFEST: "job-manifest.json",
-    ContractName.JOB_RESULT: "job-result.json",
-    ContractName.VALIDATION_REPORT: "validation-report.json",
-    ContractName.CODEX_RESULT: "codex-result.json",
     ContractName.VENUE_CATALOG: "venue-catalog.json",
     ContractName.POLICY_CONFIG: "policy-config.json",
 }
 
-_SUPPORTED_SCHEMA_VERSIONS = {
-    contract: ({1, 2} if contract in {
-        ContractName.VERIFICATION_REQUEST,
-        ContractName.VERIFICATION_RESULT,
-        ContractName.JOB,
-        ContractName.JOB_RESULT,
-    } else {1})
-    for contract in ContractName
-}
+_SUPPORTED_SCHEMA_VERSIONS = {contract: {1} for contract in ContractName}
 
 
 class ContractValidationError(ValueError):

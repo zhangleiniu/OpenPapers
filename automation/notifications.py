@@ -15,11 +15,9 @@ from automation.contracts import (
     ContractValidationError,
     validate_contract,
 )
-from automation.domain import BlockerCode, SecretBoundaryError, assert_secret_free
-from automation.reminders import CaseDigest, ReminderCadence
+from automation.domain import SecretBoundaryError, assert_secret_free
 
 
-MAX_DIGEST_ITEMS = 100
 MAX_SUMMARY_CHARS = 2_000
 MAX_MESSAGE_CHARS = 100_000
 
@@ -94,7 +92,6 @@ _SENSITIVE_QUERY_KEYS = frozenset(
         "x-goog-signature",
     }
 )
-_CASE_STATUSES = frozenset({"open", "stalled", "dormant", "snoozed"})
 
 
 @dataclass(frozen=True)
@@ -157,18 +154,6 @@ class FailureDecision:
     retryable: bool
 
 
-@dataclass(frozen=True)
-class DeliveryOutcome:
-    """Observable result of one delivery coordination request."""
-
-    notification_id: str
-    status: str
-    attempted: bool
-    attempt_number: int | None
-    failure_category: FailureCategory | None
-    receipt_id: str | None
-
-
 @runtime_checkable
 class NotificationTransport(Protocol):
     """Effect boundary implemented only by fakes in P3.3."""
@@ -180,32 +165,6 @@ class NotificationTransport(Protocol):
         idempotency_key: str,
     ) -> TransportReceipt:
         """Attempt one delivery using the stable notification identity."""
-
-
-class NotificationDeliveryStore(Protocol):
-    """Structural store interface used without importing SQLite here."""
-
-    def prepare_notification_delivery(
-        self,
-        intent: NotificationIntent,
-        *,
-        lease: Any,
-        started_at: datetime | str,
-    ) -> Any | None: ...
-
-    def complete_notification_delivery(
-        self,
-        notification_id: str,
-        attempt_number: int,
-        *,
-        status: str,
-        lease: Any,
-        completed_at: datetime | str,
-        failure_category: str | None = None,
-        receipt_id: str | None = None,
-    ) -> Any: ...
-
-    def get_notification(self, notification_id: str) -> Any | None: ...
 
 
 def _utc_timestamp(value: datetime | str, *, field: str) -> str:
@@ -420,174 +379,6 @@ def build_immediate_notification(
     return intent
 
 
-def reminder_source_id(
-    case_id: str,
-    cadence: ReminderCadence | str,
-    slot: int,
-    due_at: datetime,
-) -> str:
-    """Return the stable source claim for one case reminder slot."""
-    try:
-        resolved_cadence = ReminderCadence(cadence)
-    except (TypeError, ValueError) as exc:
-        raise NotificationError("reminder cadence is invalid") from exc
-    _validated_ids((case_id,), field="case_id", required=True, maximum=1)
-    if not isinstance(slot, int) or isinstance(slot, bool) or slot < 1:
-        raise NotificationError("reminder slot must be a positive integer")
-    return _stable_id(
-        "reminder",
-        (
-            case_id,
-            resolved_cadence.value,
-            str(slot),
-            _utc_timestamp(due_at, field="due_at"),
-        ),
-    )
-
-
-def build_digest_notification(
-    digest: CaseDigest,
-    *,
-    run_ids: Sequence[str] = (),
-) -> NotificationIntent:
-    """Build one stable grouped digest intent from explicit P3.2 data."""
-    if not isinstance(digest, CaseDigest):
-        raise NotificationError("digest must be P3.2 CaseDigest data")
-    generated_at = _utc_timestamp(digest.generated_at, field="generated_at")
-    seen_cadences: set[ReminderCadence] = set()
-    seen_cases: set[str] = set()
-    items = []
-    for group in digest.groups:
-        if not isinstance(group.cadence, ReminderCadence):
-            raise NotificationError("digest group cadence is invalid")
-        if group.cadence in seen_cadences or not group.items:
-            raise NotificationError("digest groups must be unique and non-empty")
-        seen_cadences.add(group.cadence)
-        for item in group.items:
-            if item.cadence is not group.cadence:
-                raise NotificationError("digest item cadence does not match its group")
-            _validated_ids(
-                (item.case_id,), field="case_id", required=True, maximum=1
-            )
-            if item.case_id in seen_cases:
-                raise NotificationError("digest contains a duplicate case")
-            seen_cases.add(item.case_id)
-            if (
-                not isinstance(item.venue_id, str)
-                or _VENUE_PATTERN.fullmatch(item.venue_id) is None
-            ):
-                raise NotificationError("digest venue_id is invalid")
-            if (
-                not isinstance(item.year, int)
-                or isinstance(item.year, bool)
-                or not 1900 <= item.year <= 2200
-            ):
-                raise NotificationError("digest year is invalid")
-            try:
-                BlockerCode(item.blocker)
-            except (TypeError, ValueError) as exc:
-                raise NotificationError("digest blocker is invalid") from exc
-            if item.status not in _CASE_STATUSES:
-                raise NotificationError("digest status is invalid")
-            if (
-                not isinstance(item.age_days, int)
-                or isinstance(item.age_days, bool)
-                or item.age_days < 0
-            ):
-                raise NotificationError("digest age_days is invalid")
-            if (
-                not isinstance(item.slot, int)
-                or isinstance(item.slot, bool)
-                or item.slot < 1
-            ):
-                raise NotificationError("digest slot is invalid")
-            meaningful_at = _utc_timestamp(
-                item.last_meaningful_change_at,
-                field="last_meaningful_change_at",
-            )
-            due_at = _utc_timestamp(item.due_at, field="due_at")
-            if due_at > generated_at or meaningful_at > generated_at:
-                raise NotificationError("digest item time exceeds generation time")
-            _validated_ids(
-                item.evidence_ids,
-                field="digest evidence_ids",
-                required=True,
-                maximum=1000,
-            )
-            items.append(item)
-    if digest.due_count != len(items) or not items:
-        raise NotificationError("digest must contain at least one consistent due item")
-    if len(items) > MAX_DIGEST_ITEMS:
-        raise NotificationError(
-            f"digest exceeds its {MAX_DIGEST_ITEMS}-item delivery bound"
-        )
-    runs = _validated_ids(run_ids, field="run_ids", required=False, maximum=100)
-    sources = tuple(
-        sorted(
-            reminder_source_id(
-                item.case_id,
-                item.cadence,
-                item.slot,
-                item.due_at,
-            )
-            for item in items
-        )
-    )
-    if len(set(sources)) != len(sources):
-        raise NotificationError("digest contains duplicate reminder slots")
-    evidence = _validated_ids(
-        tuple(
-            sorted(
-                {
-                    evidence_id
-                    for item in items
-                    for evidence_id in item.evidence_ids
-                }
-            )
-        ),
-        field="evidence_ids",
-        required=True,
-        maximum=1000,
-    )
-    lines = [
-        "OpenPapers unresolved-case digest",
-        f"Generated at: {generated_at}",
-        f"Due cases: {len(items)}",
-    ]
-    for group in digest.groups:
-        lines.append("")
-        lines.append(f"{group.cadence.value.upper()} ({len(group.items)})")
-        for item in group.items:
-            lines.extend(
-                (
-                    f"- Case: {item.case_id}",
-                    f"  Venue/year: {item.venue_id} {item.year}",
-                    f"  Blocker/status: {item.blocker} / {item.status}",
-                    "  Age/slot: "
-                    f"{item.age_days} days / {item.cadence.value}:{item.slot}",
-                    f"  Due at: {_utc_timestamp(item.due_at, field='due_at')}",
-                    f"  Summary: {_summary(item.summary)}",
-                    "  Evidence: " + ", ".join(sorted(item.evidence_ids)),
-                )
-            )
-    lines.extend(("", "Run references:"))
-    lines.extend(f"- {run_id}" for run_id in runs)
-    if not runs:
-        lines.append("- none")
-    intent = NotificationIntent(
-        notification_id=_stable_id("notification:digest", sources),
-        kind=NotificationKind.DIGEST,
-        source_ids=sources,
-        created_at=generated_at,
-        subject=f"OpenPapers unresolved cases: {len(items)} due",
-        body=_message_text(lines),
-        evidence_ids=evidence,
-        run_ids=runs,
-    )
-    validate_notification_intent(intent)
-    return intent
-
-
 def classify_transport_failure(error: BaseException) -> FailureDecision:
     """Classify a transport exception without retaining its raw text."""
     category = (
@@ -598,93 +389,6 @@ def classify_transport_failure(error: BaseException) -> FailureDecision:
     return FailureDecision(category, category in _RETRYABLE_FAILURES)
 
 
-def _validated_receipt(receipt: object) -> TransportReceipt:
-    if not isinstance(receipt, TransportReceipt):
-        raise TransportFailure(FailureCategory.PROTOCOL_ERROR)
-    _validated_ids(
-        (receipt.receipt_id,), field="receipt_id", required=True, maximum=1
-    )
-    return receipt
-
-
 def validate_receipt_id(receipt_id: str) -> None:
     """Validate a secret-free opaque transport acknowledgement ID."""
     _validated_ids((receipt_id,), field="receipt_id", required=True, maximum=1)
-
-
-def deliver_notification(
-    intent: NotificationIntent,
-    *,
-    repository: NotificationDeliveryStore,
-    lease: Any,
-    transport: NotificationTransport,
-    now: datetime | str,
-) -> DeliveryOutcome:
-    """Coordinate one fake/injected attempt around durable state.
-
-    P3.3 deliberately does not find events or due cases. The caller supplies an
-    already constructed intent. Transport I/O occurs after the repository has
-    committed an in-flight claim and outside any SQLite transaction.
-    """
-    validate_notification_intent(intent)
-    attempt = repository.prepare_notification_delivery(
-        intent, lease=lease, started_at=now
-    )
-    if attempt is None:
-        record = repository.get_notification(intent.notification_id)
-        if record is None:
-            raise NotificationError("suppressed delivery has no durable record")
-        category = (
-            FailureCategory(record.last_failure_category)
-            if record.last_failure_category is not None
-            else None
-        )
-        return DeliveryOutcome(
-            notification_id=intent.notification_id,
-            status=record.status,
-            attempted=False,
-            attempt_number=None,
-            failure_category=category,
-            receipt_id=record.receipt_id,
-        )
-
-    try:
-        receipt = _validated_receipt(
-            transport.send(intent, idempotency_key=intent.notification_id)
-        )
-    except TransportFailure as exc:
-        decision = classify_transport_failure(exc)
-        status = "retryable" if decision.retryable else "permanent_failure"
-        record = repository.complete_notification_delivery(
-            intent.notification_id,
-            attempt.attempt_number,
-            status=status,
-            lease=lease,
-            completed_at=now,
-            failure_category=decision.category.value,
-        )
-        return DeliveryOutcome(
-            notification_id=intent.notification_id,
-            status=record.status,
-            attempted=True,
-            attempt_number=attempt.attempt_number,
-            failure_category=decision.category,
-            receipt_id=None,
-        )
-
-    record = repository.complete_notification_delivery(
-        intent.notification_id,
-        attempt.attempt_number,
-        status="delivered",
-        lease=lease,
-        completed_at=now,
-        receipt_id=receipt.receipt_id,
-    )
-    return DeliveryOutcome(
-        notification_id=intent.notification_id,
-        status=record.status,
-        attempted=True,
-        attempt_number=attempt.attempt_number,
-        failure_category=None,
-        receipt_id=receipt.receipt_id,
-    )

@@ -7,7 +7,7 @@ from pathlib import Path
 
 from automation.agent_run_notifications import deliver_agent_run_email
 from automation.codex_agent import CodexProcessResult, run_claimed_codex_agent
-from automation.control_state import ControlStateRepository
+from automation.control_state import AgentRunReportError, ControlStateRepository
 from automation.domain import Writer
 from automation.due_policy import claim_due_agent_run
 from automation.event_dates import (
@@ -145,6 +145,35 @@ class AgentRunNotificationTests(unittest.TestCase):
             other, claim.run_id, replay, clock=lambda: NOW
         ).attempted)
         self.assertEqual(replay.calls, [])
+
+    def test_explicit_namespaced_recovery_is_limited_to_protocol_failure(self):
+        failed_transport = Transport(
+            TransportFailure(FailureCategory.PROTOCOL_ERROR)
+        )
+        failed = deliver_agent_run_email(
+            self.state, self.claim.run_id, failed_transport, clock=lambda: NOW,
+            notification_namespace="rehearsal-first",
+        )
+        self.assertEqual(failed.status, "permanent_failure")
+
+        recovery_transport = Transport(TransportReceipt("receipt:recovered"))
+        recovered = deliver_agent_run_email(
+            self.state, self.claim.run_id, recovery_transport, clock=lambda: NOW,
+            notification_namespace="rehearsal-recovery",
+            retry_permanent_protocol_error=True,
+        )
+        self.assertEqual(recovered.status, "delivered")
+        self.assertEqual(recovered.attempt_number, 2)
+        first_key = failed_transport.calls[0][1]
+        recovery_key = recovery_transport.calls[0][1]
+        self.assertNotEqual(first_key, recovery_key)
+
+        with self.assertRaisesRegex(AgentRunReportError, "namespace"):
+            deliver_agent_run_email(
+                self.state, self.claim.run_id,
+                Transport(TransportReceipt("receipt:unused")), clock=lambda: NOW,
+                notification_namespace="bad namespace",
+            )
 
     def test_lease_loss_after_acceptance_leaves_visible_in_flight_state(self):
         class Clock:

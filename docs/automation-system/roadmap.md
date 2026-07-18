@@ -21,7 +21,7 @@ Valid phase statuses are `Planned`, `In progress`, `Implemented`, and
 | Production composition | Explicit cohort/config plus one bounded agent wakeup effect | Implemented |
 | Installation, activation, rollback | Private config, marker-last transitions, exact recovery, enabled gate | Implemented |
 | Post-install operations | Credentials, canaries, read-only status, dashboard, operator commands, failure alerting | Implemented |
-| State simplification | Migrate away from vestigial verification/case/job/notification schema | Planned after real production successes |
+| State simplification | Migrate away from vestigial verification/case/job/notification schema | Deployed and verified in production (2026-07-18) |
 | JMLR enrollment | Recurring, non-terminal success semantics for a continuous journal | Planned |
 
 ## Phase notes
@@ -47,7 +47,10 @@ decision-relevant:
   distinct-venue failure circuit bound execution. Three consecutive
   failures pause a schedule until explicit recovery.
 - **Agent execution.** The runner is Codex-only (`workspace-write` sandbox,
-  ephemeral state, ignored user config, no MCP), with a portable
+  ephemeral state, ignored user config, no MCP). Command network is enabled
+  through Codex's proxy only for the claimed venue's cataloged official and
+  archival domains; no wildcard or local/private destination is allowed. It
+  uses a portable
   four-field result schema. The standing prompt supplies the accepted
   retry window and asks `not_ready` runs for a concrete evidence-based UTC
   retry; null remains valid.
@@ -66,12 +69,26 @@ decision-relevant:
   only through `agent_operations update-monitor-config` /
   `repair-markers`.
 
-## State simplification (Planned)
+## State simplification (Deployed)
 
-Once real production successes prove the run/notification records, migrate
-`automation/control_state.py` away from the inherited verification, case,
-reminder, typed-job, and old notification tables in one deliberate
-migration. Acceptance: the cleanup migration opens representative
-schema-10 state, preserves approximate-date and scheduler ownership data,
-creates the simplified records deterministically, and rejects corrupt or
-ambiguous state.
+Schema 11 migrates `automation/control_state.py` away from the inherited
+verification, case, reminder, typed-job, generic-notification, and old
+scheduler tables. Regression and isolated-copy tests open populated schema-10
+state, preserve every active ownership/date/agent/artifact/report row, remove
+all 15 retired tables, and reject corrupt or ambiguous state. The legacy
+modules, schemas, fixtures, configs, and scheduler service mode were removed.
+The authorized stopped-service deployment on 2026-07-18 retained exact
+rollback copies, proved the schema-10 source unchanged in an isolated schema-11
+rehearsal, migrated production, and completed a healthy bounded `no_due_work`
+wake. All active row counts were preserved; local-control and the dashboard
+were restarted on the manifest-verified runtime while cloud remained paused.
+
+The first authorized rehearsal on 2026-07-18 did not satisfy this gate: it
+proved terminal-artifact and delivered-report behavior but ended `failed`
+because the then-current workspace sandbox left scraper network disabled.
+The corrected second rehearsal produced and independently validated all 42
+COLT 2011 papers/PDFs with a terminal `success`. Its report hit a
+cross-database Resend idempotency collision with the first rehearsal and is
+retained as `permanent_failure/protocol_error`. The explicit recovery became
+report attempt 2, revalidated all 42 papers/PDFs, delivered successfully, and
+returned `proved_success=true`; the evidence gate is now satisfied.

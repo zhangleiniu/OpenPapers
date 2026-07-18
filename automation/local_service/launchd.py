@@ -71,13 +71,6 @@ def render_launchdaemon(config: LocalServiceConfig) -> bytes:
     return plistlib.dumps(document, fmt=plistlib.FMT_XML, sort_keys=True)
 
 
-def render_isolated_shadow_launchdaemon(config: LocalServiceConfig) -> bytes:
-    """Render the fixed P4.LS service with only the isolated scheduler effect."""
-    document = plistlib.loads(render_launchdaemon(config))
-    document["ProgramArguments"].append("--isolated-shadow")
-    return plistlib.dumps(document, fmt=plistlib.FMT_XML, sort_keys=True)
-
-
 def render_production_launchdaemon(config: LocalServiceConfig) -> bytes:
     """Render the fixed P4.LC service without embedding configuration/secrets."""
     document = plistlib.loads(render_launchdaemon(config))

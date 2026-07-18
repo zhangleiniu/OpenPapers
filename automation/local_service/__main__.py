@@ -1,4 +1,4 @@
-"""One-shot local service command with explicit shadow/production modes."""
+"""One-shot local service command with an explicit production mode."""
 
 from __future__ import annotations
 
@@ -22,7 +22,6 @@ from automation.local_service.production import (
     send_wake_failure_alert,
     should_alert_wake_failures,
 )
-from automation.local_service.shadow import IsolatedSchedulerShadowEffect
 from automation.local_service.agent_control import InstalledAgentProductionEffect
 
 
@@ -38,14 +37,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--schedule-minute", type=int, default=17)
     parser.add_argument("--record-limit", type=int, default=128)
     parser.add_argument(
-        "--isolated-shadow",
-        action="store_true",
-        help="run only the marker-gated local due-work scheduler",
-    )
-    parser.add_argument(
         "--production-control",
         action="store_true",
-        help="run the marker-gated production monitor and local scheduler",
+        help="run the marker-gated production monitor and agent control plane",
     )
     return parser
 
@@ -68,13 +62,9 @@ def main(
         schedule_minute=args.schedule_minute,
         record_limit=args.record_limit,
     )
-    if args.isolated_shadow and args.production_control:
-        raise ValueError("local service modes are mutually exclusive")
-    if (args.isolated_shadow or args.production_control) and effect is not None:
+    if args.production_control and effect is not None:
         raise ValueError("an injected effect cannot replace a concrete service mode")
-    if args.isolated_shadow:
-        resolved_effect = IsolatedSchedulerShadowEffect()
-    elif args.production_control:
+    if args.production_control:
         resolved_effect = InstalledAgentProductionEffect(
             repository_root=args.repository_root
         )

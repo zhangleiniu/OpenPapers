@@ -19,7 +19,7 @@ from automation.agent_activation import (
     read_cloud_drain_proof,
 )
 from automation.agent_credentials import prepare_agent_credential_context
-from automation.control_state import ControlStateRepository
+from automation.control_state import CONTROL_SCHEMA_VERSION, ControlStateRepository
 from automation.domain import Writer
 from automation.local_service.agent_control import initialize_agent_production_root
 from automation.local_service.production import initialize_production_root
@@ -186,7 +186,7 @@ class AgentActivationTests(unittest.TestCase):
         result = self._audit()
 
         self.assertTrue(result.ready)
-        self.assertEqual(result.schema_version, 10)
+        self.assertEqual(result.schema_version, CONTROL_SCHEMA_VERSION)
         self.assertEqual(result.recipient_count, 2)
         self.assertTrue(result.cloud_schedule_paused)
         self.assertEqual(result.active_cloud_executions, 0)

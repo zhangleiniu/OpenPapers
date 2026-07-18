@@ -36,11 +36,32 @@ class VenueEditionTests(unittest.TestCase):
             isinstance(item["start_date"], date)
             for entries in editions.values() for item in entries
         ))
+        self.assertTrue(all(
+            item["source_url"].startswith("https://")
+            and isinstance(item["verified_on"], date)
+            and item["date_scope"] in {
+                "event_start", "main_program_start", "volume_start",
+            }
+            for entries in editions.values() for item in entries
+        ))
         with tempfile.TemporaryDirectory() as temp:
             bad = Path(temp) / "editions.json"
             bad.write_text(json.dumps({
-                "schema_version": 1,
+                "schema_version": 2,
                 "editions": [{"venue_id": "icml", "year": 2026}],
+            }))
+            with self.assertRaisesRegex(AgentDashboardError, "invalid"):
+                load_venue_editions(bad)
+
+            bad.write_text(json.dumps({
+                "schema_version": 2,
+                "editions": [{
+                    "venue_id": "icml", "year": 2026,
+                    "start_date": "2026-07-07",
+                    "date_scope": "main_program_start",
+                    "source_url": "https://example.com/unrelated",
+                    "verified_on": "2026-07-18",
+                }],
             }))
             with self.assertRaisesRegex(AgentDashboardError, "invalid"):
                 load_venue_editions(bad)
@@ -178,6 +199,77 @@ class AgentDashboardTests(unittest.TestCase):
         self.assertEqual(acl["status"]["text"], "Collected")
         # Curated verified date beats the operator estimate for the same year.
         self.assertEqual(acl["last_edition"]["date"], "2026-07-02")
+
+    def test_completed_status_suppresses_stale_failed_disposition(self):
+        targets = [{
+            "venue_id": "iclr",
+            "year": 2026,
+            "event_date": None,
+            "agent": {
+                "status": "completed",
+                "next_check_at": None,
+                "last_disposition": "failed",
+                "updated_at": self._time(NOW),
+            },
+            "latest_attempt": None,
+            "latest_report": None,
+        }]
+
+        model = self._model(targets=targets)
+
+        iclr = next(v for v in model["venues"] if v["venue_id"] == "iclr")
+        self.assertEqual(iclr["status"]["text"], "Collected")
+
+    def test_older_actionable_target_beats_newer_terminal_target(self):
+        targets = [
+            {
+                "venue_id": "icml",
+                "year": 2026,
+                "event_date": None,
+                "agent": {
+                    "status": "scheduled",
+                    "next_check_at": self._time(NOW + timedelta(days=2)),
+                    "last_disposition": "not_ready",
+                    "updated_at": self._time(NOW),
+                },
+                "latest_attempt": None,
+                "latest_report": None,
+            },
+            {
+                "venue_id": "icml",
+                "year": 2027,
+                "event_date": None,
+                "agent": {
+                    "status": "completed",
+                    "next_check_at": None,
+                    "last_disposition": "success",
+                    "updated_at": self._time(NOW),
+                },
+                "latest_attempt": None,
+                "latest_report": None,
+            },
+        ]
+
+        model = self._model(targets=targets)
+
+        icml = next(v for v in model["venues"] if v["venue_id"] == "icml")
+        self.assertEqual(icml["current_target"]["year"], 2026)
+        self.assertEqual(icml["status"]["text"], "Scheduled · not_ready")
+
+    def test_edition_day_uses_chicago_calendar_not_utc_calendar(self):
+        after_utc_midnight = datetime(2026, 7, 18, 1, tzinfo=timezone.utc)
+        model = build_dashboard_model(
+            load_venue_catalog(), [], observed_at=after_utc_midnight,
+            editions={"icml": [{
+                "year": 2026,
+                "start_date": date(2026, 7, 18),
+                "label": None,
+            }]},
+        )
+
+        icml = next(v for v in model["venues"] if v["venue_id"] == "icml")
+        self.assertIsNone(icml["last_edition"])
+        self.assertEqual(icml["next_edition"]["date"], "2026-07-18")
 
     def test_report_delivery_problem_surfaces_as_warning_only(self):
         model = self._model()

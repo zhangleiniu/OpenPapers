@@ -20,8 +20,8 @@ production writer. It wakes hourly and exits after a bounded invocation:
 2. Once daily at or after 08:00 America/Chicago it runs the deterministic
    source monitor and sends one TLS SMTP email per source change or error.
    Exact daily replay does not repeat the monitor or its notifications.
-3. On every wakeup it runs the local SQLite due selector. When persisted
-   work is due, the enabled bounded composition may initialize one event
+3. On every wakeup the agent composition reads due state under the local
+   SQLite single-writer lease. When persisted work is due, it may initialize one event
    date, run one coding agent, attempt one durable report, and apply
    bounded worktree retention.
 4. A failed wake records a bounded, secret-free failure category; three
@@ -61,8 +61,8 @@ never create work, claim an agent, or bypass the due-policy gates.
 
 ## Scheduling and the coding agent
 
-`automation/local_scheduler.py` holds the single-writer lease and selects
-only records whose persisted `next_check_at` is due — a frequent wakeup does
+`automation/control_state.py` holds the single-writer lease; `event_dates.py`
+and `due_policy.py` select only records whose persisted `next_check_at` is due — a frequent wakeup does
 not mean venues are checked frequently. For each enrolled venue/year:
 
 1. One Gemini Search call estimates the approximate event date (a
@@ -93,15 +93,18 @@ scrape predates enrollment can be closed with
   behind an authenticated NIU-private HTTPS Caddy proxy at
   `https://archer.cs.niu.edu:8443/` (username `openpapers`; password
   operator-held). It shows one perpetual-cycle row per catalog venue: the
-  last held edition and next expected edition (curated verified dates in
-  `automation/config/venue_editions.v1.json` merged with the control
-  state's own estimates; `~` marks a cadence approximation), the
+  last held edition and next expected edition (curated dates merged with the
+  control state's own estimates; `~` marks a cadence approximation), the
   scheduler's next attempt, and a color-coded countdown that rolls to the
   next edition once a collection completes. Timestamps default to
   America/Chicago with a client-side timezone selector (the page's single
   inline script; no external resource is ever loaded). It exposes no
   control methods, paths, addresses, or credentials. Its DigiCert leaf
   expires 2026-12-03 and is renewed manually.
+
+  The venue monitor badge means only “present in the tracked registry”; it is
+  not live monitor-health evidence. Schema-2 date provenance and the
+  target-selection fixes were deployed with the 2026-07-18 schema-11 runtime.
 
 None of these surfaces can claim work or change a gate. Do not weaken the
 private SQLite file permissions or copy private paths, credentials,

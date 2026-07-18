@@ -4,7 +4,7 @@ Each catalog venue renders as one perpetual-cycle row: its last held
 edition, the next expected edition, and the scheduler's next attempt, with
 a color-coded countdown to whichever check comes next. Edition dates merge
 the control state's own estimated event dates with the curated
-``automation/config/venue_editions.v1.json`` (verified dates win) and fall
+``automation/config/venue_editions.v2.json`` (verified dates win) and fall
 back to a cadence approximation marked with ``~``. Timestamps default to
 America/Chicago; a client-side selector re-renders them in other zones
 (inline script only — the strict no-external-resource CSP still applies).
@@ -43,7 +43,7 @@ _PROGRESS_COLORS = {
     "none": "#3a4763",
 }
 DEFAULT_VENUE_EDITIONS = (
-    Path(__file__).with_name("config") / "venue_editions.v1.json"
+    Path(__file__).with_name("config") / "venue_editions.v2.json"
 )
 
 
@@ -86,31 +86,66 @@ def load_venue_editions(
     except (OSError, json.JSONDecodeError) as exc:
         raise AgentDashboardError("venue editions are unavailable") from exc
     if not isinstance(payload, dict) \
-            or payload.get("schema_version") != 1 \
+            or payload.get("schema_version") != 2 \
             or not isinstance(payload.get("editions"), list) \
             or len(payload["editions"]) > 500:
         raise AgentDashboardError("venue editions are invalid")
+    catalog = load_venue_catalog()
+    official_domains = {
+        venue["venue_id"]: tuple(venue["official_domains"])
+        for venue in catalog["venues"]
+    }
     editions: dict[str, list[dict[str, Any]]] = {}
     seen: set[tuple[str, int]] = set()
     for item in payload["editions"]:
+        required = {
+            "venue_id", "year", "start_date", "date_scope", "source_url",
+            "verified_on",
+        }
         if not isinstance(item, dict) \
-                or not {"venue_id", "year", "start_date"} <= set(item) \
-                or set(item) - {"venue_id", "year", "start_date", "label"}:
+                or not required <= set(item) \
+                or set(item) - (required | {"label"}):
             raise AgentDashboardError("venue editions are invalid")
         venue_id, year = item["venue_id"], item["year"]
         if not isinstance(venue_id, str) or not isinstance(year, int) \
                 or isinstance(year, bool) or not 2000 <= year <= 2200 \
                 or (venue_id, year) in seen:
             raise AgentDashboardError("venue editions are invalid")
-        start = date.fromisoformat(item["start_date"])
+        try:
+            start = date.fromisoformat(item["start_date"])
+            verified_on = date.fromisoformat(item["verified_on"])
+        except (TypeError, ValueError) as exc:
+            raise AgentDashboardError("venue editions are invalid") from exc
         label = item.get("label")
+        date_scope = item["date_scope"]
+        source_url = item["source_url"]
+        try:
+            source = urlsplit(source_url)
+            source_port = source.port
+        except (TypeError, ValueError) as exc:
+            raise AgentDashboardError("venue editions are invalid") from exc
         if label is not None and (
             not isinstance(label, str) or not 1 <= len(label) <= 32
-        ):
+        ) or date_scope not in {
+            "event_start", "main_program_start", "volume_start",
+        } or not isinstance(source_url, str) or not 1 <= len(source_url) <= 2048 \
+                or source.scheme != "https" or source.username is not None \
+                or source.password is not None or source_port not in {None, 443} \
+                or not source.hostname or "." not in source.hostname \
+                or source.query or source.fragment \
+                or venue_id not in official_domains \
+                or not any(
+                    source.hostname == domain
+                    or source.hostname.endswith("." + domain)
+                    for domain in official_domains.get(venue_id, ())
+                ) \
+                or not 2000 <= verified_on.year <= 2200:
             raise AgentDashboardError("venue editions are invalid")
         seen.add((venue_id, year))
         editions.setdefault(venue_id, []).append({
             "year": year, "start_date": start, "label": label,
+            "date_scope": date_scope, "source_url": source_url,
+            "verified_on": verified_on,
         })
     return editions
 
@@ -264,8 +299,8 @@ def _cycle_progress(
         end = datetime.combine(
             date.fromisoformat(str(next_edition["iso_date"])),
             datetime.min.time(),
-            tzinfo=timezone.utc,
-        )
+            tzinfo=ZoneInfo(_DEFAULT_TIMEZONE),
+        ).astimezone(timezone.utc)
         text, category = _remaining_label(end, observed_at)
         return {
             "fraction": max(
@@ -283,12 +318,31 @@ def _status_view(current_target: Mapping[str, object] | None) -> dict[str, Any]:
         return {"text": "Not enrolled", "warning": None}
     phase = str(current_target["phase"])
     disposition = current_target.get("last_disposition")
+    if phase == "Collected":
+        # An operator completion or successful collection is authoritative.
+        # A prior failed run remains in history but must not contradict the
+        # terminal schedule in the dashboard's single-line summary.
+        disposition = None
     text = phase if disposition is None else f"{phase} · {disposition}"
     report_status = current_target.get("report_status")
     warning = None
     if report_status in {"retryable", "permanent_failure"}:
         warning = f"report delivery {report_status}"
     return {"text": text, "warning": warning}
+
+
+def _current_target_priority(target: Mapping[str, object]) -> tuple[int, str, int]:
+    """Prefer operational relevance, using newest year only as a tie-breaker."""
+    phase = str(target["phase"])
+    year = int(target["year"])
+    if phase in _ACTIVE_PHASES:
+        return (0, "", -year)
+    if phase in _ATTENTION_PHASES:
+        return (1, "", -year)
+    next_attempt = target.get("next_attempt_at")
+    if isinstance(next_attempt, str):
+        return (2, next_attempt, -year)
+    return (3, "", -year)
 
 
 def build_dashboard_model(
@@ -304,7 +358,7 @@ def build_dashboard_model(
             or len(targets) > _MAX_TARGETS:
         raise AgentDashboardError("dashboard catalog or target bound is invalid")
     editions = editions or {}
-    today = observed_at.astimezone(timezone.utc).date()
+    today = observed_at.astimezone(ZoneInfo(_DEFAULT_TIMEZONE)).date()
     by_id: dict[str, dict[str, object]] = {}
     lifecycles: dict[str, Mapping[str, Any]] = {}
     for venue in venues:
@@ -328,7 +382,8 @@ def build_dashboard_model(
             "display_name": display_name,
             "lifecycle_kind": lifecycle["kind"],
             "source_monitor": (
-                "Configured" if scraper["monitor_registered"] else "Not configured"
+                "Registry configured"
+                if scraper["monitor_registered"] else "Registry missing"
             ),
             "targets": [],
             "db_dates": {},
@@ -404,7 +459,8 @@ def build_dashboard_model(
     for venue_id in sorted(by_id):
         venue = by_id[venue_id]
         target_rows = sorted(venue.pop("targets"), key=lambda item: int(item["year"]))
-        current = target_rows[-1] if target_rows else None
+        current = min(target_rows, key=_current_target_priority) \
+            if target_rows else None
         db_dates = venue.pop("db_dates")
         last, next_edition = _resolve_editions(
             venue_id, lifecycles[venue_id], editions.get(venue_id, ()),

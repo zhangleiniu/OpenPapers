@@ -1,4 +1,4 @@
-"""Explicit bounded cleanup for schema-10 managed agent worktrees."""
+"""Explicit bounded cleanup for managed agent worktrees."""
 
 from __future__ import annotations
 

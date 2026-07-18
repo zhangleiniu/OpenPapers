@@ -61,28 +61,6 @@ def load_policy_config(
     """Load policy defaults and validate cross-field safety constraints."""
     payload = _load_json(Path(path))
     validate_contract(ContractName.POLICY_CONFIG, payload)
-    scheduling = payload["scheduling"]
-    backoff = scheduling["post_conference_release_backoff_days"]
-    if backoff != sorted(backoff):
-        raise ContractValidationError(
-            "post-conference release backoff days must be sorted")
-    if (scheduling["unknown_schedule_interval_days"]
-            > scheduling["max_silence_days"]):
-        raise ContractValidationError(
-            "unknown-schedule interval cannot exceed maximum silence")
-    if (scheduling["verified_milestone_lead_days"]
-            > scheduling["max_silence_days"]):
-        raise ContractValidationError(
-            "milestone lead time cannot exceed maximum silence")
-    reminders = payload["reminders"]
-    if not (
-        reminders["weekly_until_days"]
-        < reminders["monthly_until_days"]
-        <= reminders["dormant_after_days"]
-    ):
-        raise ContractValidationError(
-            "reminder windows must progress from weekly to monthly to dormant")
-
     discovery = payload["discovery_budget"]
     if discovery["max_calls_per_venue_per_day"] > discovery["max_calls_per_day"]:
         raise ContractValidationError(
@@ -91,15 +69,4 @@ def load_policy_config(
         raise ContractValidationError(
             "second-provider budget cannot exceed the global discovery budget")
 
-    codex = payload["codex_budget"]
-    if codex["max_runs_per_venue_per_day"] > codex["max_runs_per_day"]:
-        raise ContractValidationError(
-            "per-venue Codex budget cannot exceed the global budget")
-
-    domains: set[str] = set()
-    for policy in payload["crawl"]["domains"]:
-        domain = policy["domain"]
-        if domain in domains:
-            raise ContractValidationError(f"duplicate crawl policy: {domain}")
-        domains.add(domain)
     return deepcopy(payload)

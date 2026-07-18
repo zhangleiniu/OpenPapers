@@ -19,6 +19,8 @@ from automation.domain import Writer
 
 
 _PRESERVED_TABLES = (
+    "control_lease",
+    "control_ownership",
     "event_date_schedule",
     "event_date_attempt",
     "agent_schedule",
@@ -42,7 +44,9 @@ class ControlStateAudit:
     journal_mode: str
     active_event_date_attempts: int
     active_agent_runs: int
+    active_artifacts: int
     in_flight_reports: int
+    active_report_attempts: int
     preserved_counts: tuple[tuple[str, int], ...]
     migration_ready: bool
 
@@ -133,8 +137,14 @@ def audit_control_state(path: Path) -> ControlStateAudit:
             active_runs = _count_where(
                 connection, tables, "agent_run_attempt", "disposition = 'active'"
             )
+            active_artifacts = _count_where(
+                connection, tables, "agent_execution_artifact", "lifecycle = 'active'"
+            )
             in_flight = _count_where(
                 connection, tables, "agent_run_report", "status = 'in_flight'"
+            )
+            active_report_attempts = _count_where(
+                connection, tables, "agent_run_report_attempt", "outcome = 'active'"
             )
     except sqlite3.Error as exc:
         raise ControlStateMigrationError("control state audit failed") from exc
@@ -143,11 +153,15 @@ def audit_control_state(path: Path) -> ControlStateAudit:
         and owner == Writer.LOCAL_CONTROL_PLANE.value
         and 5 <= version <= CONTROL_SCHEMA_VERSION
         and journal_mode != "wal"
-        and not any((active_dates, active_runs, in_flight))
+        and not any((
+            active_dates, active_runs, active_artifacts, in_flight,
+            active_report_attempts,
+        ))
     )
     return ControlStateAudit(
         version, CONTROL_SCHEMA_VERSION, quick_ok, owner, journal_mode,
-        active_dates, active_runs, in_flight, counts, ready,
+        active_dates, active_runs, active_artifacts, in_flight,
+        active_report_attempts, counts, ready,
     )
 
 
@@ -239,7 +253,9 @@ def _audit_payload(audit: ControlStateAudit) -> dict[str, object]:
         "journal_mode": audit.journal_mode,
         "active_event_date_attempts": audit.active_event_date_attempts,
         "active_agent_runs": audit.active_agent_runs,
+        "active_artifacts": audit.active_artifacts,
         "in_flight_reports": audit.in_flight_reports,
+        "active_report_attempts": audit.active_report_attempts,
         "preserved_counts": dict(audit.preserved_counts),
         "migration_ready": audit.migration_ready,
     }
