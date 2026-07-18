@@ -16,6 +16,12 @@ from automation.local_service.service import (
     VolumeAvailabilityProbe,
     run_local_service_once,
 )
+from automation.local_service.records import read_service_run_records
+from automation.local_service.production import (
+    consecutive_wake_failures,
+    send_wake_failure_alert,
+    should_alert_wake_failures,
+)
 from automation.local_service.shadow import IsolatedSchedulerShadowEffect
 from automation.local_service.agent_control import InstalledAgentProductionEffect
 
@@ -82,6 +88,23 @@ def main(
         platform_name=platform_name,
     )
     print(json.dumps(report.as_dict(), sort_keys=True))
+    if args.production_control and report.status is LocalServiceRunStatus.FAILED:
+        # Alerting is best-effort: a broken alert path must never change the
+        # run outcome, and if the marker-guarded SMTP configuration itself is
+        # what broke, there is no usable transport anyway.
+        try:
+            records = read_service_run_records(
+                config.run_records_path, limit=64
+            )
+            consecutive = consecutive_wake_failures(records)
+            if records and should_alert_wake_failures(consecutive):
+                send_wake_failure_alert(
+                    config.internal_root,
+                    consecutive=consecutive,
+                    latest_record=records[-1],
+                )
+        except Exception:
+            pass
     if report.status is LocalServiceRunStatus.COMPLETED:
         return 0
     return 3

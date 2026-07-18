@@ -121,9 +121,10 @@ class LocalServiceRunReport:
     observed_at: datetime
     selection_count: int
     health_ready: bool
+    failure_category: str | None = None
 
     def as_dict(self) -> dict[str, object]:
-        return {
+        payload: dict[str, object] = {
             "status": self.status.value,
             "code": self.code.value,
             "scheduled_for": _timestamp(self.scheduled_for),
@@ -131,6 +132,9 @@ class LocalServiceRunReport:
             "selection_count": self.selection_count,
             "health_ready": self.health_ready,
         }
+        if self.failure_category is not None:
+            payload["failure_category"] = self.failure_category
+        return payload
 
 
 @dataclass(frozen=True)
@@ -398,6 +402,7 @@ def _report(
     observed_at: datetime,
     selection_count: int = 0,
     health_ready: bool,
+    failure_category: str | None = None,
 ) -> LocalServiceRunReport:
     return LocalServiceRunReport(
         status=status,
@@ -406,7 +411,30 @@ def _report(
         observed_at=observed_at,
         selection_count=selection_count,
         health_ready=health_ready,
+        failure_category=failure_category,
     )
+
+
+def failure_category_from_exception(exc: BaseException) -> str:
+    """Summarize an effect failure without leaking paths or environment.
+
+    Control-plane error types (anything defined under ``automation.``) keep
+    their message: those messages are static literals by convention and are
+    the whole diagnostic ("production registry fingerprint changed"). Any
+    other exception contributes only its class name, so an OSError can never
+    put a filesystem path into the bounded run records.
+    """
+    name = type(exc).__name__
+    module = type(exc).__module__ or ""
+    text = name
+    if module.startswith("automation."):
+        detail = str(exc).strip()
+        if detail:
+            text = f"{name}: {detail}"
+    cleaned = "".join(
+        character if 32 <= ord(character) < 127 else " " for character in text
+    )
+    return cleaned[:200]
 
 
 def run_local_service_once(
@@ -472,13 +500,14 @@ def run_local_service_once(
                 scheduled_for=scheduled_for,
                 observed_at=observed_at,
             )
-        except Exception:
+        except Exception as exc:
             result = _report(
                 LocalServiceRunStatus.FAILED,
                 LocalServiceRunCode.EFFECT_FAILED,
                 scheduled_for=scheduled_for,
                 observed_at=observed_at,
                 health_ready=True,
+                failure_category=failure_category_from_exception(exc),
             )
         else:
             if not isinstance(outcome, LocalEffectOutcome):

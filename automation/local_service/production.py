@@ -384,6 +384,67 @@ def _timestamp(value: datetime) -> str:
     return value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
+WAKE_ALERT_THRESHOLD = 3
+WAKE_ALERT_REPEAT_EVERY = 24
+
+
+def consecutive_wake_failures(records: Sequence[Mapping[str, Any]]) -> int:
+    """Count trailing failed records in oldest-to-newest run records."""
+    count = 0
+    for record in reversed(records):
+        if record.get("status") != "failed":
+            break
+        count += 1
+    return count
+
+
+def should_alert_wake_failures(consecutive: int) -> bool:
+    """Alert when failures first look systemic, then once per further day.
+
+    The service wakes hourly, so 3 consecutive failures ≈ 3 hours broken;
+    after that one reminder per further 24 failures (~daily) while broken.
+    """
+    if consecutive < WAKE_ALERT_THRESHOLD:
+        return False
+    return (
+        consecutive == WAKE_ALERT_THRESHOLD
+        or (consecutive - WAKE_ALERT_THRESHOLD) % WAKE_ALERT_REPEAT_EVERY == 0
+    )
+
+
+def send_wake_failure_alert(
+    internal_root: Path,
+    *,
+    consecutive: int,
+    latest_record: Mapping[str, Any],
+    notifier: SourceNotifier | None = None,
+) -> None:
+    """Send one bounded email describing consecutive production wake failures.
+
+    Uses the same validated configuration and TLS SMTP path as the monitor's
+    change/error events. The caller decides whether an alert is due; this
+    function only composes and sends. It raises on failure so the caller can
+    swallow it — an alert problem must never change the service outcome.
+    """
+    configuration, secrets = validate_production_root(Path(internal_root))
+    event = {
+        "status": "error",
+        "venue": "(service)",
+        "year": "",
+        "source_key": "local-control wake",
+        "item_count": consecutive,
+        "detail": (
+            f"{consecutive} consecutive failed wakes; latest "
+            f"scheduled_for={latest_record.get('scheduled_for', '')} "
+            f"category={latest_record.get('failure_category', 'unknown')}"
+        ),
+        "snapshot_path": "",
+    }
+    (notifier or SmtpSourceNotifier()).send(
+        event, configuration=configuration, password=secrets.smtp_password
+    )
+
+
 def _registry_source_count(registry_path: Path) -> int:
     from automation.monitor import load_registry
 

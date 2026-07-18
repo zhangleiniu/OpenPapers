@@ -416,6 +416,80 @@ class LocalServiceHealthAndRunTests(LocalServiceFixture):
         self.assertNotIn(str(self.internal), serialized)
 
 
+class FailureVisibilityTests(LocalServiceFixture):
+    def test_category_keeps_control_plane_messages_and_masks_others(self):
+        from automation.local_service.production import ProductionControlError
+        from automation.local_service.service import failure_category_from_exception
+
+        self.assertEqual(
+            failure_category_from_exception(
+                ProductionControlError("production registry fingerprint changed")
+            ),
+            "ProductionControlError: production registry fingerprint changed",
+        )
+        # Non-automation exceptions contribute only their class name, so an
+        # OSError can never place a filesystem path into the records.
+        self.assertEqual(
+            failure_category_from_exception(
+                OSError("/private/secret/path is unavailable")
+            ),
+            "OSError",
+        )
+        noisy = ProductionControlError("line\nbreaks\tand\x00controls" + "x" * 300)
+        category = failure_category_from_exception(noisy)
+        self.assertLessEqual(len(category), 200)
+        self.assertNotIn("\n", category)
+        self.assertNotIn("\x00", category)
+
+    def test_failed_run_record_carries_category_and_legacy_records_still_read(self):
+        from automation.local_service.production import ProductionControlError
+        from automation.local_service.records import read_service_run_records
+
+        probe = FakeVolumeProbe()
+        report = run_local_service_once(
+            self.config,
+            effect=FakeEffect(
+                error=ProductionControlError("restored monitor state is incomplete")
+            ),
+            volume_probe=probe,
+            clock=MutableClock(),
+            platform_name="Darwin",
+        )
+        self.assertEqual(report.code, LocalServiceRunCode.EFFECT_FAILED)
+        self.assertEqual(
+            report.failure_category,
+            "ProductionControlError: restored monitor state is incomplete",
+        )
+        records = read_service_run_records(self.config.run_records_path, limit=3)
+        self.assertEqual(
+            records[-1]["failure_category"],
+            "ProductionControlError: restored monitor state is incomplete",
+        )
+        # A legacy record without the optional key must remain readable.
+        document = json.loads(self.config.run_records_path.read_text())
+        legacy = dict(records[-1])
+        legacy.pop("failure_category")
+        document["records"].append(legacy)
+        self.config.run_records_path.write_text(json.dumps(document))
+        reread = read_service_run_records(self.config.run_records_path, limit=3)
+        self.assertNotIn("failure_category", reread[-1])
+
+    def test_alert_thresholds_fire_at_three_then_daily(self):
+        from automation.local_service.production import (
+            consecutive_wake_failures,
+            should_alert_wake_failures,
+        )
+
+        failed = {"status": "failed"}
+        ok = {"status": "completed"}
+        self.assertEqual(consecutive_wake_failures([ok, failed, failed]), 2)
+        self.assertEqual(consecutive_wake_failures([failed, ok]), 0)
+        self.assertEqual(consecutive_wake_failures([failed] * 5), 5)
+
+        fired = [n for n in range(1, 60) if should_alert_wake_failures(n)]
+        self.assertEqual(fired, [3, 27, 51])
+
+
 class LocalServiceLaunchdAndCommandTests(LocalServiceFixture):
     def test_launchdaemon_is_fixed_low_impact_and_credential_free(self):
         rendered = render_launchdaemon(self.config)
@@ -708,6 +782,29 @@ class ProductionControlTests(LocalServiceFixture):
             initialize_production_root(
                 self.internal, self.configuration, self.secrets
             )
+
+    def test_wake_failure_alert_uses_validated_config_and_bounded_content(self):
+        from automation.local_service.production import send_wake_failure_alert
+
+        notifier = FakeNotifier()
+        send_wake_failure_alert(
+            self.internal,
+            consecutive=3,
+            latest_record={
+                "scheduled_for": "2026-07-17T14:17:00Z",
+                "failure_category": "ProductionControlError: registry changed",
+            },
+            notifier=notifier,
+        )
+        (event, configuration, password), = notifier.calls
+        self.assertEqual(event["status"], "error")
+        self.assertEqual(event["item_count"], 3)
+        self.assertIn("3 consecutive failed wakes", event["detail"])
+        self.assertIn("ProductionControlError", event["detail"])
+        self.assertEqual(password, "smtp-password")
+        serialized = json.dumps(event)
+        self.assertNotIn(str(self.internal), serialized)
+        self.assertNotIn("smtp-password", serialized)
 
     def test_monitor_notification_scheduler_and_exact_replay(self):
         monitor_calls = []

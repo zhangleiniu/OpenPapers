@@ -23,6 +23,9 @@ RUN_RECORD_KEYS = frozenset(
         "health_ready",
     }
 )
+# Optional, present only on failed runs written by newer service revisions;
+# absent from legacy records, so it is never required.
+OPTIONAL_RUN_RECORD_KEYS = frozenset({"failure_category"})
 RUN_STATUS_CODES = {
     "completed": frozenset({"completed", "no_due_work"}),
     "blocked": frozenset(
@@ -106,7 +109,16 @@ def _atomic_json(path: Path, payload: Mapping[str, object]) -> None:
 
 
 def _validate_run_record(record: object) -> dict[str, object]:
-    if not isinstance(record, dict) or set(record) != RUN_RECORD_KEYS:
+    if not isinstance(record, dict) \
+            or not RUN_RECORD_KEYS <= set(record) \
+            or set(record) - RUN_RECORD_KEYS - OPTIONAL_RUN_RECORD_KEYS:
+        raise ServiceRecordError("stored service run record is invalid")
+    category = record.get("failure_category")
+    if category is not None and (
+        not isinstance(category, str)
+        or not 1 <= len(category) <= 200
+        or any(not 32 <= ord(character) < 127 for character in category)
+    ):
         raise ServiceRecordError("stored service run record is invalid")
     if not all(
         isinstance(record[field], str)
@@ -149,7 +161,8 @@ def read_service_run_records(
     path: Path, *, limit: int = 3
 ) -> tuple[dict[str, object], ...]:
     """Read a bounded tail of service records without preparing a writer."""
-    if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 20:
+    if isinstance(limit, bool) or not isinstance(limit, int) \
+            or not 1 <= limit <= MAX_STORED_RUN_RECORDS:
         raise ServiceRecordError("service record read limit is invalid")
     target = Path(path)
     _safe_target(target)
