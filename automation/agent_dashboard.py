@@ -5,9 +5,16 @@ edition, the next expected edition, and the scheduler's next attempt, with
 a color-coded countdown to whichever check comes next. Edition dates merge
 the control state's own estimated event dates with the curated
 ``automation/config/venue_editions.v2.json`` (verified dates win) and fall
-back to a cadence approximation marked with ``~``. Timestamps default to
-America/Chicago; a client-side selector re-renders them in other zones
-(inline script only — the strict no-external-resource CSP still applies).
+back to a cadence approximation marked with ``~``. A year with a real
+agent_schedule row that has not reached "Collected" is never reported as a
+finished "last edition" even once its calendar date has passed — it stays
+"next edition" until it is actually done, optionally paired with a
+waiting-for-PDF badge sourced from scraper metadata JSON (``--metadata-
+root``, a lightweight pdf_path-presence check, not the fuller on-disk
+validity ``postprocessing/generate_statistics.py`` performs). Timestamps
+default to America/Chicago; a client-side selector re-renders them in other
+zones (inline script only — the strict no-external-resource CSP still
+applies).
 """
 
 from __future__ import annotations
@@ -43,6 +50,16 @@ _ACTIVE_PHASES = frozenset({"Agent running", "Date lookup running"})
 # before that atomic insert existed.
 _ATTENTION_PHASES = frozenset({"Needs human", "Paused", "Data inconsistency"})
 _ANOMALY_PHASES = frozenset({"Data inconsistency"})
+# Phases that come from a real agent_schedule row (see _target_phase) and
+# are not "Collected" — positive evidence that a year's collection is still
+# open, even if its calendar date has already passed. Phases derived from
+# event_date alone ("Waiting for date", "Date lookup running", "Data
+# inconsistency") mean the agent hasn't engaged with the year yet and do
+# NOT count here — a not-yet-started year still resolves last/next purely
+# from chronology, same as before.
+_AGENT_INCOMPLETE_PHASES = frozenset({
+    "Scheduled", "Agent running", "Needs human", "Paused",
+})
 _PROGRESS_COLORS = {
     "active": "#a78bfa",
     "due": "#fb923c",
@@ -166,6 +183,7 @@ def _resolve_editions(
     curated: Sequence[Mapping[str, Any]],
     db_dates: Mapping[int, str],
     today: date,
+    incomplete_years: frozenset[int] = frozenset(),
 ) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
     """Merge curated and control-state edition dates into last/next.
 
@@ -178,6 +196,15 @@ def _resolve_editions(
     placeholder, not a real date, and no cadence approximation is invented
     for it either. Its real schedule is ``current_target.next_attempt_at``,
     rendered separately by the caller.
+
+    ``incomplete_years`` marks years the caller knows are still open (an
+    agent_schedule row exists and has not reached "Collected"), even though
+    the year's calendar date may already be in the past — e.g. a venue whose
+    metadata is scraped but PDFs are still pending. The most recent such
+    year is never reported as "last edition" (it is not actually done) and
+    always becomes "next edition" with its own real date, pre-empting the
+    cadence approximation — the row stays on the venue/year that is
+    genuinely in progress instead of jumping ahead to a guessed future one.
     """
     is_continuous = lifecycle.get("kind") == "continuous"
     merged: dict[int, dict[str, Any]] = {}
@@ -191,15 +218,22 @@ def _resolve_editions(
             "year": item["year"], "start_date": item["start_date"],
             "label": item["label"], "approx": False,
         }
+    pending = None
+    if not is_continuous and incomplete_years:
+        pending = merged.get(max(incomplete_years))
     ordered = sorted(merged.values(), key=lambda item: item["start_date"])
     last = None
     next_edition = None
     for item in ordered:
+        if pending is not None and item["year"] == pending["year"]:
+            continue
         if item["start_date"] <= today:
             last = item
         elif next_edition is None:
             next_edition = item
-    if next_edition is None and last is not None and not is_continuous:
+    if pending is not None:
+        next_edition = pending
+    elif next_edition is None and last is not None and not is_continuous:
         interval = lifecycle.get("interval_years") or 1
         approx_year = last["year"] + interval
         next_edition = {
@@ -211,6 +245,46 @@ def _resolve_editions(
             "approx": True,
         }
     return last, next_edition
+
+
+def _paper_has_pdf(paper: Any) -> bool:
+    if not isinstance(paper, Mapping):
+        return False
+    pdf_path = paper.get("pdf_path")
+    return isinstance(pdf_path, str) and bool(pdf_path)
+
+
+def scan_pdf_completeness(metadata_root: Path) -> dict[str, dict[int, bool]]:
+    """Per-venue-year PDF completeness, read from scraper metadata JSON.
+
+    A lightweight signal only: it checks whether each paper record in
+    ``metadata/{venue}/{venue}_{year}.json`` carries a non-empty
+    ``pdf_path`` field, not on-disk file validity —
+    ``postprocessing/generate_statistics.py`` does that fuller check for the
+    canonical coverage report. This is enough to distinguish "PDFs still
+    pending" from "fully collected" for the dashboard's own indicator,
+    without stat-ing every PDF on every render. Unreadable or malformed
+    files are skipped rather than raised: this is a best-effort display
+    hint, never scheduling or readiness authority.
+    """
+    result: dict[str, dict[int, bool]] = {}
+    root = Path(metadata_root)
+    if not root.is_dir():
+        return result
+    for path in sorted(root.glob("*/*.json")):
+        venue_id, separator, year_text = path.stem.rpartition("_")
+        if not separator or not year_text.isdigit():
+            continue
+        try:
+            papers = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+            continue
+        if not isinstance(papers, list) or not papers:
+            continue
+        result.setdefault(venue_id, {})[int(year_text)] = all(
+            _paper_has_pdf(paper) for paper in papers
+        )
+    return result
 
 
 def _edition_view(
@@ -364,7 +438,11 @@ def _cycle_progress(
     return {"fraction": 0.0, "category": "none", "label": phase or "No cycle data"}
 
 
-def _status_view(current_target: Mapping[str, object] | None) -> dict[str, Any]:
+def _status_view(
+    current_target: Mapping[str, object] | None,
+    *,
+    waiting_for_pdf: bool = False,
+) -> dict[str, Any]:
     """Split phase (primary) from historical disposition (secondary).
 
     The two used to be fused into one string ("Scheduled · not_ready"),
@@ -376,7 +454,7 @@ def _status_view(current_target: Mapping[str, object] | None) -> dict[str, Any]:
     if current_target is None:
         return {
             "phase": "Not enrolled", "year": None, "disposition": None,
-            "warning": None, "anomaly": False,
+            "warning": None, "anomaly": False, "waiting_for_pdf": False,
         }
     phase = str(current_target["phase"])
     disposition = current_target.get("last_disposition")
@@ -395,6 +473,7 @@ def _status_view(current_target: Mapping[str, object] | None) -> dict[str, Any]:
         "disposition": disposition,
         "warning": warning,
         "anomaly": phase in _ANOMALY_PHASES,
+        "waiting_for_pdf": bool(waiting_for_pdf),
     }
 
 
@@ -418,6 +497,7 @@ def build_dashboard_model(
     *,
     observed_at: datetime,
     editions: Mapping[str, Sequence[Mapping[str, Any]]] | None = None,
+    pdf_completeness: Mapping[str, Mapping[int, bool]] | None = None,
 ) -> dict[str, object]:
     """Join bounded state to every catalog venue without adding authority."""
     venues = catalog.get("venues") if isinstance(catalog, Mapping) else None
@@ -534,10 +614,20 @@ def build_dashboard_model(
         current = min(target_rows, key=_current_target_priority) \
             if target_rows else None
         db_dates = venue.pop("db_dates")
+        incomplete_years = frozenset(
+            int(row["year"]) for row in target_rows
+            if row["phase"] in _AGENT_INCOMPLETE_PHASES
+        )
         last, next_edition = _resolve_editions(
             venue_id, lifecycles[venue_id], editions.get(venue_id, ()),
-            db_dates, today,
+            db_dates, today, incomplete_years,
         )
+        pdf_pending = False
+        if current is not None and current["phase"] in _AGENT_INCOMPLETE_PHASES:
+            year_complete = (pdf_completeness or {}).get(
+                venue_id, {}
+            ).get(int(current["year"]))
+            pdf_pending = year_complete is False
         venue["enrolled"] = bool(target_rows)
         venue["current_target"] = current
         venue["last_edition"] = _edition_view(venue_id, last)
@@ -545,7 +635,7 @@ def build_dashboard_model(
         venue["progress"] = _cycle_progress(
             current, venue["next_edition"], observed_at
         )
-        venue["status"] = _status_view(current)
+        venue["status"] = _status_view(current, waiting_for_pdf=pdf_pending)
         resolved.append(venue)
 
     def _sort_key(venue: Mapping[str, Any]) -> tuple:
@@ -660,6 +750,11 @@ def _status_cell(status: Mapping[str, object]) -> str:
             ' <span class="badge-warn" '
             f'title="{html.escape(str(warning), quote=True)}">&#9993;</span>'
         )
+    if status.get("waiting_for_pdf"):
+        primary += (
+            ' <span class="badge-info" title="Metadata collected for this '
+            'year; PDF download is still in progress">&#128196;</span>'
+        )
     cell = primary
     disposition = status.get("disposition")
     if disposition:
@@ -743,6 +838,7 @@ tr:last-child td {{ border-bottom: 0; }}
 .edition-year {{ font-weight: 700; }}
 .edition-label {{ color: #8491a8; font-size: 12px; }}
 .badge-warn {{ color: #f2c14e; cursor: help; }}
+.badge-info {{ color: #60a5fa; cursor: help; }}
 .bar-track {{ width: 130px; height: 6px; border-radius: 3px; background: #202b46;
   overflow: hidden; }}
 .bar-fill {{ height: 100%; border-radius: 3px; }}
@@ -823,6 +919,7 @@ def build_dashboard_document(
     *,
     clock: Callable[[], datetime] = lambda: datetime.now(timezone.utc),
     editions_path: Path = DEFAULT_VENUE_EDITIONS,
+    metadata_root: Path | None = None,
 ) -> bytes:
     """Build the current page from catalog plus one immutable state read."""
     model = build_dashboard_model(
@@ -830,6 +927,9 @@ def build_dashboard_document(
         read_agent_state_summary(Path(state_path)),
         observed_at=clock(),
         editions=load_venue_editions(editions_path),
+        pdf_completeness=(
+            scan_pdf_completeness(metadata_root) if metadata_root else None
+        ),
     )
     return render_dashboard(model).encode("utf-8")
 
@@ -838,6 +938,7 @@ class _DashboardServer(HTTPServer):
     state_path: Path
     clock: Callable[[], datetime]
     editions_path: Path
+    metadata_root: Path | None
 
 
 class _DashboardHandler(BaseHTTPRequestHandler):
@@ -872,6 +973,7 @@ class _DashboardHandler(BaseHTTPRequestHandler):
             body = build_dashboard_document(
                 self.server.state_path, clock=self.server.clock,
                 editions_path=self.server.editions_path,
+                metadata_root=self.server.metadata_root,
             )
         except (AgentDashboardError, AgentStatusError, OSError, ValueError):
             self._send(503, b"status unavailable\n", "text/plain; charset=utf-8")
@@ -895,6 +997,7 @@ def create_dashboard_server(
     port: int = 8765,
     clock: Callable[[], datetime] = lambda: datetime.now(timezone.utc),
     editions_path: Path = DEFAULT_VENUE_EDITIONS,
+    metadata_root: Path | None = None,
 ) -> HTTPServer:
     """Create a loopback-only reader; no request can mutate scheduler state."""
     path = Path(state_path)
@@ -909,10 +1012,13 @@ def create_dashboard_server(
         raise AgentDashboardError("dashboard must bind to 127.0.0.1")
     if not isinstance(port, int) or isinstance(port, bool) or not 0 <= port <= 65535:
         raise AgentDashboardError("dashboard port is invalid")
+    if metadata_root is not None and not Path(metadata_root).is_absolute():
+        raise AgentDashboardError("dashboard metadata root is unsafe")
     server = _DashboardServer((bind, port), _DashboardHandler)
     server.state_path = path
     server.clock = clock
     server.editions_path = Path(editions_path)
+    server.metadata_root = Path(metadata_root) if metadata_root else None
     return server
 
 
@@ -922,14 +1028,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--bind", default=_BIND)
     parser.add_argument("--port", default=8765, type=int)
     parser.add_argument("--editions", default=DEFAULT_VENUE_EDITIONS, type=Path)
-    # Retained so an installed launch configuration that passes it keeps
-    # starting; the dataset-mtime column it fed was replaced by editions.
-    parser.add_argument("--metadata-root", type=Path, help=argparse.SUPPRESS)
+    parser.add_argument(
+        "--metadata-root", type=Path, default=None,
+        help="scraper metadata root, for the waiting-for-PDF status badge "
+        "(optional; omit to disable it)",
+    )
     args = parser.parse_args(argv)
     try:
         server = create_dashboard_server(
             args.state, bind=args.bind, port=args.port,
-            editions_path=args.editions,
+            editions_path=args.editions, metadata_root=args.metadata_root,
         )
     except AgentDashboardError:
         print(json.dumps({"dashboard": "blocked", "reason": "unsafe_configuration"}))

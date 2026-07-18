@@ -21,6 +21,7 @@ from automation.agent_dashboard import (
     create_dashboard_server,
     load_venue_editions,
     render_dashboard,
+    scan_pdf_completeness,
 )
 from automation.agent_status import read_agent_state_summary
 from automation.configuration import load_venue_catalog
@@ -104,6 +105,46 @@ class VenueEditionTests(unittest.TestCase):
         self.assertEqual(last["year"], 2025)
         self.assertEqual(next_edition["year"], 2026)
         self.assertFalse(next_edition["approx"])
+
+    def test_incomplete_year_pre_empts_last_edition_even_past_its_date(self):
+        # AISTATS-shaped case: metadata scraped, PDFs still pending, so the
+        # agent_schedule row for 2026 has not reached "Collected" even
+        # though its curated date has already passed. It must not be
+        # reported as a finished "last edition", and it must not be skipped
+        # in favor of a guessed future year either.
+        curated = [{"year": 2026, "start_date": date(2026, 5, 2), "label": None}]
+        last, next_edition = _resolve_editions(
+            "aistats", {"kind": "annual"}, curated, {}, TODAY,
+            incomplete_years=frozenset({2026}),
+        )
+        self.assertIsNone(last)
+        self.assertEqual(next_edition["year"], 2026)
+        self.assertFalse(next_edition["approx"])
+        self.assertEqual(next_edition["start_date"], date(2026, 5, 2))
+
+    def test_incomplete_year_falls_back_to_the_prior_completed_edition(self):
+        curated = [
+            {"year": 2025, "start_date": date(2025, 5, 1), "label": None},
+            {"year": 2026, "start_date": date(2026, 5, 2), "label": None},
+        ]
+        last, next_edition = _resolve_editions(
+            "aistats", {"kind": "annual"}, curated, {}, TODAY,
+            incomplete_years=frozenset({2026}),
+        )
+        self.assertEqual(last["year"], 2025)
+        self.assertEqual(next_edition["year"], 2026)
+
+    def test_incomplete_years_ignored_for_a_continuous_venue(self):
+        # A continuous venue's agent_schedule never reaches "Collected" by
+        # design (recurring success keeps it "scheduled") — that must never
+        # be mistaken for an open year pre-empting its curated last edition.
+        curated = [{"year": 2026, "start_date": date(2026, 1, 1), "label": "v27"}]
+        last, next_edition = _resolve_editions(
+            "jmlr", {"kind": "continuous"}, curated, {}, TODAY,
+            incomplete_years=frozenset({2026}),
+        )
+        self.assertEqual(last["year"], 2026)
+        self.assertIsNone(next_edition)
 
     def test_countdown_buckets_by_urgency(self):
         cases = [
@@ -386,6 +427,82 @@ class AgentDashboardTests(unittest.TestCase):
         self.assertEqual(icml["status"]["phase"], "Scheduled")
         self.assertEqual(icml["status"]["disposition"], "not_ready")
 
+    def test_open_year_stays_next_edition_and_can_flag_waiting_for_pdf(self):
+        # aistats 2026: metadata scraped, PDFs mostly missing — the agent
+        # keeps retrying (status stays 'scheduled', not 'completed'). Its
+        # curated date (2026-05-02) has already passed relative to NOW
+        # (2026-07-16), but it must still be the row's "next edition", not
+        # a jump ahead to a fabricated ~2027 guess, and the status column
+        # must carry a waiting-for-PDF hint when metadata says so.
+        targets = [{
+            "venue_id": "aistats",
+            "year": 2026,
+            "event_date": None,
+            "agent": {
+                "status": "scheduled",
+                "next_check_at": self._time(NOW + timedelta(days=5)),
+                "last_disposition": "not_ready",
+                "updated_at": self._time(NOW),
+            },
+            "latest_attempt": None,
+            "latest_report": None,
+        }]
+
+        model = self._model(targets=targets)
+        aistats = next(v for v in model["venues"] if v["venue_id"] == "aistats")
+        self.assertIsNone(aistats["last_edition"])
+        self.assertEqual(aistats["next_edition"]["name"], "AISTATS 2026")
+        self.assertFalse(aistats["next_edition"]["approx"])
+        self.assertFalse(aistats["status"]["waiting_for_pdf"])
+
+        model = build_dashboard_model(
+            load_venue_catalog(), targets, observed_at=NOW,
+            editions=load_venue_editions(),
+            pdf_completeness={"aistats": {2026: False}},
+        )
+        aistats = next(v for v in model["venues"] if v["venue_id"] == "aistats")
+        self.assertTrue(aistats["status"]["waiting_for_pdf"])
+        document = render_dashboard(model)
+        self.assertIn("badge-info", document)
+        self.assertIn("PDF download is still in progress", document)
+
+        # A venue whose metadata scan says the year IS fully downloaded
+        # never gets the badge, even mid-retry for an unrelated reason.
+        model = build_dashboard_model(
+            load_venue_catalog(), targets, observed_at=NOW,
+            editions=load_venue_editions(),
+            pdf_completeness={"aistats": {2026: True}},
+        )
+        aistats = next(v for v in model["venues"] if v["venue_id"] == "aistats")
+        self.assertFalse(aistats["status"]["waiting_for_pdf"])
+
+    def test_scan_pdf_completeness_reads_metadata_and_skips_bad_entries(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / "aistats").mkdir()
+            (root / "aistats" / "aistats_2026.json").write_text(json.dumps([
+                {"title": "a", "pdf_path": "a.pdf"},
+                {"title": "b", "pdf_path": None},
+            ]), encoding="utf-8")
+            (root / "aistats" / "aistats_2025.json").write_text(json.dumps([
+                {"title": "a", "pdf_path": "a.pdf"},
+            ]), encoding="utf-8")
+            (root / "aistats" / "not-a-venue-year.json").write_text(
+                "[]", encoding="utf-8"
+            )
+            (root / "aistats" / "aistats_2024.json").write_text(
+                "not json", encoding="utf-8"
+            )
+
+            result = scan_pdf_completeness(root)
+
+        self.assertEqual(result["aistats"][2026], False)
+        self.assertEqual(result["aistats"][2025], True)
+        self.assertNotIn(2024, result["aistats"])
+
+        missing = scan_pdf_completeness(Path("/nonexistent-openpapers-root"))
+        self.assertEqual(missing, {})
+
     def test_orphaned_event_date_without_agent_schedule_renders_as_anomaly(self):
         # complete_event_date_success inserts the agent_schedule row in the
         # same transaction as this status flip, so this shape (event_date
@@ -535,6 +652,12 @@ class AgentDashboardTests(unittest.TestCase):
         relative = Path(self.state.name)
         with self.assertRaisesRegex(AgentDashboardError, "unavailable|unsafe"):
             create_dashboard_server(relative, port=0)
+
+    def test_relative_metadata_root_is_rejected_before_listen(self):
+        with self.assertRaisesRegex(AgentDashboardError, "metadata root"):
+            create_dashboard_server(
+                self.state, port=0, metadata_root=Path("relative/metadata")
+            )
 
 
 if __name__ == "__main__":
