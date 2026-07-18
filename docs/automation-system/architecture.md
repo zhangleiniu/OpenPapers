@@ -212,38 +212,11 @@ forward or require intervention; they must not create a tight retry loop.
 
 ## Current and retired components
 
-Currently reusable:
+The implemented component map is maintained in [`README.md`](./README.md);
+current behavior is defined by the code and tests.
 
-- deterministic baseline monitor and immutable snapshots;
-- venue catalog/configuration and discovery request plumbing;
-- Gemini adapter, after simplifying its target use to approximate dates;
-- additive schema-v8 approximate-date schedules and the production-enabled
-  `initialize_event_dates()` composition boundary;
-- additive schema-v9 agent schedules/run history and the production-enabled,
-  effect-free `due_policy.py` transition boundary;
-- additive schema-v10 execution artifacts, managed-worktree retention, and
-  dedicated run-report delivery state;
-- the production-enabled Codex-only isolated-worktree runner and retention effect,
-  with fake tests and one accepted ICML 2026 `not_ready` canary;
-- the production-enabled run-report composer/coordinator, with Resend selected as its
-  sole provider-idempotent transport; baseline monitor SMTP remains separate;
-- the production-enabled explicit target cohort and bounded production composition;
-- read-only control-state audit and isolated-copy migration rehearsal tooling;
-- dedicated-role credential-path validation, three separately gated canary
-  commands, and disabled-only marker-last refresh binding;
-- read-only external-effects readiness, explicit marker-last activation,
-  exact disabled rollback, and effects-disabled rehearsal tooling;
-- installed read-only enabled-production status and private two-canary proof
-  validation;
-- installed loopback-only, read-only all-catalog venue dashboard behind a
-  private-address HTTPS and Basic Auth proxy;
-- installed durable monitor-change scheduling hints with later-wake due-gate
-  enforcement;
-- lease-protected SQLite repository and local due selector;
-- marker-gated LaunchDaemon service and bounded local records;
-- paused Cloud Run monitor as a rollback mechanism;
-
-Retired from the target design:
+Retired from the target design (do not resurrect without a recorded
+decision):
 
 - deterministic citation-shape resolution and HTML/PDF verification;
 - case/reminder/fatigue-digest workflows;

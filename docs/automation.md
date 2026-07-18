@@ -1,38 +1,47 @@
 # Automation and monitoring
 
-This page describes the current deployed automation boundary. The target
-agent-driven design and its implementation status are documented separately in
-[`automation-system/`](./automation-system/README.md).
+This page describes the deployed automation boundary. The target design and
+its component reference are in [`automation-system/`](./automation-system/README.md);
+day-to-day procedures are in
+[`automation-system/operations.md`](./automation-system/operations.md).
+Repository documentation is not proof of live health: inspect the actual
+LaunchDaemons, bounded records, and cloud schedule before an operational
+change. The dated deployment snapshot lives in
+[`automation-system/current-handoff.md`](./automation-system/current-handoff.md).
 
 ## What runs in production
 
-One marker-gated system LaunchDaemon on the maintainer's Mac is the sole
+One marker-gated system LaunchDaemon on the maintainer's Mac
+(`org.openpapers.local-control`, dedicated role `_openpapers`) is the sole
 production writer. It wakes hourly and exits after a bounded invocation:
 
-1. It validates private production configuration, restored monitor state, and
-   the external-volume safety gate.
-2. Once daily at or after 08:00 America/Chicago, it runs the deterministic
-   source monitor. Exact daily replay does not repeat the monitor or its
-   notification effect.
-3. It sends one TLS SMTP email for every source change or source error.
-4. On every wakeup it runs the local SQLite due selector. When persisted work
-   is due, the enabled bounded composition may initialize one date, run one
-   coding agent, attempt one durable report, and apply bounded retention.
+1. It validates the private production configuration, its integrity-marker
+   chain, restored monitor state, and the external-volume safety gate.
+2. Once daily at or after 08:00 America/Chicago it runs the deterministic
+   source monitor and sends one TLS SMTP email per source change or error.
+   Exact daily replay does not repeat the monitor or its notifications.
+3. On every wakeup it runs the local SQLite due selector. When persisted
+   work is due, the enabled bounded composition may initialize one event
+   date, run one coding agent, attempt one durable report, and apply
+   bounded worktree retention.
+4. A failed wake records a bounded, secret-free failure category; three
+   consecutive failures email the monitor recipients, then about daily
+   while broken.
 
-The retained Cloud Scheduler trigger is paused. Its Cloud Run/Prefect monitor
-remains available only for rollback and must never run concurrently with the
-local production service.
-
-Repository documentation is not proof of live external health. Inspect the
-actual LaunchDaemon, bounded records, cloud schedule, and co-resident-service
-health before an operational change.
+External effects are gated by the installed agent-control configuration and
+each carry separate budgets, cooldowns, a global concurrency slot, and a
+systemic-failure circuit. The retained Cloud Scheduler/Cloud Run monitor is
+paused and exists only as a rollback path; it must never run concurrently
+with the local service (rollback order and the single-writer rule are at the
+end of this page).
 
 ## Deterministic source monitor
 
-`automation/conferences.json` is the versioned source registry. Runtime hashes,
-counts, snapshots, and status are stored separately under
-`$SCRAPER_DATA_ROOT/monitor/` for ordinary manual use; the installed local
-service uses its private restored monitor tree.
+`automation/conferences.json` is the versioned source registry; every
+catalog venue has at least one registered source. Runtime hashes, counts,
+and immutable snapshots are stored separately (under
+`$SCRAPER_DATA_ROOT/monitor/` for manual use; the installed service uses its
+private monitor tree):
 
 ```bash
 python automation/monitor.py
@@ -40,234 +49,93 @@ python automation/monitor.py --venue icml --year 2026
 python automation/monitor.py --no-write
 ```
 
-Each JSON-line event reports source status, item count, content hash, change
-status, bounded diagnostic detail, and the most recent immutable snapshot.
-Supported detectors are:
+Detectors: `openreview_api` (accepted-note IDs for an invitation, filtered
+by venueid), `official_html` (CSS-selected item count on a page), and
+`pmlr_volume` (a matching proceedings listing). JMLR's entry is a loose
+continuous-volume-size proxy rather than a discrete availability signal.
 
-- `openreview_api`: hashes sorted accepted-note IDs;
-- `official_html`: hashes normalized text for a configured repeated item;
-- `pmlr_volume`: detects a matching proceedings listing.
+The monitor is cheap operational coverage, not readiness authority: a change
+or a date is only a scheduling hint. A changed available source may advance
+an existing configured future agent check to its cooldown boundary; it can
+never create work, claim an agent, or bypass the due-policy gates.
 
-The monitor is retained as cheap operational coverage. It is not the target
-readiness authority and its registry does not need to recognize every source a
-future coding agent might use.
+## Scheduling and the coding agent
 
-The repository now implements a narrow monitor-change scheduling hint: a
-changed available registered source can advance an existing configured future
-agent check to its cooldown boundary, after all ordinary work in that wake.
-It copies only venue/year/time, cannot create or reactivate work, and a later
-wake still enforces every due-policy gate before Codex. This bridge is
-installed; it applies only to sources already present in the deterministic
-monitor registry and does not invent sources for newly enrolled venues.
+`automation/local_scheduler.py` holds the single-writer lease and selects
+only records whose persisted `next_check_at` is due — a frequent wakeup does
+not mean venues are checked frequently. For each enrolled venue/year:
 
-## Local scheduling boundary
+1. One Gemini Search call estimates the approximate event date (a
+   scheduling hint, never readiness proof).
+2. At or after that date, Codex runs in an isolated no-remote worktree,
+   decides readiness itself, may repair and run the scraper, and returns
+   `success`, `not_ready` (with an optional evidence-based UTC retry),
+   `needs_human`, or `failed`. It never commits, pushes, merges, or deploys;
+   a human reviews the worktree.
+3. Every terminal run composes one replay-safe report email through the
+   Resend adapter with durable idempotent delivery state.
 
-`automation/local_scheduler.py` obtains the single-writer lease and selects
-conference records whose persisted `next_check_at` is due. A frequent local
-wakeup therefore does not mean every conference is searched or checked.
+The tracked cohort (`automation/config/agent_targets.v1.json`, schema 3)
+lists the 13 formulaic annual/periodic venues plus manually confirmed
+one-off editions in `extra_targets` (currently NAACL 2027). ICCV and ECCV
+carry `interval_years`/`cycle_anchor_year` so they are only scheduled for
+years they occur in. Continuous JMLR is visible but not enrolled; it needs
+recurring, non-terminal success semantics. A venue/year whose canonical
+scrape predates enrollment can be closed with
+`automation.agent_operations mark-completed` (see the operations runbook).
 
-The installed service now validates schema-10 state, private agent-control v2
-configuration, the explicit 2026 cohort, a pinned no-remote agent source, the
-Codex executable, durable execution/report state, and bounded retention policy.
-Its installed external-effects gate is enabled. The first successful bounded
-wake recorded one event-date attempt and no Codex or Resend attempt. Later
-hourly wakes still perform external work only when persisted due state and the
-separate date/agent budgets, cooldowns, concurrency slot, and failure circuit
-permit it. See the [`roadmap`](./automation-system/roadmap.md).
+## Status surfaces
 
-The installed target policy uses an explicit allowlist of 13 formulaic
-(annual or fixed-period) catalog venues plus an annual cohort policy: October
-adds the following year for bounded date initialization and January advances
-the active window. ICCV and ECCV each carry a periodic-cadence modifier so
-they are only scheduled for a year they actually occur in, rather than every
-year. NAACL, which has no reliable calendar formula, is enrolled separately
-via a manually confirmed one-off `extra_targets` entry for its 2027 edition,
-not the calendar-driven cohort. Continuous JMLR remains outside this
-conference-success state machine entirely. The policy does not delete or
-reactivate older durable rows or make a date into readiness proof. The
-authorized enabled-runtime upgrade to commit `898a3e0` (superseding the
-earlier `eb0e762` upgrade) installed this policy, registered the current-year
-targets, and its first wake selected exactly one date lookup while preserving
-enabled effects.
+- Change/error and run-report emails, plus the wake-failure alert.
+- `automation.agent_status`: a secret-free read-only summary CLI for
+  enabled production, including the strict private two-canary proof format.
+- The read-only dashboard: loopback backend (`automation.agent_dashboard`)
+  behind an authenticated NIU-private HTTPS Caddy proxy at
+  `https://archer.cs.niu.edu:8443/` (username `openpapers`; password
+  operator-held). It shows one row per catalog venue with a color-coded
+  countdown to the next check, the last real download date from the local
+  dataset tree, disposition, and report state. It exposes no control
+  methods, paths, addresses, or credentials. Its DigiCert leaf expires
+  2026-12-03 and is renewed manually.
 
-## Current scope, visibility, and development handoff
-
-The enabled coding-agent cohort covers 13 formulaic catalog venues plus
-NAACL's manually confirmed 2027 edition. The deterministic source monitor is
-now a registered source for all 15 catalog venues (JMLR's is a loose
-continuous-volume-size proxy, not a discrete availability signal), matching
-the agent cohort's coverage for the first time. JMLR is displayed but remains
-outside annual scheduling because continuous publication needs
-recurring-success semantics. A source-monitor email is an
-observation, not proof of archival readiness; Codex independently decides
-readiness and reports `not_ready`, `needs_human`, `failed`, or `success`.
-
-The LaunchDaemon and SQLite schedule continue without an IDE or Codex
-conversation. It is therefore safe to close a development conversation while
-waiting for normal production work. The installed status surfaces are the
-bounded source-change/agent-run email stream, the secret-free status command,
-and the read-only dashboard described below. A report counts as the next
-development gate only when it says `Disposition: success`; a source change or
-`not_ready` report does not satisfy that gate.
-
-For any new or resumed development task, begin with the zero-context reading
-order, deployed snapshot, next gates, and reusable prompt in
-[`automation-system/current-handoff.md`](./automation-system/current-handoff.md).
-After a genuine production success, attach its report and use this specialized
-instruction:
-
-> Continue OpenPapers agent-driven automation. Read `AGENTS.md`, the required
-> automation-system documents, current ExecPlans, and commits since the last
-> handoff. Production has produced a genuine agent `success`; perform the
-> large-volume production acceptance without changing production state, then
-> implement, test, document, and commit legacy state simplification only if
-> that acceptance passes. Do not deploy, push, run a manual canary, resume
-> cloud, or change IAM without separate authorization.
-
-An overall safe status summary still requires fresh cloud and two-canary
-proofs described in
-[`automation-system/development.md`](./automation-system/development.md). Do
-not inspect the protected SQLite database by weakening its filesystem
-permissions or copy private paths, credentials, recipient addresses, or agent
-explanations into a public log.
-
-The installed dashboard backend is loopback-only and read-only. It
-shows all 15 catalog venues, whether each has a deterministic monitor source,
-persisted agent target years, the last schedule update, next attempt, latest
-disposition, and report state. It does not expose paths, explanations,
-addresses, receipts, credentials, or production control methods. A separate
-LaunchDaemon runs a root-owned Caddy copy as `_openpapers`, binds only the
-fixed NIU private address, terminates institution-issued DigiCert HTTPS,
-requires Basic Auth, and
-proxies to `127.0.0.1:8765`. On the NIU network or VPN, open
-`https://archer.cs.niu.edu:8443/`. The username is `openpapers`; the password
-is operator-held and not stored in documentation. The installed wildcard leaf
-certificate matches `archer.cs.niu.edu`, chains to DigiCert Global Root G2,
-and expires at 2026-12-03 23:59:59 UTC. Caddy uses this manually supplied
-certificate and does not renew it automatically. Before expiry, obtain a
-replacement leaf/intermediate chain from NIU DoIT using a matching CSR, verify
-the hostname, chain, validity, and private-key public key, then perform another
-stopped-proxy atomic TLS replacement. The retained local-CA configuration is a
-private rollback artifact, not the active client trust path.
-
-The installed external volume intentionally holds a validated `agent-source`
-and the managed `agent-runs` root as siblings. One authorized activation
-revealed that the production composition incorrectly rejected this safe layout
-before any provider attempt. Exact rollback restored disabled state; the path
-check now isolates the writable runs root from the source without permitting
-execution inside either source or managed worktrees. A disabled refresh does
-not authorize another activation.
-
-Dedicated-role credential-path injection, three adapter-specific canary
-commands, and disabled-only marker-last refresh are implemented in the
-repository. The dedicated role now has private Codex device authentication and
-Google ADC backed by service-account impersonation; no service-account key was
-created. After repairing the fixed service venv from tracked automation
-requirements, the separately authorized installed Gemini canary completed and
-returned the ICML 2026 date hint `2026-07-07`. The first configured Resend key
-was revoked before any email. A rotated key and schema-3 two-recipient
-allowlist were subsequently installed while disabled. One separately
-authorized Resend canary made a single request addressed to both approved
-recipients, and the operator confirmed that both received it. The installed
-global gate was later enabled by a separately authorized activation. A separately
-authorized installed Codex canary completed with `needs_human`; review accepted
-only its passing regression test for the existing provisional OpenReview
-fallback and retained the isolated canary worktree. It did not establish scrape
-readiness or change scraper logic.
-
-The installed runtime now includes the separate read-only activation audit,
-effects-disabled rehearsal, marker-last gate transition, and exact disabled
-rollback. Its authorized disabled rehearsal completed, followed by a loaded-
-service audit proving schema 10 healthy and idle, both credentials, two approved
-recipients, sufficient disk, the pinned source, and cloud paused with zero
-active executions. After repairing the installed source/run sibling-layout
-check, a new activation repeated those gates, retained an exact disabled
-rollback backup, enabled effects marker-last, and passed its bounded first
-wake. Installation and rehearsal by themselves still do not authorize
-activation.
-
-The installed `automation.agent_status` module provides a bounded read-only
-summary for enabled production and a strict private two-canary proof format.
-It does not expose paths, addresses, explanations, changed filenames, receipts,
-or credentials and cannot claim work or change the effects gate. The
-disabled-only refresh command must not be used while production effects are
-enabled; future enabled upgrades require the same stopped-service, marker-last,
-exact-state rollback boundary used for `eb0e762`.
-
-The installed Codex prompt was refined after observing a production
-`not_ready` result with a useful publication explanation but no structured
-retry. It now supplies the accepted retry window and requests a concrete UTC
-time when evidence supports one, while retaining null/fallback compatibility
-and Codex's readiness authority.
-
-Schema version 10 adds event-date and agent schedule/attempt tables plus the
-new execution-artifact and agent-run-report records.
-`automation/control_state.py` still also contains tables and interfaces for the
-abandoned verification, case/reminder, notification, and typed-job design.
-They are vestigial compatibility surface and are not wired into production.
+None of these surfaces can claim work or change a gate. Do not weaken the
+private SQLite file permissions or copy private paths, credentials,
+recipient addresses, or agent explanations into a public log.
 
 ## Discovery adapter
-
-The repository includes a budgeted and cached Gemini Search Grounding adapter:
 
 ```bash
 python -m automation.run_discovery --venue icml
 python -m automation.run_discovery --live --venue icml --year 2026
 ```
 
-The ordinary command uses fixtures/development behavior. `--live` requires
-explicit authorization, Application Default Credentials, and makes a real
-provider call. The original adapter still produces strict citation-backed
-evidence. The new `GeminiEventDateProvider` has a separate loose date-only
-prompt plus fake and installed-live coverage. The dedicated role has explicit
-private ADC, and the production caller is enabled but remains due- and
-budget-gated. The first installed canary
-attempt exposed a missing fixed-venv dependency before a provider request; the
-dependency gate was added, the venv repaired from tracked requirements, and a
-newly authorized canary then completed.
-
-This automation discovery use is separate from Gemini track classification in
-some core scrapers, documented in
-[`GOOGLE_CLOUD_SETUP.md`](./GOOGLE_CLOUD_SETUP.md).
+The ordinary command uses fixtures; `--live` requires explicit
+authorization and Application Default Credentials. `GeminiEventDateProvider`
+is the production date estimator; the stricter citation-backed discovery
+output is not wired into scheduling. This use is separate from Gemini track
+classification in some core scrapers
+([`GOOGLE_CLOUD_SETUP.md`](./GOOGLE_CLOUD_SETUP.md)).
 
 ## Email boundaries
 
-The installed monitor uses TLS SMTP and reports only deterministic source
-changes/errors. The separate agent-run path has selected the Resend HTTPS
-adapter and durably composes one replay-safe report per terminal run. Its
-automatic caller is enabled but acts only on durable pending/retryable report
-state. The old case,
-reminder, canary, and fatigue-digest notification design has been retired.
+The monitor and the wake-failure alert use TLS SMTP. Agent-run reports use
+the Resend HTTPS adapter with a provider idempotency key and an explicit
+recipient allowlist (policy stores only address fingerprints). Notification
+failure is retryable delivery state and never changes a run outcome.
 
 ## Cloud rollback path
 
 `automation/prefect_flows.py` and `automation/run_monitor_flow.py` implement
-the retained Cloud Run monitor. When deliberately resumed for rollback, Cloud
-Scheduler starts a Cloud Run Job that restores monitor state from GCS and
-records flow/task state in Prefect Cloud.
-
-The cloud path is not the target scheduler and does not contain agent work,
-typed job dispatch, or local execution. Deployment assets and the exact
-single-writer warning are in
-[`automation/deployment/README.md`](../automation/deployment/README.md).
-
-Rollback order is strict:
-
-1. stop and verify the local OpenPapers LaunchDaemon;
-2. resume only the exact retained cloud schedule;
-3. verify a successful cloud recovery and monitor-state persistence.
-
-Local activation uses the inverse no-overlap order: pause and drain cloud
-before opening local production state. Never use both as writers.
+the retained Cloud Run monitor (deployment assets:
+[`automation/deployment/README.md`](../automation/deployment/README.md)).
+Strict rollback order: stop and verify the local LaunchDaemon; resume only
+the exact retained cloud schedule; verify cloud recovery. Local activation
+uses the inverse order. Never run both writers.
 
 ## Historical material
 
-The former P0-P6 design—deterministic citation resolution, HTML/PDF
-verification, cases/digests, typed jobs, Mac Prefect worker, staging pipeline,
-and Codex as a last-resort repair step—was abandoned. Its documents and live
-reviews are under
+The abandoned deterministic-verification design (P0–P6) is archived under
 [`automation-system/archive/`](./automation-system/archive/README.md).
-
-Ignored `docs/local-p4*-operations.md` files may be present on the maintainer's
-Mac. They are private cutover/audit records, not public development guidance;
-the current `local-p4lc` record remains useful for scoped rollback evidence.
+Deployment history lives in git history and dated ExecPlans, not in this
+page. Ignored `docs/local-p4*-operations.md` files on the production Mac are
+private operational records, not public guidance.

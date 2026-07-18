@@ -3,10 +3,11 @@
 This directory is the zero-context entry point for OpenPapers' optional
 automation control plane. Read this page before changing `automation/`, then
 [`architecture.md`](./architecture.md) for the safety boundaries and
-[`roadmap.md`](./roadmap.md) for implementation status. A returning agent reads
+[`roadmap.md`](./roadmap.md) for phase status. A returning agent reads
 [`development.md`](./development.md) next and then
-[`current-handoff.md`](./current-handoff.md) for the concise deployed snapshot,
-next gates, and reusable continuation prompt.
+[`current-handoff.md`](./current-handoff.md) for the deployed snapshot and
+next gates. Operational procedures live in
+[`operations.md`](./operations.md).
 
 The core scrapers remain independently installable and runnable. Prefect,
 GCP, an LLM provider, email, and a coding-agent CLI are never core
@@ -14,37 +15,31 @@ dependencies.
 
 ## Product goal
 
-The maintainer already handles a newly published conference by giving Codex or
-Claude Code a venue and year. The agent inspects the repository and the web,
-decides whether papers are available, reuses or repairs a scraper, runs it,
-and explains the outcome. The automation system should decide *when that
-existing workflow is worth running* and invoke it in a contained environment;
-it should not reproduce the agent's reasoning with venue-specific verification
-code.
+The maintainer already handles a newly published conference by giving Codex
+or Claude Code a venue and year. The agent inspects the repository and the
+web, decides whether papers are available, reuses or repairs a scraper, runs
+it, and explains the outcome. The automation system decides *when that
+existing workflow is worth running* and invokes it in a contained
+environment; it does not reproduce the agent's reasoning with venue-specific
+verification code.
 
-For each configured `venue/year`, the intended flow is:
+For each configured `venue/year`, the flow is:
 
 1. Obtain one approximate event date from a cheap web-search/LLM discovery
-   call, such as the answer to "ICML 2026 date". This is a scheduling hint,
-   not proof that papers are downloadable.
+   call ("ICML 2026 date"). This is a scheduling hint, not proof that
+   papers are downloadable.
 2. Persist the estimate as `next_check_at` and do no more network or model
-   work for that venue/year before it is due. A local scheduler may wake
-   frequently, but it only reads SQLite and exits when nothing is due.
-3. At or after `next_check_at`, invoke a coding agent in an isolated git
-   worktree/branch. Give it the repository, venue, year, and a standing task
-   prompt. The agent may investigate the web, inspect or edit scrapers, run
-   tests, and attempt the scrape.
-4. Capture a small machine-readable disposition plus the agent's natural-
-   language explanation and worktree changes:
-   `success`, `not_ready`, `needs_human`, or `failed`.
-5. On `not_ready`, use the agent's suggested retry time or a bounded default
-   delay of a few days. On success or human intervention, stop automatic
-   retries. Send one email describing every run outcome.
+   work for that venue/year before it is due.
+3. When due, invoke a coding agent in an isolated git worktree with the
+   repository, venue, year, and a standing prompt. The agent may
+   investigate the web, edit scrapers, run tests, and attempt the scrape.
+4. Capture a machine-readable disposition plus explanation and worktree
+   changes: `success`, `not_ready`, `needs_human`, or `failed`.
+5. On `not_ready`, use the agent's suggested retry time or a bounded
+   default. On success or human intervention, stop automatic retries. Send
+   one email per run outcome.
 
-The approximate date intentionally does not need deterministic citation or
-readiness verification. A wrong estimate costs at most one contained agent
-run, after which the agent can report that publication is not ready and
-recommend when to retry.
+A wrong date estimate costs at most one contained agent run.
 
 ## Scheduling semantics
 
@@ -65,189 +60,95 @@ date missing -> discover approximate event date once -> sleep until due
 ```
 
 A date may be rediscovered only when it is missing, invalid, explicitly
-superseded, or a later agent result says that the estimate changed. Adding a
-new conference year also creates a new estimate; it does not make older
-completed years active again.
+superseded, or a later agent result says the estimate changed. Adding a new
+conference year does not reactivate older completed years.
 
-## Current implementation
+## Component map
 
-The following exists and runs today:
+All of the following are implemented, tested, and — except where noted —
+installed in enabled production. Current behavior is defined by the code and
+tests, not this list.
 
-- `automation/monitor.py` and `automation/conferences.json`: the original
-  deterministic source monitor. It checks registered OpenReview, official
-  HTML, and PMLR sources for hash/count changes and stores immutable
-  snapshots.
-- `automation/local_service/production.py` and
-  `automation/local_service/agent_control.py`: the installed Mac LaunchDaemon
-  production composition. The service wakes hourly; once daily at or after 08:00
-  America/Chicago it runs the baseline monitor and emails change/error events
-  over TLS SMTP. The agent-control v2 boundary validates installed state; its
-  external-effects gate is now enabled, so due work may reach the bounded
-  Gemini, Codex, retention, and Resend composition.
-- `automation/local_scheduler.py` and `automation/control_state.py`: local,
-  lease-protected due-work selection and versioned SQLite storage. The schema
-  is now version 10 and adds approximate-date and coding-agent schedules,
-  immutable attempts, execution artifacts, and run-report delivery state,
-  while still
-  containing case, verification, notification, and execution-job tables
-  inherited from the abandoned design. They are not evidence that those old
-  workflows are active.
-- `automation/event_dates.py` and
-  `automation/providers/gemini.py::GeminiEventDateProvider`: an installed,
-  production-enabled one-time date initializer. Given explicit venue/year
-  targets, it calls the provider only when a pending target is due, stores an 08:00
-  America/Chicago check time, sleeps on replay, and schedules a 30-day retry
-  for expected no-date/provider failures. An isolated ICML 2026 live canary on
-  2026-07-15 returned the correct main-conference start date after the adapter
-  was adjusted for the provider's optional explanation field; it did not
-  retain state or change the installed service.
-- `automation/due_policy.py`: an installed, active, effect-free agent-run policy.
-  It claims at most one due schedule, durably applies `success`, `not_ready`,
-  `needs_human`, and `failed`, and enforces default/suggested retries, bounded
-  failure backoff, a global active slot, a monthly ceiling, and a recent
-  distinct-venue systemic-failure circuit. It does not start an agent.
-- `automation/codex_agent.py`: an installed, production-enabled Codex-only runner.
-  It uses real isolated Git worktrees in tests, pins Codex's workspace sandbox
-  and structured result schema, durably records bounded review artifacts, and
-  verifies the primary checkout did not change. Four authorized ICML 2026
-  canary starts verified
-  isolation and exposed CLI flag placement, portable-schema, and overly strict
-  optional-field handling; none modified either checkout. The final call was
-  cleanly accepted as `not_ready`. Its installed caller is due- and budget-gated.
-  The repository standing prompt now also supplies the exact accepted retry
-  window and asks `not_ready` runs for a concrete evidence-based UTC retry,
-  with active/partial releases checked promptly and no artificial conservation
-  of normal agent usage. It still permits null when no defensible time exists,
-  and neither dates nor source changes become readiness proof. This prompt
-  refinement is installed.
-- `automation/agent_worktree_retention.py`: an explicit, production-enabled retention
-  effect that removes only terminal schema-10 worktrees beneath the exact
-  configured runs root, using age and count bounds. Unregistered worktrees,
-  including the retained ICML 2026 canary, are never candidates.
-- `automation/agent_run_notifications.py`: a production-enabled run-report composer
-  and delivery coordinator. Terminal runner completion creates one pending
-  report atomically; Resend supplies the selected provider idempotency key,
-  and transient/permanent delivery state never changes the run outcome.
-- `automation/agent_production.py` and
-  `automation/config/agent_targets.v1.json`: an installed production
-  composition whose repository policy now explicitly covers all 14 annual
-  venues in the catalog and rolls their year cohort forward annually. The
-  continuous JMLR lifecycle is not forced through terminal conference-success
-  semantics. A
-  date lookup, agent run, report attempt, and retention cleanup are separately
-  bounded; adapters are constructed only after the enabled configuration and
-  all credential/source gates validate. The enabled installed runtime now uses
-  this 14-venue annual cohort policy.
-- `automation/agent_credentials.py` and `automation/agent_canary.py`: private
-  dedicated-role credential layout plus three mutually exclusive operator
-  canaries. Codex receives an explicit private `CODEX_HOME`, Gemini loads an
-  explicit private ADC file, and Resend secrets are marker-bound without
-  activation. Each canary requires its own live authorization flag; installed
-  Gemini, Codex, and Resend canaries have completed. The Resend canary used one
-  provider request addressed to the two approved recipients, and the operator
-  confirmed delivery to both.
-- `automation/local_service/agent_control.py`: marker-last replacement
-  primitives for disabled refresh/Resend provisioning and separately bounded
-  enabled runtime replacement. Disabled refresh rejects either enabled
-  endpoint. Enabled replacement requires both endpoints to remain enabled and
-  restores exact prior files on an in-process failure.
-- `automation/agent_activation.py`: an installed and exercised
-  read-only readiness audit plus separately authorized activation, disabled
-  rehearsal, and rollback commands. It requires exact schema/idle,
-  credential/allowlist, disk/source, fixed-service, and fresh paused/drained
-  cloud evidence before the gate can be opened. After one failed first wake
-  restored its exact disabled backup, the source-layout repair was refreshed
-  disabled and a newly authorized activation completed. The first successful
-  bounded wake recorded one event-date attempt and no Codex or Resend attempt.
-- `automation/agent_status.py`: an installed, read-only safe-summary
-  CLI for enabled production. It combines schema/idle lifecycle state, the last
-  three bounded service wakes, credential/recipient/source/disk readiness, a
-  fresh paused/drained cloud proof, and a fresh two-canary drift proof without
-  printing paths, addresses, explanations, changed filenames, receipts, or
-  credentials. Canary comparison uses a private expected branch/HEAD/status
-  digest, so an intentionally dirty retained canary is not a false alarm.
-- `automation/agent_dashboard.py`: an installed local web view built from the
-  immutable safe state summary, the validated catalog, and a read-only,
-  non-authoritative scan of the core scraper's own
-  `$SCRAPER_DATA_ROOT/metadata/<venue>/` tree (filenames and file
-  modification times only, never file contents) for a "last downloaded" date
-  per venue. It shows one row per catalog venue — the venue's current
-  (highest-year) schedule state collapses multiple persisted years into a
-  single row — ordered so the venue likely to produce new data soonest sorts
-  first, with a colored progress indicator summarizing phase and time
-  elapsed toward the next attempt. The listener accepts only `127.0.0.1`,
-  exposes no control methods or external resources. The loopback backend is
-  served through a separate authenticated NIU-private HTTPS proxy with a
-  manually renewed DigiCert certificate. This one-row-per-venue,
-  urgency-ordered layout and the metadata-tree read are implemented and
-  tested in the repository but have not yet been deployed to the installed
-  production role, which still serves the prior one-row-per-venue-year,
-  alphabetically-sorted layout without a metadata-tree read.
-- `automation/source_change_hints.py`: an installed, durable
-  scheduling-only bridge from the trusted deterministic monitor. A changed,
-  available source records only venue/year/time in the bounded production
-  wakeup journal. After the wake's ordinary agent/report/retention work, the
-  enabled composition may advance one existing future check to the configured
-  cooldown boundary. It never creates a target, claims an agent, reactivates a
-  terminal schedule, treats the change as readiness, or bypasses later budget,
-  concurrency, and circuit gates.
-- `automation/control_state_migration.py`: a safe-summary read-only audit,
-  new-file SQLite backup, and isolated-copy schema rehearsal command. Fixture
-  rehearsal passed; the dedicated-role production database was migrated from
-  schema 6 to schema 10 with a retained private backup.
-- `automation/discovery.py` and `automation/providers/gemini.py`: a budgeted,
-  cached Gemini Search Grounding adapter with an explicit manual `--live`
-  command. Its current output is stricter than the approximate-date signal the
-  target scheduler needs; that scheduling use is not wired.
-- `automation/resend_notifications.py`: the selected low-level Resend HTTPS
-  adapter for agent-run reports. Its rotated private credential and approved
-  two-recipient allowlist are installed; its automatic caller is enabled but
-  runs only for a durable pending/retryable agent report.
-- `automation/prefect_flows.py`, `automation/run_monitor_flow.py`, and
-  `automation/deployment/`: the paused Cloud Run monitor retained solely as a
-  rollback path. It is not the target scheduler.
+- `automation/monitor.py` + `automation/conferences.json`: deterministic
+  source monitor (OpenReview/official-HTML/PMLR detectors, immutable
+  snapshots). Cheap coverage, never readiness authority.
+- `automation/local_service/`: the installed Mac LaunchDaemon composition —
+  bounded hourly wakes, daily monitor email, secret-free failure categories
+  on failed wakes, and a consecutive-failure email alert. `production.py`
+  guards the marker-bound private monitor configuration;
+  `agent_control.py` guards the v2 agent configuration and the
+  external-effects gate.
+- `automation/local_scheduler.py` + `automation/control_state.py`:
+  lease-protected due selection over versioned SQLite (schema 10). Old
+  verification/case/job/notification tables remain as vestigial
+  compatibility surface only.
+- `automation/event_dates.py` + `providers/gemini.py
+  ::GeminiEventDateProvider`: one-time approximate-date initialization with
+  bounded retries and a monthly ceiling.
+- `automation/due_policy.py`: effect-free due/retry/backoff/budget state
+  machine — one global agent slot, venue cooldown, monthly ceiling,
+  systemic-failure circuit.
+- `automation/codex_agent.py`: the Codex-only isolated-worktree runner —
+  sandboxed subprocess, structured four-field result, primary-checkout
+  invariance, bounded artifacts.
+- `automation/agent_worktree_retention.py`: bounded terminal-worktree
+  cleanup; unregistered worktrees are never candidates.
+- `automation/agent_run_notifications.py` +
+  `automation/resend_notifications.py`: one replay-safe Resend report per
+  terminal run with durable idempotent delivery state.
+- `automation/agent_production.py` +
+  `automation/config/agent_targets.v1.json`: the production composition and
+  target policy — a 13-venue annual/periodic cohort (ICCV/ECCV carry
+  `interval_years`/`cycle_anchor_year`) plus manually confirmed
+  `extra_targets`; JMLR excluded pending recurring-success semantics.
+- `automation/agent_credentials.py`, `automation/agent_canary.py`,
+  `automation/agent_activation.py`: private credential layout, three
+  separately authorized live canaries, and the read-only
+  audit/rehearsal/activation/rollback boundary for the effects gate.
+- `automation/agent_operations.py`: operator commands for deliberately
+  fail-closed states — recover an interrupted date attempt, mark an
+  already-scraped venue/year completed, update the monitor registry
+  configuration with its full integrity-marker chain, repair a broken
+  chain. See [`operations.md`](./operations.md).
+- `automation/agent_status.py`: secret-free read-only production summary
+  and the private two-canary proof format.
+- `automation/agent_dashboard.py`: the loopback read-only venue dashboard
+  (countdown to next check, real last-download dates from the local dataset
+  tree), served through an authenticated NIU-private HTTPS proxy.
+- `automation/source_change_hints.py`: the scheduling-only bridge from
+  monitor changes to an advanced future check.
+- `automation/control_state_migration.py`: read-only audit, backup, and
+  isolated-copy schema rehearsal.
+- `automation/prefect_flows.py`, `automation/run_monitor_flow.py`,
+  `automation/deployment/`: the paused Cloud Run monitor, retained solely
+  as a rollback path.
 
-External GCP and Mac state must be inspected before making a live-health
-claim; repository files only describe the expected topology.
-
-## Not yet active or built
-
-- Migration of `control_state.py` from its vestigial old schema to the small
-  date/dispatch/run model.
-
-Never describe one of these as implemented merely because an old schema,
-contract, fixture, or archived document exists.
+Not yet built: migration of `control_state.py` away from its vestigial old
+schema (planned after the target run state is proven by real successes),
+and JMLR recurring-success enrollment.
 
 ## Documentation map
 
 - [`architecture.md`](./architecture.md): target components and invariants.
-- [`roadmap.md`](./roadmap.md): current phase status and acceptance criteria.
+- [`roadmap.md`](./roadmap.md): phase status and acceptance criteria.
 - [`development.md`](./development.md): development and validation workflow.
-- [`current-handoff.md`](./current-handoff.md): last verified deployment
-  boundary, next gates, safe pickup procedure, and continuation prompt.
-- [`installation-readiness.md`](./installation-readiness.md): read-only audit,
-  isolated rehearsal, and separately authorized installation gates.
-- [`local-first-decision.md`](./local-first-decision.md): why the production
-  scheduler is a single local Mac service rather than Prefect orchestration.
-- [`../automation.md`](../automation.md): current deployed monitor behavior and
-  rollback boundary.
-- [`archive/README.md`](./archive/README.md): abandoned deterministic-
-  verification design and its historical documents.
-
-Host-specific `docs/local-p4*-operations.md` files may exist in a maintainer's
-checkout. They are intentionally excluded from Git: `local-p4lc` records the
-current cutover/rollback evidence, while `local-p4o` and `local-p4ls` are
-historical audit records. They are not development guidance and must never
-contain or be copied into tracked secrets or host identifiers.
+- [`operations.md`](./operations.md): production runbook.
+- [`current-handoff.md`](./current-handoff.md): dated deployment snapshot
+  and next gates.
+- [`installation-readiness.md`](./installation-readiness.md): audit and
+  installation gates.
+- [`local-first-decision.md`](./local-first-decision.md): why production is
+  a single local Mac service.
+- [`../automation.md`](../automation.md): deployed behavior summary.
+- [`archive/README.md`](./archive/README.md): the abandoned
+  deterministic-verification design.
 
 ## Sources of truth
 
 - Current behavior: executable code and tests.
-- Target automation behavior: this directory's non-archive documents.
-- Current deployed topology: [`../automation.md`](../automation.md), checked
-  against the actual Mac/GCP state.
-- Last verified handoff and next gates:
-  [`current-handoff.md`](./current-handoff.md), treated as a dated snapshot
-  rather than live health proof.
+- Target design: this directory's non-archive documents.
+- Deployed topology: [`../automation.md`](../automation.md), checked against
+  actual Mac/GCP state.
+- Last verified snapshot: [`current-handoff.md`](./current-handoff.md).
 - Canonical dataset coverage: `statistics.md`.
-- Historical design only: `archive/`.
+- History: git log, dated ExecPlans under `.agent/plans/`, and `archive/`.

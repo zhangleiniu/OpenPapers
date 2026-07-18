@@ -7,39 +7,15 @@ binary, ADC, or Resend recipient are ready.
 
 ## Current boundary
 
-The installation gate completed with schema-10 state and private agent-control
-v2 configuration. The unchanged fixed LaunchDaemon selects the installed
-composition. Its production external-effects gate is now enabled, while the
-deterministic baseline monitor remains active. Treat the checklist below as the
-completed installation record and as prerequisites for rollback or any future
-replacement; live canaries and activation remain separate authorities.
-The repository now has disabled-only marker-last refresh and dedicated-role
-credential/canary tooling. Current host status evidence confirms private Codex
-authentication and impersonated Google ADC. After the installed dependency
-gate passed, one separately authorized Gemini canary returned the ICML 2026
-date hint `2026-07-07`. One separately authorized Codex canary completed with
-`needs_human`; review accepted only a passing regression test for the existing
-provisional OpenReview fallback and retained its isolated worktree. The first
-Resend key was revoked before any email. A rotated key and schema-3
-two-recipient allowlist were then installed while disabled; one separately
-authorized canary made a single provider request, and the operator confirmed
-delivery to both approved recipients. These observations do not authorize
-another canary or activation.
-
-The installed runtime now contains the source-layout repair and explicit
-activation/readiness/rollback boundary through commit `eb0e762`. Its
-stopped-service disabled rehearsal and
-post-bootstrap read-only audit completed successfully. The audit proved schema
-10 healthy and idle, both credentials, two approved recipients, sufficient
-disk, the pinned source, the fixed service loaded, and cloud paused with zero
-active executions. A separately authorized activation repeated fresh evidence,
-retained an exact disabled backup, and passed its first bounded wake with one
-event-date attempt and no Codex or Resend attempt. The gate is enabled; future
-refresh through the disabled-only path first requires an explicit rollback.
-A later authorized enabled-runtime replacement retained exact state and code
-rollback packages, kept cloud paused/drained and effects enabled, registered
-all 14 annual venues, and passed a one-selection first wake. The same runtime
-supplies the installed read-only status and dashboard modules.
+Installation, credential provisioning, all three live canaries, and
+activation completed; the production external-effects gate is enabled with
+schema-10 state and private agent-control v2 configuration. The checklist
+below is retained as the prerequisite set for rollback or any future
+replacement — live canaries and activation each remain separate authorities,
+and refresh through the disabled-only path first requires an explicit
+rollback. The installed revision and dated evidence live in
+[`current-handoff.md`](./current-handoff.md); delivery history lives in git
+log and the dated ExecPlans.
 
 ## Installed automation dependency gate
 

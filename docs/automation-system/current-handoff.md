@@ -12,110 +12,66 @@ Before changing automation code, read the required documents in this order:
 4. [`development.md`](./development.md)
 5. this handoff
 
-Then inspect `git status`, commits since the installed revision, and only the
-ExecPlan relevant to the requested task. Most plans under `.agent/plans/` are
-completed historical records, including plans for the retired verification,
-case, job, Prefect-worker, and staging architectures. Do not infer that they
-are active from their presence.
+For operational work use [`operations.md`](./operations.md). Then inspect
+`git status`, commits since the installed revision, and only the ExecPlan
+relevant to the requested task. Most plans under `.agent/plans/` are
+completed historical records; do not infer activity from their presence.
 
 ## Last verified boundary
 
-As of 2026-07-17, production has these properties:
+As of 2026-07-18, production has these properties:
 
 - The sole writer is the hourly system LaunchDaemon
-  `org.openpapers.local-control`. Its external-effects gate is enabled and its
-  private SQLite database is schema 10.
+  `org.openpapers.local-control` (role `_openpapers`). Its external-effects
+  gate is enabled and its private SQLite database is schema 10.
 - The installed runtime and pinned no-remote agent source are commit
-  `898a3e0` (an authorized marker-last enabled upgrade from the prior
-  `eb0e762`). Repository commits after that revision are documentation only
-  at this handoff; always confirm with `git log 898a3e0..HEAD`. The upgrade's
-  first bounded wake completed with `selection_count=1` and retained an exact
-  backup of the pre-upgrade runtime, source, and control state.
-- The coding-agent cohort's tracked allowlist now has 13 formulaic venues
-  (annual or fixed-period) plus one manually confirmed one-off edition:
-  ICCV and ECCV each carry a periodic-cadence modifier
-  (`interval_years`/`cycle_anchor_year`) so they are only scheduled for a
-  year they actually occur in, and NAACL — which has no reliable calendar
-  formula — is enrolled via a schema-3 `extra_targets` entry for its
-  independently confirmed 2027 edition (San Francisco, June 1-5) rather than
-  the calendar-driven cohort. October adds the following year and January
-  advances the active window for the 13 formulaic venues; each wake still
-  initializes at most one date or runs at most one due agent.
-- Continuous JMLR is visible in the catalog/dashboard but is deliberately not
-  enrolled. Terminal annual `success` semantics would miss later JMLR papers
-  in the same year.
-- The independent deterministic source monitor now has a registered source
-  for all 15 catalog venues (JMLR's is a loose continuous-volume-size proxy,
-  not a discrete availability signal). The private production
-  `registry_sha256`/`expected_source_count` config was updated to match
-  (18 total sources) as part of this same upgrade window.
-- The dedicated role's OpenReview access was anonymous (no
-  `OPENREVIEW_USERNAME`/`OPENREVIEW_PASSWORD` in its runtime environment),
-  which made the ICML/AISTATS/ICLR/NeurIPS OpenReview-based monitor checks
-  fail with an anonymous-access challenge and, since the monitor effect
-  raises when any source reports an error, silently failed every hourly
-  production wake for at least several hours before this was diagnosed and
-  fixed by placing role credentials at `/opt/openpapers-shadow/runtime/.env`.
-  That file is **not** part of the versioned runtime and will be lost on the
-  next enabled-runtime upgrade unless it is re-created or the credentials are
-  moved to a persistent location (e.g. the LaunchDaemon plist's
-  `EnvironmentVariables`) — this is an open follow-up, not yet done.
-- The dashboard backend LaunchDaemon (`org.openpapers.agent-dashboard`) is a
-  persistent process that does not restart automatically when the runtime is
-  swapped; it must be `launchctl kickstart -k`'d after an enabled-runtime
-  upgrade to serve the newly deployed `agent_dashboard.py`.
-- Codex device authentication, impersonated Google ADC, the Resend sender, and
-  a two-recipient allowlist are configured for the dedicated role. Do not copy
-  their values into a prompt, log, document, fixture, or commit.
+  `4aa6d85`. Always confirm the repository delta with
+  `git log 4aa6d85..HEAD`; repository commits after that revision are not
+  deployed until a separately authorized runtime upgrade.
+- The deterministic monitor registry covers all 15 catalog venues (18
+  sources); the private monitor configuration matches
+  (`expected_source_count=18`).
+- The agent cohort is the 13 formulaic venues (ICCV/ECCV on their two-year
+  cadence) plus the manually confirmed `extra_targets` entry NAACL 2027.
+  ICLR/AAAI/CVPR/COLT/ACL 2026 were operator-marked completed (canonical
+  scrapes predate enrollment); ICML/AISTATS/IJCAI 2026 remain active with
+  `not_ready` rechecks pending archival proceedings. JMLR is visible but
+  unenrolled.
+- OpenReview credentials for the role live in the local-control plist's
+  `EnvironmentVariables` (plist is 0600 for that reason). Codex/ADC/Resend
+  credentials live in the dedicated role's private credential root. Do not
+  copy any of their values anywhere.
+- The read-only dashboard (loopback backend + authenticated NIU-private
+  HTTPS proxy at `https://archer.cs.niu.edu:8443/`, username `openpapers`)
+  shows per-venue countdowns, real last-download dates, dispositions, and
+  report state. Its DigiCert leaf expires 2026-12-03 and is renewed
+  manually — start with NIU DoIT by early November 2026.
 - The retained Cloud Scheduler/Cloud Run path was last verified paused with
-  zero active executions. That is historical evidence, not a current health
-  claim; generate a fresh private proof before any production mutation.
-- The original ICML 2026 canary and installed Codex canary worktrees are
-  retained outside managed cleanup. Their expected dirty/clean states require
-  the private proof workflow rather than an assumption that both are clean.
-- The read-only venue dashboard runs as two additional LaunchDaemons. Its
-  application listener is loopback-only; authenticated HTTPS is available on
-  the NIU network or VPN at `https://archer.cs.niu.edu:8443/` with username
-  `openpapers`. The operator holds the password.
-- The dashboard uses a manually installed NIU-issued DigiCert wildcard leaf.
-  It expires at 2026-12-03 23:59:59 UTC and is not automatically renewed by
-  Caddy. Begin renewal with NIU DoIT by early November 2026.
-- Exact pre-upgrade and pre-certificate rollback artifacts are retained in
-  private production storage. Do not delete or restore them without separate
-  operational authority.
-
-The concrete deployed topology and operating history are in
-[`../automation.md`](../automation.md). Only executable code/tests and fresh
-host evidence can establish current behavior and health.
+  zero active executions; generate a fresh private proof before any
+  production mutation. Both canary worktrees are retained outside managed
+  cleanup, with expected states tracked by the private proof workflow.
+- Exact pre-upgrade rollback packages are retained in private production
+  storage. Do not delete or restore them without separate operational
+  authority.
 
 ## Current development position
 
-The agent-driven path is implemented and enabled: approximate dates schedule
-work, Codex decides readiness and scraper action, worktrees and execution
-artifacts are bounded, and every terminal run has durable Resend report state.
-Dates and deterministic source changes remain scheduling hints, never
-readiness proof. The abandoned strict verification/job/case design remains
-retired.
+The agent-driven path is implemented and enabled end to end. Failed wakes
+record a secret-free failure category and alert by email after three
+consecutive failures; deliberately fail-closed states have tracked operator
+exits (`automation.agent_operations`). Dates and monitor changes remain
+scheduling hints, never readiness proof; the retired strict
+verification/job/case design stays retired.
 
-There is no unfinished repository implementation required merely to keep the
-service running. The next feature should be selected from an explicit user
-outcome. Known follow-up gates are:
+Known follow-up gates:
 
 1. **First genuine production `success`.** Preserve production state and
    review the large-volume scrape, validation evidence, artifact bounds,
    worktree, and report delivery. Only after that acceptance should legacy
-   schema simplification be considered. The relevant living record is
-   `.agent/plans/agent-production-learning-lifecycle.md`.
+   schema simplification proceed (see `roadmap.md`).
 2. **Continuous JMLR enrollment.** Design recurring non-terminal success
-   semantics before adding JMLR; do not force it through the annual cohort.
-3. **Dashboard product changes.** Preserve the immutable read-only state
-   boundary, loopback application listener, authenticated HTTPS proxy, and
-   absence of control endpoints. The completed deployment record is
-   `.agent/plans/enabled-upgrade-dashboard-deployment.md`.
-4. **Certificate renewal.** This is an operator maintenance task, not a reason
-   to change the agent scheduler. Generate a new private key/CSR without
-   overwriting the live key, send only the CSR, validate the returned leaf and
-   chain, and perform a proxy-only atomic replacement.
+   semantics; do not force JMLR through the annual cohort.
+3. **Certificate renewal** (operator maintenance; see `operations.md`).
 
 ## Safe pickup procedure
 
@@ -124,16 +80,15 @@ Start every continuation with read-only repository inspection:
 ```bash
 git status --short
 git log --oneline --decorate -12
-git log --oneline 898a3e0..HEAD
+git log --oneline 4aa6d85..HEAD
 python postprocessing/generate_statistics.py --check
 ```
 
 For an automation code change, use the validation floor from
 [`development.md`](./development.md). Create or resume an ExecPlan only when
-the requested work meets `.agent/PLANS.md` criteria. Update this handoff in the
-same change when the installed revision, active venue scope, topology,
-credential/recipient shape, certificate boundary, next development gate, or
-production safety policy changes.
+the requested work meets `.agent/PLANS.md` criteria. Update this handoff in
+the same change when the installed revision, venue scope, topology,
+credential shape, certificate boundary, next gate, or safety policy changes.
 
 Repository inspection does not authorize production actions. Installation,
 enabled-runtime replacement, activation/rollback, live Gemini/Codex/Resend
@@ -142,18 +97,18 @@ worktrees or backups each require appropriate explicit authority.
 
 ## Reusable continuation prompt
 
-Replace the bracketed outcome rather than asking the next agent to infer work
-from history:
+Replace the bracketed outcome rather than asking the next agent to infer
+work from history:
 
 > Continue OpenPapers agent-driven automation for: **[concrete outcome]**.
 > Read `AGENTS.md`, then
 > `docs/automation-system/README.md`, `architecture.md`, `roadmap.md`,
 > `development.md`, and `current-handoff.md` in order. Inspect the working
-> tree, commits since installed revision `898a3e0`, executable behavior, and
-> only the relevant ExecPlan. Preserve the current agent-driven design: dates
-> are scheduling hints, Codex decides readiness and scraper actions, and the
-> retired strict verification/job/case architecture stays retired. Proceed in
-> order and pause only when user authority or input is genuinely required.
-> Do not mutate production, run a live canary, resume cloud, change IAM,
-> deploy, push, or delete retained backups/worktrees unless separately
-> authorized.
+> tree, commits since the installed revision named in `current-handoff.md`,
+> executable behavior, and only the relevant ExecPlan. Preserve the current
+> agent-driven design: dates are scheduling hints, Codex decides readiness
+> and scraper actions, and the retired strict verification/job/case
+> architecture stays retired. Proceed in order and pause only when user
+> authority or input is genuinely required. Do not mutate production, run a
+> live canary, resume cloud, change IAM, deploy, push, or delete retained
+> backups/worktrees unless separately authorized.
