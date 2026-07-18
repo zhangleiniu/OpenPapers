@@ -20,17 +20,13 @@ SCHEMA_ROOT = Path(__file__).with_name("schemas")
 class ContractName(str, Enum):
     """Stable names for artifacts crossing automation component boundaries."""
 
-    DISCOVERY_RESULT = "discovery_result"
     NOTIFICATION_INTENT = "notification_intent"
     VENUE_CATALOG = "venue_catalog"
-    POLICY_CONFIG = "policy_config"
 
 
 _SCHEMA_FILES = {
-    ContractName.DISCOVERY_RESULT: "discovery-result.json",
     ContractName.NOTIFICATION_INTENT: "notification-intent.json",
     ContractName.VENUE_CATALOG: "venue-catalog.json",
-    ContractName.POLICY_CONFIG: "policy-config.json",
 }
 
 _SUPPORTED_SCHEMA_VERSIONS = {contract: {1} for contract in ContractName}

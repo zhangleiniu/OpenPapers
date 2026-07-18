@@ -149,9 +149,8 @@ this deterministic monitor for daily change/error coverage; it does not use
 the monitor as proof that papers are ready or as authority to run a scraper.
 See the [current automation deployment](./docs/automation.md).
 
-Prefect, container, and cloud deployment support is an optional component kept
-under [`automation/deployment`](./automation/deployment/README.md). The core
-scrapers do not require those dependencies.
+The core scrapers never depend on Prefect, containers, cloud deployment, an
+LLM provider, email, or a coding-agent CLI.
 
 The local-first control plane estimates each venue/year's event date once,
 sleeps until that date, and then gives the venue/year to Codex in an isolated

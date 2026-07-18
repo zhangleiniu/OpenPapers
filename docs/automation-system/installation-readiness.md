@@ -103,8 +103,7 @@ authentication files in tracked configuration or command output.
 The following actions are intentionally not authorized by an audit or
 rehearsal:
 
-1. Stop and verify the current LaunchDaemon is inactive; keep the paused cloud
-   rollback scheduler paused.
+1. Stop and verify the current LaunchDaemon is inactive.
 2. Create a fresh timestamped private SQLite backup and verify it before any
    migration.
 3. Install versioned private agent configuration/secrets and a new marker
@@ -126,17 +125,21 @@ ordinary refresh authority cannot migrate or downgrade the schema.
 
 If any step fails, stop the service. Restore the pre-migration database and
 private config/marker/plist as one set before restarting; never attempt an
-in-place schema downgrade. Do not resume the cloud rollback path until the
-local service is confirmed stopped and the no-overlap procedure is reviewed.
+in-place schema downgrade.
 
 ## Activation readiness and disabled rehearsal
 
-The ignored host wrapper must query the exact external Cloud Scheduler and
-Cloud Run Job immediately before audit and write a private schema-1 proof with
-only `cloud_schedule_paused=true`, `active_cloud_executions=0`, and
-`checked_at`. Tracked validation rejects unknown fields, unsafe permissions,
-future timestamps beyond bounded clock skew, and proof older than 15 minutes.
-It does not contain or print GCP resource identifiers.
+`automation/agent_activation.py::read_cloud_drain_proof` still requires a
+`--cloud-proof` file proving `cloud_schedule_paused=true` and
+`active_cloud_executions=0` before it will report the system ready. This
+predates the 2026-07-18 removal of the Cloud Scheduler/Cloud Run rollback
+path (see `docs/automation.md`); the check is now permanently vacuous (there
+is no cloud writer left that could ever conflict) rather than removed —
+tightening `agent_activation.py`'s own contract was treated as a separate,
+more invasive decision from deleting already-dead files and was left for a
+follow-up. A short-lived proof file can still be hand-written in the schema-1
+shape (`cloud_schedule_paused: true`, `active_cloud_executions: 0`,
+`checked_at` within 15 minutes) to satisfy it in the meantime.
 
 Run the read-only audit as the dedicated role while the fixed service is still
 loaded. It must report `ready=true`, effects false, the exact schema expected

@@ -13,9 +13,6 @@ python -m pip install -r requirements.txt
 python -m pip install -r automation/requirements.txt
 ```
 
-Install `automation/deployment/requirements.txt` only when working on the
-paused Cloud Run rollback path.
-
 ## Commands
 
 Run the deterministic baseline monitor:
@@ -26,18 +23,15 @@ python automation/monitor.py --venue icml --year 2026
 python automation/monitor.py --no-write
 ```
 
-Run the existing evidence-strict discovery adapter in unmetered manual
-development mode. This path is separate from the new date-only provider.
-`--live` requires a GCP project and Application Default Credentials and makes
-a real Gemini call:
-
-```bash
-python -m automation.run_discovery --venue icml
-python -m automation.run_discovery --live --venue icml --year 2026
-```
-
-The target date-only path is installed behind the enabled production gate;
-development and test commands still inject fakes and make no automatic call.
+The production date estimator is `automation/providers/gemini.py::
+GeminiEventDateProvider`, called once per venue/year by
+`automation/event_dates.py` before it is due. A stricter, evidence-strict
+discovery adapter with its own CLI (`automation/run_discovery.py`) used to
+exist alongside it but was never wired into scheduling and was removed on
+2026-07-18; `automation/discovery.py` now holds only the small request/error
+contract both still share. The date-only path is installed behind the
+enabled production gate; development and test commands inject fakes and
+make no automatic call.
 `automation.event_dates.initialize_event_dates` tests inject an
 `EventDateProvider`; there is deliberately no standalone automatic live command:
 

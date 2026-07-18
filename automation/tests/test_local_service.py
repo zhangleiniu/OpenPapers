@@ -610,8 +610,6 @@ class LocalServiceLaunchdAndCommandTests(LocalServiceFixture):
             "automation.notifications",
             "automation.job_queue",
             "automation.job_results",
-            "automation.mac_worker",
-            "automation.prefect_flows",
         ):
             self.assertNotIn(forbidden, imported)
             self.assertNotIn(forbidden, source)

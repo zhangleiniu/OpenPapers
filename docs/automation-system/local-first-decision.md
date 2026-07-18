@@ -1,6 +1,11 @@
 # Local-first automation decision
 
-Status: accepted on 2026-07-14; still current
+Status: accepted on 2026-07-14; still current. The retained Cloud Run
+rollback path this record repeatedly references was fully decommissioned on
+2026-07-18 (cloud resources deleted, implementing code removed) once the
+local LaunchDaemon was proven — see `docs/automation.md`'s "Retired cloud
+rollback path". Everything below describing that path is historical context
+for why local-first was chosen, not a description of current state.
 
 ## Context
 
@@ -28,8 +33,9 @@ The production control plane is local-first and single-writer:
   protocol is part of the target design;
 - discovery, coding-agent invocation, and notification are bounded external
   effects called by the local control plane;
-- the retained Cloud Run monitor is a paused rollback path, not a second
-  scheduler.
+- the Cloud Run monitor that once existed as a paused rollback path was
+  decommissioned on 2026-07-18 (see the status note above) — there is now
+  only ever the one scheduler.
 
 An hourly LaunchDaemon wakeup is only a cheap local SQLite poll. It does not
 authorize hourly web searches or conference checks. A venue/year with a
@@ -56,7 +62,10 @@ Host-specific cutover and rollback evidence lives in the maintainer's ignored
 `docs/local-p4lc-operations.md`. Earlier ignored `local-p4o` and `local-p4ls`
 records are historical audits. None is a tracked development specification.
 
-## Current migration and rollback invariants
+## Migration and rollback invariants (historical — cloud path decommissioned)
+
+These governed the 2026-07-14 cutover and the (now-removed) cloud rollback
+path; retained for history, not as live constraints.
 
 1. The Mac and cloud monitor must never be active writers at the same time.
 2. Rollback stops and verifies the local OpenPapers label before resuming the

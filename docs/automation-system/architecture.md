@@ -44,9 +44,11 @@ existing configured future `next_check_at` forward to the cooldown boundary;
 therefore no agent is claimed from the hint until a later wake re-applies every
 normal budget, concurrency, cooldown, and systemic-failure gate.
 
-The Mac is the sole production writer. The paused Cloud Run/Prefect monitor is
-only a rollback path and must never be resumed while the local production
-LaunchDaemon is active.
+The Mac is the sole production writer. An earlier Cloud Run/Prefect monitor
+existed only as a rollback path and was fully decommissioned on 2026-07-18
+(cloud resources deleted, implementing code removed) once the local
+LaunchDaemon was proven — see `docs/automation.md`'s "Retired cloud rollback
+path".
 
 ## Where strict interfaces belong
 

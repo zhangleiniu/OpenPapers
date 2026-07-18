@@ -1,4 +1,4 @@
-"""Strict loaders for versioned automation catalog and policy configuration."""
+"""Strict loader for the versioned automation venue catalog."""
 
 from __future__ import annotations
 
@@ -16,7 +16,6 @@ from automation.contracts import (
 
 CONFIG_ROOT = Path(__file__).with_name("config")
 DEFAULT_VENUE_CATALOG = CONFIG_ROOT / "venue_catalog.v1.json"
-DEFAULT_POLICY_CONFIG = CONFIG_ROOT / "policies.v1.json"
 
 
 def _load_json(path: Path) -> dict[str, Any]:
@@ -52,21 +51,4 @@ def load_venue_catalog(
                 raise ContractValidationError(
                     f"alias {alias!r} belongs to both {previous} and {venue_id}")
             aliases[alias] = venue_id
-    return deepcopy(payload)
-
-
-def load_policy_config(
-    path: Path = DEFAULT_POLICY_CONFIG,
-) -> dict[str, Any]:
-    """Load policy defaults and validate cross-field safety constraints."""
-    payload = _load_json(Path(path))
-    validate_contract(ContractName.POLICY_CONFIG, payload)
-    discovery = payload["discovery_budget"]
-    if discovery["max_calls_per_venue_per_day"] > discovery["max_calls_per_day"]:
-        raise ContractValidationError(
-            "per-venue discovery budget cannot exceed the global budget")
-    if discovery["max_second_provider_calls_per_day"] > discovery["max_calls_per_day"]:
-        raise ContractValidationError(
-            "second-provider budget cannot exceed the global discovery budget")
-
     return deepcopy(payload)

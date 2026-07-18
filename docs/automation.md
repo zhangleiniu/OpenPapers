@@ -30,10 +30,9 @@ production writer. It wakes hourly and exits after a bounded invocation:
 
 External effects are gated by the installed agent-control configuration and
 each carry separate budgets, cooldowns, a global concurrency slot, and a
-systemic-failure circuit. The retained Cloud Scheduler/Cloud Run monitor is
-paused and exists only as a rollback path; it must never run concurrently
-with the local service (rollback order and the single-writer rule are at the
-end of this page).
+systemic-failure circuit. The Mac LaunchDaemon is the sole production
+writer; there is no other writer to coordinate with (see "Retired cloud
+rollback path" at the end of this page).
 
 ## Deterministic source monitor
 
@@ -110,17 +109,16 @@ None of these surfaces can claim work or change a gate. Do not weaken the
 private SQLite file permissions or copy private paths, credentials,
 recipient addresses, or agent explanations into a public log.
 
-## Discovery adapter
+## Date estimation
 
-```bash
-python -m automation.run_discovery --venue icml
-python -m automation.run_discovery --live --venue icml --year 2026
-```
-
-The ordinary command uses fixtures; `--live` requires explicit
-authorization and Application Default Credentials. `GeminiEventDateProvider`
-is the production date estimator; the stricter citation-backed discovery
-output is not wired into scheduling. This use is separate from Gemini track
+`automation/providers/gemini.py::GeminiEventDateProvider` is the production
+date estimator (`automation/event_dates.py` calls it once per venue/year
+before it is due). A stricter citation-backed discovery pipeline with its
+own budget ledger, artifact store, and two-provider escalation used to live
+alongside it (`automation/run_discovery.py`) but was never wired into
+scheduling and was removed on 2026-07-18; `automation/discovery.py` now
+holds only the small request/error contract both `event_dates.py` and the
+Gemini provider still share. This is separate from Gemini track
 classification in some core scrapers
 ([`GOOGLE_CLOUD_SETUP.md`](./GOOGLE_CLOUD_SETUP.md)).
 
@@ -131,14 +129,19 @@ the Resend HTTPS adapter with a provider idempotency key and an explicit
 recipient allowlist (policy stores only address fingerprints). Notification
 failure is retryable delivery state and never changes a run outcome.
 
-## Cloud rollback path
+## Retired cloud rollback path
 
-`automation/prefect_flows.py` and `automation/run_monitor_flow.py` implement
-the retained Cloud Run monitor (deployment assets:
-[`automation/deployment/README.md`](../automation/deployment/README.md)).
-Strict rollback order: stop and verify the local LaunchDaemon; resume only
-the exact retained cloud schedule; verify cloud recovery. Local activation
-uses the inverse order. Never run both writers.
+An earlier design ran the deterministic monitor on a paused Cloud Scheduler
+job (`openpapers-monitor-daily`) triggering a Cloud Run job
+(`openpapers-monitor`) in the `llmcon` GCP project, kept solely as a
+rollback path while the local LaunchDaemon was unproven. Once the local
+service was the proven, sole production writer this path had no remaining
+purpose, so on 2026-07-18 both cloud resources were deleted and the
+implementing code (`automation/prefect_flows.py`, `run_monitor_flow.py`,
+`automation/deployment/`, `automation/mac_worker/`) was removed from the
+repository. The code is still recoverable from git history if a cloud path
+is ever needed again; see `docs/automation-system/local-first-decision.md`
+for why local-first was chosen in the first place.
 
 ## Historical material
 

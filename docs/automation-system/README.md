@@ -9,9 +9,11 @@ automation control plane. Read this page before changing `automation/`, then
 next gates. Operational procedures live in
 [`operations.md`](./operations.md).
 
-The core scrapers remain independently installable and runnable. Prefect,
-GCP, an LLM provider, email, and a coding-agent CLI are never core
-dependencies.
+The core scrapers remain independently installable and runnable. GCP, an LLM
+provider, email, and a coding-agent CLI are never core dependencies. Prefect
+was used by an earlier Cloud Run rollback path; that path was fully
+decommissioned on 2026-07-18 and Prefect is no longer a dependency of any
+kind, optional or otherwise.
 
 ## Product goal
 
@@ -123,13 +125,13 @@ tests, not this list.
   monitor changes to an advanced future check.
 - `automation/control_state_migration.py`: read-only audit, backup, and
   isolated-copy schema rehearsal.
-- `automation/prefect_flows.py`, `automation/run_monitor_flow.py`,
-  `automation/deployment/`: the paused Cloud Run monitor, retained solely
-  as a rollback path.
 
 Schema-11 simplification is implemented and isolated-copy tested but is not
-installed merely because it exists in this working tree. JMLR recurring-
-success enrollment is not yet built.
+installed merely because it exists in this working tree. The Cloud Run/
+Prefect rollback path (`automation/prefect_flows.py`, `run_monitor_flow.py`,
+`automation/deployment/`) was fully decommissioned on 2026-07-18 — see
+`docs/automation.md`'s "Retired cloud rollback path" — and no longer exists
+in this repository or in the `llmcon` GCP project.
 
 ## Documentation map
 

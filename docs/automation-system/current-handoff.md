@@ -64,10 +64,18 @@ As of 2026-07-18, production has these properties:
   provenance, target-selection fixes, and America/Chicago edition page.
   Its DigiCert leaf expires 2026-12-03 and is renewed manually — start with
   NIU DoIT by early November 2026.
-- The retained Cloud Scheduler/Cloud Run path was last verified paused with
-  zero active executions; generate a fresh private proof before any
-  production mutation. Both canary worktrees are retained outside managed
-  cleanup, with expected states tracked by the private proof workflow.
+- The Cloud Scheduler job (`openpapers-monitor-daily`) and Cloud Run job
+  (`openpapers-monitor`, project `llmcon`) that made up the retained rollback
+  path were deleted on 2026-07-18, and the implementing code
+  (`automation/prefect_flows.py`, `run_monitor_flow.py`,
+  `automation/deployment/`, `automation/mac_worker/`) was removed from the
+  repository in the same change — see `docs/automation.md`'s "Retired cloud
+  rollback path". There is no cloud path left to verify paused or resume;
+  `automation/agent_activation.py::read_cloud_drain_proof` still requires a
+  `--cloud-proof` file by contract, now permanently vacuously satisfiable
+  (see `installation-readiness.md`). Both canary worktrees are retained
+  outside managed cleanup, with expected states tracked by the private proof
+  workflow.
 - Exact pre-upgrade rollback packages are retained in private production
   storage. Do not delete or restore them without separate operational
   authority.
@@ -89,9 +97,16 @@ Known follow-up gates:
    this hardening change has not itself been installed as a new runtime and
    the wrapper has not been rerun. Review it with the rest of the current
    working tree before the next upgrade.
-2. **Continuous JMLR enrollment.** Design recurring non-terminal success
-   semantics; do not force JMLR through the annual cohort.
+2. **Continuous JMLR enrollment.** Recurring non-terminal success semantics
+   are designed and implemented in the working tree (commit `302df18`) — see
+   `.agent/plans/perpetual-scheduling-and-jmlr.md` — but not yet installed as
+   a new runtime.
 3. **Certificate renewal** (operator maintenance; see `operations.md`).
+4. **Tighten `agent_activation.py`'s cloud-proof requirement.** It still
+   requires a `--cloud-proof` file now that the cloud path it proves paused
+   no longer exists (see the boundary note above and
+   `installation-readiness.md`); decide whether to drop the requirement or
+   leave it as permanently-satisfiable defense in depth.
 
 ## Safe pickup procedure
 

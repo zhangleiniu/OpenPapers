@@ -5,9 +5,7 @@ import unittest
 from pathlib import Path
 
 from automation.configuration import (
-    DEFAULT_POLICY_CONFIG,
     DEFAULT_VENUE_CATALOG,
-    load_policy_config,
     load_venue_catalog,
 )
 from automation.contracts import (
@@ -25,7 +23,6 @@ FIXTURES = Path(__file__).with_name("fixtures") / "phase0"
 class ContractTests(unittest.TestCase):
     def test_active_schemas_self_check_and_saved_fixtures_pass(self):
         fixtures = {
-            ContractName.DISCOVERY_RESULT: "discovery-result.v1.json",
             ContractName.NOTIFICATION_INTENT: "notification-intent.v1.json",
         }
         for contract in ContractName:
@@ -40,17 +37,17 @@ class ContractTests(unittest.TestCase):
 
     def test_unknown_version_missing_and_extra_fields_are_rejected(self):
         payload = json.loads(
-            (FIXTURES / "discovery-result.v1.json").read_text(encoding="utf-8")
+            (FIXTURES / "notification-intent.v1.json").read_text(encoding="utf-8")
         )
         for mutation in (
             lambda item: item.update(schema_version=2),
-            lambda item: item.pop("discovery_id"),
+            lambda item: item.pop("notification_id"),
             lambda item: item.update(unexpected=True),
         ):
             candidate = json.loads(json.dumps(payload))
             mutation(candidate)
             with self.assertRaises(ContractValidationError):
-                validate_contract(ContractName.DISCOVERY_RESULT, candidate)
+                validate_contract(ContractName.NOTIFICATION_INTENT, candidate)
 
     def test_artifact_fingerprint_is_order_independent(self):
         self.assertEqual(
@@ -92,23 +89,8 @@ class ConfigurationTests(unittest.TestCase):
             with self.assertRaisesRegex(ContractValidationError, "belongs"):
                 load_venue_catalog(path)
 
-    def test_policy_contains_only_active_discovery_budget(self):
-        policy = load_policy_config()
-        self.assertEqual(set(policy), {"schema_version", "discovery_budget"})
-        self.assertEqual(policy["discovery_budget"]["max_concurrency"], 2)
-
-    def test_cross_field_discovery_budget_limits_fail_closed(self):
-        policy = load_policy_config()
-        policy["discovery_budget"]["max_calls_per_venue_per_day"] = 21
-        with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "policy.json"
-            path.write_text(json.dumps(policy), encoding="utf-8")
-            with self.assertRaisesRegex(ContractValidationError, "per-venue"):
-                load_policy_config(path)
-
     def test_default_configuration_files_are_explicitly_versioned(self):
         self.assertTrue(DEFAULT_VENUE_CATALOG.name.endswith(".v1.json"))
-        self.assertTrue(DEFAULT_POLICY_CONFIG.name.endswith(".v1.json"))
 
 
 if __name__ == "__main__":
