@@ -25,8 +25,8 @@ As of 2026-07-18, production has these properties:
   `org.openpapers.local-control` (role `_openpapers`). Its external-effects
   gate is enabled and its private SQLite database is schema 10.
 - The installed runtime and pinned no-remote agent source are commit
-  `4aa6d85`. Always confirm the repository delta with
-  `git log 4aa6d85..HEAD`; repository commits after that revision are not
+  `1d2eac9`. Always confirm the repository delta with
+  `git log 1d2eac9..HEAD`; repository commits after that revision are not
   deployed until a separately authorized runtime upgrade.
 - The deterministic monitor registry covers all 15 catalog venues (18
   sources); the private monitor configuration matches
@@ -80,7 +80,7 @@ Start every continuation with read-only repository inspection:
 ```bash
 git status --short
 git log --oneline --decorate -12
-git log --oneline 4aa6d85..HEAD
+git log --oneline 1d2eac9..HEAD
 python postprocessing/generate_statistics.py --check
 ```
 
