@@ -112,9 +112,12 @@ tests, not this list.
   chain. See [`operations.md`](./operations.md).
 - `automation/agent_status.py`: secret-free read-only production summary
   and the private two-canary proof format.
-- `automation/agent_dashboard.py`: the loopback read-only venue dashboard
-  (countdown to next check, real last-download dates from the local dataset
-  tree), served through an authenticated NIU-private HTTPS proxy.
+- `automation/agent_dashboard.py`: the loopback read-only venue dashboard —
+  one perpetual-cycle row per venue (last/next edition from the curated
+  `config/venue_editions.v1.json` merged with the control state's own date
+  estimates, next attempt, color-coded countdown), timestamps in
+  America/Chicago with a client-side timezone selector — served through an
+  authenticated NIU-private HTTPS proxy.
 - `automation/source_change_hints.py`: the scheduling-only bridge from
   monitor changes to an advanced future check.
 - `automation/control_state_migration.py`: read-only audit, backup, and

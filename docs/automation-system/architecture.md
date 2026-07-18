@@ -188,9 +188,14 @@ forward or require intervention; they must not create a tight retry loop.
   clean.
 - **The dashboard is a view, not a controller.** Its application HTTP listener
   is numeric loopback-only, rereads SQLite through the immutable safe-summary
-  boundary, and offers no mutation method. HTML is escaped and self-contained.
-  The installed remote endpoint is a separate authenticated HTTPS proxy bound
-  only to the host's fixed private address; it adds no control route.
+  boundary, and offers no mutation method. All rendered content is escaped
+  and the page loads no external resource of any kind. One deliberate
+  exception to "no active content" exists (decided 2026-07-18 at the
+  maintainer's direction): a single inline script implements the client-side
+  timezone selector, with CSP still blocking every external script, style,
+  image, and connection. The installed remote endpoint is a separate
+  authenticated HTTPS proxy bound only to the host's fixed private address;
+  it adds no control route.
 - **Canary authority is adapter-specific.** Gemini, Codex, and Resend live
   canaries are distinct commands and permissions. No canary permission enables
   the automatic production composition or another adapter.

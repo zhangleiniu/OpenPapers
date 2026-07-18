@@ -92,11 +92,16 @@ scrape predates enrollment can be closed with
 - The read-only dashboard: loopback backend (`automation.agent_dashboard`)
   behind an authenticated NIU-private HTTPS Caddy proxy at
   `https://archer.cs.niu.edu:8443/` (username `openpapers`; password
-  operator-held). It shows one row per catalog venue with a color-coded
-  countdown to the next check, the last real download date from the local
-  dataset tree, disposition, and report state. It exposes no control
-  methods, paths, addresses, or credentials. Its DigiCert leaf expires
-  2026-12-03 and is renewed manually.
+  operator-held). It shows one perpetual-cycle row per catalog venue: the
+  last held edition and next expected edition (curated verified dates in
+  `automation/config/venue_editions.v1.json` merged with the control
+  state's own estimates; `~` marks a cadence approximation), the
+  scheduler's next attempt, and a color-coded countdown that rolls to the
+  next edition once a collection completes. Timestamps default to
+  America/Chicago with a client-side timezone selector (the page's single
+  inline script; no external resource is ever loaded). It exposes no
+  control methods, paths, addresses, or credentials. Its DigiCert leaf
+  expires 2026-12-03 and is renewed manually.
 
 None of these surfaces can claim work or change a gate. Do not weaken the
 private SQLite file permissions or copy private paths, credentials,

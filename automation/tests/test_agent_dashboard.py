@@ -1,18 +1,21 @@
 import copy
-import os
+import json
 import sqlite3
 import tempfile
 import threading
 import unittest
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 from automation.agent_dashboard import (
     AgentDashboardError,
+    _remaining_label,
+    _resolve_editions,
     build_dashboard_model,
     create_dashboard_server,
+    load_venue_editions,
     render_dashboard,
 )
 from automation.agent_status import read_agent_state_summary
@@ -22,6 +25,74 @@ from automation.domain import Writer
 
 
 NOW = datetime(2026, 7, 16, 16, 30, tzinfo=timezone.utc)
+TODAY = NOW.date()
+
+
+class VenueEditionTests(unittest.TestCase):
+    def test_curated_file_loads_and_rejects_malformed_entries(self):
+        editions = load_venue_editions()
+        self.assertIn("icml", editions)
+        self.assertTrue(all(
+            isinstance(item["start_date"], date)
+            for entries in editions.values() for item in entries
+        ))
+        with tempfile.TemporaryDirectory() as temp:
+            bad = Path(temp) / "editions.json"
+            bad.write_text(json.dumps({
+                "schema_version": 1,
+                "editions": [{"venue_id": "icml", "year": 2026}],
+            }))
+            with self.assertRaisesRegex(AgentDashboardError, "invalid"):
+                load_venue_editions(bad)
+
+    def test_resolution_prefers_curated_over_control_state_for_same_year(self):
+        curated = [{"year": 2026, "start_date": date(2026, 7, 2), "label": None}]
+        last, next_edition = _resolve_editions(
+            "acl", {"kind": "annual"}, curated,
+            {2026: "2026-07-27"},  # the stale operator estimate
+            TODAY,
+        )
+        self.assertEqual(last["start_date"], date(2026, 7, 2))
+        self.assertFalse(last["approx"])
+        # No known future edition: cadence approximation, month precision.
+        self.assertEqual(next_edition["year"], 2027)
+        self.assertTrue(next_edition["approx"])
+        self.assertEqual(next_edition["start_date"], date(2027, 7, 1))
+
+    def test_resolution_honors_periodic_cadence_for_the_approximation(self):
+        curated = [{"year": 2025, "start_date": date(2025, 10, 19), "label": None}]
+        last, next_edition = _resolve_editions(
+            "iccv",
+            {"kind": "annual", "interval_years": 2, "cycle_anchor_year": 2025},
+            curated, {}, TODAY,
+        )
+        self.assertEqual(last["year"], 2025)
+        self.assertEqual(next_edition["year"], 2027)
+        self.assertTrue(next_edition["approx"])
+
+    def test_future_control_state_estimate_becomes_next_edition(self):
+        last, next_edition = _resolve_editions(
+            "uai", {"kind": "annual"},
+            [{"year": 2025, "start_date": date(2025, 7, 21), "label": None}],
+            {2026: "2026-08-17"}, TODAY,
+        )
+        self.assertEqual(last["year"], 2025)
+        self.assertEqual(next_edition["year"], 2026)
+        self.assertFalse(next_edition["approx"])
+
+    def test_countdown_buckets_by_urgency(self):
+        cases = [
+            (timedelta(minutes=-5), "due now", "due"),
+            (timedelta(hours=5), "in 5h", "due"),
+            (timedelta(days=3), "in 3d", "soon"),
+            (timedelta(days=12), "in 12d", "later"),
+            (timedelta(days=90), "in 3mo", "far"),
+        ]
+        for delta, text, category in cases:
+            with self.subTest(delta=delta):
+                self.assertEqual(
+                    _remaining_label(NOW + delta, NOW), (text, category)
+                )
 
 
 class AgentDashboardTests(unittest.TestCase):
@@ -41,7 +112,6 @@ class AgentDashboardTests(unittest.TestCase):
                 "0, NULL, NULL, ?)",
                 (next_check, self._time(NOW - timedelta(hours=1))),
             )
-        self.metadata_root = self.root / "metadata"
 
     def tearDown(self):
         self.temp.cleanup()
@@ -50,204 +120,123 @@ class AgentDashboardTests(unittest.TestCase):
     def _time(value):
         return value.isoformat().replace("+00:00", "Z")
 
-    def _write_metadata(self, venue_id, year, *, mtime=None):
-        directory = self.metadata_root / venue_id
-        directory.mkdir(parents=True, exist_ok=True)
-        path = directory / f"{venue_id}_{year}.json"
-        path.write_text("[]", encoding="utf-8")
-        if mtime is not None:
-            os_mtime = mtime.timestamp()
-            os.utime(path, (os_mtime, os_mtime))
-        return path
-
-    def test_model_lists_every_catalog_venue_and_safe_schedule_times(self):
-        targets = read_agent_state_summary(self.state)
-
-        model = build_dashboard_model(
-            load_venue_catalog(), targets, observed_at=NOW
+    def _model(self, targets=None, editions=None):
+        if targets is None:
+            targets = read_agent_state_summary(self.state)
+        return build_dashboard_model(
+            load_venue_catalog(), targets, observed_at=NOW,
+            editions=editions if editions is not None else load_venue_editions(),
         )
+
+    def test_model_gives_every_venue_cycle_columns(self):
+        model = self._model()
 
         self.assertEqual(model["venue_count"], 15)
-        self.assertEqual(model["enrolled_venue_count"], 1)
-        self.assertEqual(model["target_count"], 1)
         venues = {venue["venue_id"]: venue for venue in model["venues"]}
-        self.assertEqual(venues["icml"]["current_target"], {
-            "year": 2026,
-            "phase": "Waiting for date",
-            "last_updated_at": self._time(NOW - timedelta(hours=1)),
-            "next_attempt_at": self._time(NOW + timedelta(days=2)),
-            "last_disposition": None,
-            "report_status": None,
-        })
-        self.assertFalse(venues["jmlr"]["enrolled"])
-        self.assertEqual(venues["jmlr"]["lifecycle_kind"], "continuous")
-        self.assertEqual(venues["jmlr"]["source_monitor"], "Configured")
-        self.assertEqual(venues["icml"]["source_monitor"], "Configured")
-        self.assertEqual(venues["naacl"]["source_monitor"], "Configured")
-        self.assertIsNone(venues["icml"]["last_downloaded"])
+        icml = venues["icml"]
+        self.assertEqual(icml["current_target"]["next_attempt_at"],
+                         self._time(NOW + timedelta(days=2)))
+        self.assertEqual(icml["last_edition"]["name"], "ICML 2026")
+        self.assertEqual(icml["last_edition"]["date"], "2026-07-07")
+        self.assertEqual(icml["next_edition"]["name"], "ICML 2027")
+        self.assertTrue(icml["next_edition"]["approx"])
+        self.assertEqual(icml["progress"]["label"], "in 2d")
+        self.assertEqual(icml["progress"]["category"], "soon")
+        # An unenrolled venue still shows its cycle from curated data alone.
+        naacl = venues["naacl"]
+        self.assertIsNone(naacl["current_target"])
+        self.assertEqual(naacl["last_edition"]["name"], "NAACL 2025")
+        self.assertEqual(naacl["next_edition"]["date"], "2027-06-01")
+        self.assertEqual(naacl["progress"]["label"], "next: NAACL 2027")
+        # JMLR uses its curated volume label.
+        self.assertEqual(venues["jmlr"]["last_edition"]["name"], "v27")
 
-    def test_current_target_selects_the_maximum_enrolled_year(self):
-        base_targets = read_agent_state_summary(self.state)
-        extra = dict(base_targets[0])
-        extra["year"] = 2025
-        extra["event_date"] = dict(extra["event_date"])
-
-        model = build_dashboard_model(
-            load_venue_catalog(), [extra, base_targets[0]], observed_at=NOW
-        )
-
-        venues = {venue["venue_id"]: venue for venue in model["venues"]}
-        self.assertEqual(venues["icml"]["current_target"]["year"], 2026)
-        self.assertTrue(venues["icml"]["enrolled"])
-
-    def test_last_downloaded_reads_the_highest_year_file_and_degrades_safely(self):
-        self._write_metadata(
-            "icml", 2025, mtime=datetime(2025, 6, 1, tzinfo=timezone.utc)
-        )
-        self._write_metadata(
-            "icml", 2026, mtime=datetime(2026, 7, 12, 9, 0, tzinfo=timezone.utc)
-        )
-        # A malformed filename (no trailing _<year>) must be ignored, not raise.
-        (self.metadata_root / "icml" / "notes.json").write_text("{}", encoding="utf-8")
-        targets = read_agent_state_summary(self.state)
-
-        model = build_dashboard_model(
-            load_venue_catalog(), targets, observed_at=NOW,
-            metadata_root=self.metadata_root,
-        )
-
-        venues = {venue["venue_id"]: venue for venue in model["venues"]}
-        self.assertEqual(venues["icml"]["last_downloaded"], {
-            "year": 2026,
-            "observed_at": "2026-07-12T09:00:00Z",
-        })
-        # A venue with no metadata directory at all degrades to None, not an error.
-        self.assertIsNone(venues["neurips"]["last_downloaded"])
-
-    def test_last_downloaded_is_none_when_metadata_root_is_unreadable(self):
-        targets = read_agent_state_summary(self.state)
-
-        model = build_dashboard_model(
-            load_venue_catalog(), targets, observed_at=NOW,
-            metadata_root=self.root / "does-not-exist",
-        )
-
-        venues = {venue["venue_id"]: venue for venue in model["venues"]}
-        self.assertIsNone(venues["icml"]["last_downloaded"])
-        self.assertEqual(model["venue_count"], 15)
-
-    def test_urgency_rank_orders_active_before_waiting_before_unenrolled(self):
+    def test_completed_venue_counts_down_to_its_next_edition(self):
         with sqlite3.connect(self.state) as connection:
             connection.execute(
                 "INSERT INTO event_date_schedule VALUES "
-                "('aistats', 2026, 'active', ?, NULL, NULL, NULL, NULL, NULL, "
-                "1, ?, NULL, ?)",
-                (
-                    self._time(NOW + timedelta(days=30)),
-                    "attempt:1",
-                    self._time(NOW - timedelta(minutes=5)),
-                ),
+                "('acl', 2026, 'scheduled', ?, '2026-07-27', ?, 'operator', "
+                "'operator', 'operator', 0, NULL, NULL, ?)",
+                (self._time(NOW - timedelta(days=1)),
+                 self._time(NOW - timedelta(days=1)),
+                 self._time(NOW - timedelta(days=1))),
             )
-        targets = read_agent_state_summary(self.state)
-
-        model = build_dashboard_model(
-            load_venue_catalog(), targets, observed_at=NOW
-        )
-
-        order = [venue["venue_id"] for venue in model["venues"]]
-        # "Date lookup running" (aistats) outranks "Waiting for date" (icml),
-        # which outranks every unenrolled venue.
-        self.assertEqual(order[0], "aistats")
-        self.assertEqual(order[1], "icml")
-        self.assertTrue(set(order[2:]) == {
-            venue["venue_id"] for venue in model["venues"]
-        } - {"aistats", "icml"})
-        unenrolled_ranks = {
-            venue["venue_id"]: venue["urgency_rank"][0]
-            for venue in model["venues"] if venue["venue_id"] not in {"aistats", "icml"}
-        }
-        self.assertTrue(all(rank == 4 for rank in unenrolled_ranks.values()))
-
-    def test_progress_fraction_is_bounded_and_categorized(self):
-        targets = read_agent_state_summary(self.state)
-
-        model = build_dashboard_model(
-            load_venue_catalog(), targets, observed_at=NOW
-        )
+            connection.execute(
+                "INSERT INTO agent_schedule VALUES "
+                "('acl', 2026, 'completed', NULL, 0, NULL, 0, NULL, NULL, "
+                "NULL, NULL, ?)",
+                (self._time(NOW - timedelta(days=1)),),
+            )
+        model = self._model()
 
         venues = {venue["venue_id"]: venue for venue in model["venues"]}
-        # The icml fixture's next check is NOW + 2 days: within the <7d
-        # "soon" urgency bucket, with a countdown label rather than a phase,
-        # and a bar showing the remaining time on the 30-day scale (2/30).
-        waiting = venues["icml"]["progress"]
-        self.assertEqual(waiting["category"], "soon")
-        self.assertEqual(waiting["label"], "in 2d")
-        self.assertAlmostEqual(waiting["fraction"], 2 / 30, places=3)
-        unenrolled = venues["neurips"]["progress"]
+        acl = venues["acl"]
+        self.assertEqual(acl["current_target"]["phase"], "Collected")
+        self.assertIsNone(acl["current_target"]["next_attempt_at"])
+        # Cycle continues: countdown targets the (approximate) next edition.
+        self.assertEqual(acl["progress"]["label"], "next: ACL 2027")
+        self.assertEqual(acl["status"]["text"], "Collected")
+        # Curated verified date beats the operator estimate for the same year.
+        self.assertEqual(acl["last_edition"]["date"], "2026-07-02")
+
+    def test_report_delivery_problem_surfaces_as_warning_only(self):
+        model = self._model()
+        venues = {venue["venue_id"]: venue for venue in model["venues"]}
+        self.assertIsNone(venues["icml"]["status"]["warning"])
+
+        targets = [dict(read_agent_state_summary(self.state)[0])]
+        targets[0]["latest_report"] = {
+            "attempt_number": 1, "status": "retryable", "attempt_count": 1,
+            "delivered_at": None, "last_failure_category": "transient",
+        }
+        model = self._model(targets=targets)
+        venues = {venue["venue_id"]: venue for venue in model["venues"]}
         self.assertEqual(
-            unenrolled,
-            {"fraction": 0.0, "category": "none", "label": "Not enrolled"},
+            venues["icml"]["status"]["warning"], "report delivery retryable"
         )
+        document = render_dashboard(model)
+        self.assertIn("report delivery retryable", document)
 
-    def test_remaining_label_buckets_by_urgency(self):
-        from automation.agent_dashboard import _remaining_label
+    def test_rows_sort_action_first_then_cycle_waits(self):
+        model = self._model()
+        order = [venue["venue_id"] for venue in model["venues"]]
+        # icml is the only venue with a real next attempt: it sorts first;
+        # everyone else orders by next expected edition.
+        self.assertEqual(order[0], "icml")
+        cycle = [venues for venues in model["venues"][1:]]
+        dates = [venue["next_edition"]["iso_date"] for venue in cycle]
+        self.assertEqual(dates, sorted(dates))
 
-        cases = [
-            (timedelta(minutes=-5), "due now", "due"),
-            (timedelta(minutes=30), "in <1h", "due"),
-            (timedelta(hours=5), "in 5h", "due"),
-            (timedelta(days=3), "in 3d", "soon"),
-            (timedelta(days=12), "in 12d", "later"),
-            (timedelta(days=45), "in 45d", "far"),
-            (timedelta(days=90), "in 3mo", "far"),
-        ]
-        for delta, text, category in cases:
-            with self.subTest(delta=delta):
-                self.assertEqual(
-                    _remaining_label(NOW + delta, NOW), (text, category)
-                )
-
-    def test_renderer_escapes_catalog_text_and_contains_no_external_resource(self):
+    def test_renderer_escapes_content_and_has_only_the_timezone_script(self):
         catalog = copy.deepcopy(load_venue_catalog())
         catalog["venues"][0]["display_name"] = "<script>alert('x')</script>"
-        model = build_dashboard_model(catalog, [], observed_at=NOW)
-
-        document = render_dashboard(model)
-
-        self.assertNotIn("<script>", document)
-        self.assertIn("&lt;script&gt;alert", document)
-        self.assertNotIn("http://", document)
-        self.assertNotIn("https://", document)
-        self.assertIn("This page performs no action", document)
-
-    def test_renderer_shows_venue_abbreviation_and_columns(self):
-        targets = read_agent_state_summary(self.state)
         model = build_dashboard_model(
-            load_venue_catalog(), targets, observed_at=NOW
+            catalog, [], observed_at=NOW, editions={},
         )
 
         document = render_dashboard(model)
 
-        self.assertIn(">ICML<", document)
-        self.assertNotIn("<th>Name</th>", document)
-        self.assertNotIn("<th>Lifecycle</th>", document)
-        self.assertNotIn("<th>Source monitor</th>", document)
-        self.assertNotIn("<th>Year</th>", document)
+        self.assertIn("&lt;script&gt;alert", document)
+        self.assertNotIn("<script>alert", document)
+        # Exactly one active script: the inline timezone selector.
+        self.assertEqual(document.count("<script>"), 1)
+        self.assertIn('id="tz-select"', document)
+        self.assertIn("America/Chicago", document)
+        self.assertNotIn("http://", document)
+        self.assertNotIn("https://", document)
+        self.assertIn("This\npage performs no action", document)
 
-    def test_renderer_badges_a_venue_with_no_monitor_source(self):
-        catalog = copy.deepcopy(load_venue_catalog())
-        catalog["venues"][0]["scraper"]["monitor_registered"] = False
-        model = build_dashboard_model(catalog, [], observed_at=NOW)
-
+    def test_renderer_defaults_timestamps_to_chicago(self):
+        model = self._model()
         document = render_dashboard(model)
-
-        self.assertIn("No deterministic monitor source configured", document)
+        # 2026-07-18T16:30Z == 11:30 in America/Chicago (CDT); the next
+        # attempt for icml (NOW+2d 16:30Z) renders as 11:30 local.
+        self.assertIn('data-utc="2026-07-18T16:30:00Z">2026-07-18 11:30', document)
 
     def test_loopback_server_rereads_without_mutating_state(self):
         before = self.state.read_bytes()
         server = create_dashboard_server(
-            self.state, port=0, clock=lambda: NOW,
-            metadata_root=self.metadata_root,
+            self.state, port=0, clock=lambda: NOW
         )
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
@@ -259,11 +248,11 @@ class AgentDashboardTests(unittest.TestCase):
                 self.assertEqual(
                     response.headers["X-Content-Type-Options"], "nosniff"
                 )
-                self.assertIn("default-src 'none'", response.headers[
-                    "Content-Security-Policy"
-                ])
+                policy = response.headers["Content-Security-Policy"]
+                self.assertIn("default-src 'none'", policy)
+                self.assertIn("script-src 'unsafe-inline'", policy)
             self.assertIn("International Conference on Machine Learning", body)
-            self.assertIn("Waiting for date", body)
+            self.assertIn("ICML 2026", body)
             with urlopen(base + "/healthz", timeout=3) as response:
                 self.assertEqual(response.read(), b'{"status":"ok"}\n')
             with self.assertRaises(HTTPError) as error:
