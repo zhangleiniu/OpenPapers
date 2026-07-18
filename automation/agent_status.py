@@ -18,7 +18,6 @@ from urllib.parse import quote
 from automation.agent_activation import (
     AgentActivationError,
     probe_local_service_loaded,
-    read_cloud_drain_proof,
 )
 from automation.agent_credentials import (
     AgentCredentialError,
@@ -323,7 +322,6 @@ def build_production_status(
     repository_root: Path,
     execution_root: Path,
     state_path: Path,
-    cloud_proof_path: Path,
     canary_proof_path: Path,
     service_loaded: bool,
     clock: Callable[[], datetime] = lambda: datetime.now(timezone.utc),
@@ -357,7 +355,6 @@ def build_production_status(
             >= configuration.agent.minimum_free_bytes
     except (OSError, TypeError, ValueError, AttributeError) as exc:
         raise AgentStatusError("agent execution disk is unavailable") from exc
-    cloud = read_cloud_drain_proof(Path(cloud_proof_path), clock=clock)
     canary_checked_at, canaries = read_canary_proof(
         Path(canary_proof_path), clock=clock
     )
@@ -380,11 +377,6 @@ def build_production_status(
             "disk_ready": disk_ready,
         },
         "service": {"loaded": service_loaded, "recent_wakes": list(wakes)},
-        "cloud": {
-            "schedule_paused": cloud.schedule_paused,
-            "active_executions": cloud.active_executions,
-            "checked_at": cloud.checked_at.isoformat().replace("+00:00", "Z"),
-        },
         "targets": read_agent_state_summary(Path(state_path)),
         "canaries": {"checked_at": canary_checked_at, "items": canaries},
     }
@@ -402,7 +394,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     report.add_argument("--repository-root", type=Path, required=True)
     report.add_argument("--execution-root", type=Path, required=True)
     report.add_argument("--state", type=Path, required=True)
-    report.add_argument("--cloud-proof", type=Path, required=True)
     report.add_argument("--canary-proof", type=Path, required=True)
     args = parser.parse_args(argv)
     try:
@@ -414,7 +405,6 @@ def main(argv: Sequence[str] | None = None) -> int:
                 repository_root=args.repository_root,
                 execution_root=args.execution_root,
                 state_path=args.state,
-                cloud_proof_path=args.cloud_proof,
                 canary_proof_path=args.canary_proof,
                 service_loaded=probe_local_service_loaded(),
             )

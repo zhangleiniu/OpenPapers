@@ -70,12 +70,14 @@ As of 2026-07-18, production has these properties:
   (`automation/prefect_flows.py`, `run_monitor_flow.py`,
   `automation/deployment/`, `automation/mac_worker/`) was removed from the
   repository in the same change — see `docs/automation.md`'s "Retired cloud
-  rollback path". There is no cloud path left to verify paused or resume;
-  `automation/agent_activation.py::read_cloud_drain_proof` still requires a
-  `--cloud-proof` file by contract, now permanently vacuously satisfiable
-  (see `installation-readiness.md`). Both canary worktrees are retained
-  outside managed cleanup, with expected states tracked by the private proof
-  workflow.
+  rollback path". `automation/agent_activation.py::read_cloud_drain_proof`
+  and the matching `--cloud-proof` requirement in `agent_status.py`'s status
+  report were removed with it (2026-07-18, same day) rather than left as a
+  permanently-vacuous check — there is no cloud path left to verify paused or
+  resume, and no contract left requiring a proof file. Both canary worktrees
+  are retained outside managed cleanup, with expected states tracked by the
+  private proof workflow (this refers to the unrelated Codex/agent-source
+  canary proof, not the removed cloud proof).
 - Exact pre-upgrade rollback packages are retained in private production
   storage. Do not delete or restore them without separate operational
   authority.
@@ -102,11 +104,6 @@ Known follow-up gates:
    `.agent/plans/perpetual-scheduling-and-jmlr.md` — but not yet installed as
    a new runtime.
 3. **Certificate renewal** (operator maintenance; see `operations.md`).
-4. **Tighten `agent_activation.py`'s cloud-proof requirement.** It still
-   requires a `--cloud-proof` file now that the cloud path it proves paused
-   no longer exists (see the boundary note above and
-   `installation-readiness.md`); decide whether to drop the requirement or
-   leave it as permanently-satisfiable defense in depth.
 
 ## Safe pickup procedure
 

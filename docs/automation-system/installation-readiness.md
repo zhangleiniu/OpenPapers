@@ -129,30 +129,26 @@ in-place schema downgrade.
 
 ## Activation readiness and disabled rehearsal
 
-`automation/agent_activation.py::read_cloud_drain_proof` still requires a
-`--cloud-proof` file proving `cloud_schedule_paused=true` and
-`active_cloud_executions=0` before it will report the system ready. This
-predates the 2026-07-18 removal of the Cloud Scheduler/Cloud Run rollback
-path (see `docs/automation.md`); the check is now permanently vacuous (there
-is no cloud writer left that could ever conflict) rather than removed —
-tightening `agent_activation.py`'s own contract was treated as a separate,
-more invasive decision from deleting already-dead files and was left for a
-follow-up. A short-lived proof file can still be hand-written in the schema-1
-shape (`cloud_schedule_paused: true`, `active_cloud_executions: 0`,
-`checked_at` within 15 minutes) to satisfy it in the meantime.
+`automation/agent_activation.py` used to require a `--cloud-proof` file
+proving the (now-deleted) Cloud Scheduler/Cloud Run rollback path was
+paused and drained before it would report the system ready — see
+`docs/automation.md`'s "Retired cloud rollback path". That requirement,
+`read_cloud_drain_proof`, the `CloudDrainProof` type, and the corresponding
+fields in `automation/agent_status.py`'s status report were removed on
+2026-07-18 along with the rest of the cloud path; there is no cloud writer
+left that could ever conflict, so there is nothing left to prove.
 
 Run the read-only audit as the dedicated role while the fixed service is still
 loaded. It must report `ready=true`, effects false, the exact schema expected
 by that candidate runtime, quick-check
 healthy, all three active/in-flight counts zero, both credentials present, the
-approved recipient count, sufficient disk, a safe source, cloud paused/drained,
-and `service_loaded=true`:
+approved recipient count, sufficient disk, a safe source, and
+`service_loaded=true`:
 
 ```bash
 python -m automation.agent_activation audit \
   --internal-root <private-root> --repository-root <installed-runtime> \
-  --execution-root <external-root> --state <control-state> \
-  --cloud-proof <fresh-private-cloud-proof>
+  --execution-root <external-root> --state <control-state>
 ```
 
 Disabled rehearsal requires separate authorization, a freshly created backup
@@ -160,12 +156,11 @@ path whose private parent is owned by the role, and a verified stopped fixed
 service. It replays and restores only the already-disabled v2 files and must
 finish with `external_effects_enabled=false`; it does not construct Gemini,
 Codex, Resend, scraper, or retention adapters. Restart the unchanged service
-and require a bounded disabled wake plus unchanged cloud/state/canary evidence.
+and require a bounded disabled wake plus unchanged state/canary evidence.
 
 Actual `activate` is a different command and permission. It must re-run the
 same readiness checks with the service stopped, retain an exact disabled
 backup, and install the marker last. Do not run it under installation,
 refresh, rehearsal, or canary authorization. If transition/bootstrap/first
 wake fails, keep the service stopped and use the exact `rollback` authority to
-restore the retained disabled binding before reload. Rollback never authorizes
-or resumes the cloud writer.
+restore the retained disabled binding before reload.

@@ -5,7 +5,7 @@ import subprocess
 import tempfile
 import unittest
 from contextlib import redirect_stdout
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
@@ -16,7 +16,6 @@ from automation.agent_activation import (
     audit_external_effects_readiness,
     main,
     probe_local_service_loaded,
-    read_cloud_drain_proof,
 )
 from automation.agent_credentials import prepare_agent_credential_context
 from automation.control_state import CONTROL_SCHEMA_VERSION, ControlStateRepository
@@ -144,20 +143,9 @@ class AgentActivationTests(unittest.TestCase):
         ):
             pass
         self.state.chmod(0o600)
-        self.cloud_proof = self.internal / "cloud-drain-proof.v1.json"
-        self._write_cloud_proof(NOW)
 
     def tearDown(self):
         self.temp.cleanup()
-
-    def _write_cloud_proof(self, checked_at):
-        self.cloud_proof.write_text(json.dumps({
-            "schema_version": 1,
-            "cloud_schedule_paused": True,
-            "active_cloud_executions": 0,
-            "checked_at": checked_at.isoformat().replace("+00:00", "Z"),
-        }, sort_keys=True) + "\n", encoding="utf-8")
-        self.cloud_proof.chmod(0o600)
 
     def _audit(self, **overrides):
         arguments = {
@@ -165,10 +153,8 @@ class AgentActivationTests(unittest.TestCase):
             "repository_root": self.repository,
             "execution_root": self.external,
             "state_path": self.state,
-            "cloud_proof_path": self.cloud_proof,
             "service_loaded": True,
             "expected_service_loaded": True,
-            "clock": lambda: NOW,
             "disk_usage": lambda _: SimpleNamespace(free=20_000_000_000),
         }
         arguments.update(overrides)
@@ -188,8 +174,6 @@ class AgentActivationTests(unittest.TestCase):
         self.assertTrue(result.ready)
         self.assertEqual(result.schema_version, CONTROL_SCHEMA_VERSION)
         self.assertEqual(result.recipient_count, 2)
-        self.assertTrue(result.cloud_schedule_paused)
-        self.assertEqual(result.active_cloud_executions, 0)
         rendered = repr(result)
         self.assertNotIn("placeholder-key", rendered)
         self.assertNotIn("example.test", rendered)
@@ -203,11 +187,7 @@ class AgentActivationTests(unittest.TestCase):
             )
         ))
 
-    def test_stale_cloud_proof_and_service_mismatch_block(self):
-        self._write_cloud_proof(NOW - timedelta(minutes=16))
-        with self.assertRaisesRegex(AgentActivationError, "cloud proof"):
-            self._audit()
-        self._write_cloud_proof(NOW)
+    def test_service_mismatch_blocks(self):
         with self.assertRaisesRegex(AgentActivationError, "service state"):
             self._audit(service_loaded=False)
 
@@ -251,38 +231,6 @@ class AgentActivationTests(unittest.TestCase):
             with self.assertRaisesRegex(AgentActivationError, "control state"):
                 self._audit()
 
-    def test_cloud_proof_rejects_unknown_or_future_fields(self):
-        payload = json.loads(self.cloud_proof.read_text(encoding="utf-8"))
-        payload["resource_name"] = "must-not-be-tracked"
-        self.cloud_proof.write_text(json.dumps(payload), encoding="utf-8")
-        with self.assertRaisesRegex(AgentActivationError, "cloud proof"):
-            read_cloud_drain_proof(self.cloud_proof, clock=lambda: NOW)
-        payload.pop("resource_name")
-        payload["schema_version"] = True
-        self.cloud_proof.write_text(json.dumps(payload), encoding="utf-8")
-        with self.assertRaisesRegex(AgentActivationError, "cloud proof"):
-            read_cloud_drain_proof(self.cloud_proof, clock=lambda: NOW)
-        payload["schema_version"] = 1
-        payload["active_cloud_executions"] = 0.0
-        self.cloud_proof.write_text(json.dumps(payload), encoding="utf-8")
-        with self.assertRaisesRegex(AgentActivationError, "cloud proof"):
-            read_cloud_drain_proof(self.cloud_proof, clock=lambda: NOW)
-        payload["active_cloud_executions"] = 0
-        payload["cloud_schedule_paused"] = False
-        self.cloud_proof.write_text(json.dumps(payload), encoding="utf-8")
-        with self.assertRaisesRegex(AgentActivationError, "cloud proof"):
-            read_cloud_drain_proof(self.cloud_proof, clock=lambda: NOW)
-        payload["cloud_schedule_paused"] = True
-        payload["active_cloud_executions"] = 1
-        self.cloud_proof.write_text(json.dumps(payload), encoding="utf-8")
-        with self.assertRaisesRegex(AgentActivationError, "cloud proof"):
-            read_cloud_drain_proof(self.cloud_proof, clock=lambda: NOW)
-        payload["active_cloud_executions"] = 0
-        payload["checked_at"] = (NOW + timedelta(minutes=2)).isoformat()
-        self.cloud_proof.write_text(json.dumps(payload), encoding="utf-8")
-        with self.assertRaisesRegex(AgentActivationError, "cloud proof"):
-            read_cloud_drain_proof(self.cloud_proof, clock=lambda: NOW)
-
     def test_service_probe_distinguishes_stopped_from_probe_failure(self):
         loaded = Mock(return_value=SimpleNamespace(
             returncode=0, stdout="service", stderr=""
@@ -317,7 +265,6 @@ class AgentActivationTests(unittest.TestCase):
                     "--repository-root", str(self.repository),
                     "--execution-root", str(self.external),
                     "--state", str(self.state),
-                    "--cloud-proof", str(self.cloud_proof),
                     "--backup-root", str(self.root / "backup"),
                     "--confirm-service-stopped",
                 ])
@@ -328,7 +275,7 @@ class AgentActivationTests(unittest.TestCase):
     def test_authorized_activation_cli_requires_stopped_probe_and_audit(self):
         readiness = ActivationReadiness(
             True, False, 10, True, 0, 0, 0, True, True, 2,
-            True, True, True, 0, False,
+            True, True, False,
         )
         audit = Mock(return_value=readiness)
         activate = Mock()
@@ -342,7 +289,6 @@ class AgentActivationTests(unittest.TestCase):
                 "--repository-root", str(self.repository),
                 "--execution-root", str(self.external),
                 "--state", str(self.state),
-                "--cloud-proof", str(self.cloud_proof),
                 "--backup-root", str(self.root / "backup"),
                 "--confirm-service-stopped",
                 "--authorize-external-effects-activation",

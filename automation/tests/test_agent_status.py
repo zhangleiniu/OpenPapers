@@ -50,13 +50,6 @@ class AgentStatusTests(unittest.TestCase):
         ):
             pass
         self.state.chmod(0o600)
-        self.cloud_proof = self.internal / "cloud-proof.json"
-        self._private_json(self.cloud_proof, {
-            "schema_version": 1,
-            "cloud_schedule_paused": True,
-            "active_cloud_executions": 0,
-            "checked_at": self._time(NOW),
-        })
         self.run_records = self.internal / "service" / "runs.v1.json"
         self._private_json(self.run_records, {
             "schema_version": 1,
@@ -186,7 +179,6 @@ class AgentStatusTests(unittest.TestCase):
                 repository_root=self.repository,
                 execution_root=self.execution,
                 state_path=self.state,
-                cloud_proof_path=self.cloud_proof,
                 canary_proof_path=self.canary_proof,
                 service_loaded=True,
                 clock=lambda: NOW,

@@ -6,10 +6,8 @@ import argparse
 import json
 import os
 import shutil
-import stat
 import subprocess
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Sequence
 
@@ -35,26 +33,11 @@ from automation.local_service.service import LOCAL_SERVICE_LABEL
 from automation.resend_notifications import recipient_fingerprints
 
 
-_CLOUD_PROOF_FIELDS = {
-    "schema_version",
-    "cloud_schedule_paused",
-    "active_cloud_executions",
-    "checked_at",
-}
-_CLOUD_PROOF_MAX_AGE_SECONDS = 15 * 60
-_CLOUD_PROOF_MAX_FUTURE_SKEW_SECONDS = 60
 _LAUNCHCTL = Path("/bin/launchctl")
 
 
 class AgentActivationError(ValueError):
     """Raised when activation authority or readiness cannot be proven."""
-
-
-@dataclass(frozen=True)
-class CloudDrainProof:
-    schedule_paused: bool
-    active_executions: int
-    checked_at: datetime
 
 
 @dataclass(frozen=True)
@@ -71,55 +54,7 @@ class ActivationReadiness:
     recipient_count: int
     disk_ready: bool
     agent_source_ready: bool
-    cloud_schedule_paused: bool
-    active_cloud_executions: int
     service_loaded: bool
-
-
-def _utc(value: datetime, *, field: str) -> datetime:
-    if not isinstance(value, datetime) or value.tzinfo is None:
-        raise AgentActivationError(f"{field} is invalid")
-    return value.astimezone(timezone.utc)
-
-
-def read_cloud_drain_proof(
-    path: Path,
-    *,
-    clock: Callable[[], datetime] = lambda: datetime.now(timezone.utc),
-) -> CloudDrainProof:
-    """Validate one short-lived, address-free paused/drained cloud proof."""
-    proof_path = Path(path)
-    try:
-        metadata = proof_path.lstat()
-        if not stat.S_ISREG(metadata.st_mode) or proof_path.is_symlink() \
-                or metadata.st_uid != os.geteuid() \
-                or metadata.st_mode & (stat.S_IRWXG | stat.S_IRWXO) \
-                or not 2 <= metadata.st_size <= 4096:
-            raise AgentActivationError("cloud proof is unsafe")
-        payload = json.loads(proof_path.read_bytes())
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise AgentActivationError("cloud proof is unavailable") from exc
-    if not isinstance(payload, dict) or set(payload) != _CLOUD_PROOF_FIELDS \
-            or type(payload.get("schema_version")) is not int \
-            or payload.get("schema_version") != 1 \
-            or payload.get("cloud_schedule_paused") is not True \
-            or type(payload.get("active_cloud_executions")) is not int \
-            or payload.get("active_cloud_executions") != 0 \
-            or not isinstance(payload.get("checked_at"), str):
-        raise AgentActivationError("cloud proof is invalid")
-    try:
-        checked_at = datetime.fromisoformat(
-            payload["checked_at"].replace("Z", "+00:00")
-        )
-        checked_at = _utc(checked_at, field="cloud proof timestamp")
-        observed_at = _utc(clock(), field="clock")
-    except (ValueError, AgentActivationError) as exc:
-        raise AgentActivationError("cloud proof is invalid") from exc
-    age = (observed_at - checked_at).total_seconds()
-    if not -_CLOUD_PROOF_MAX_FUTURE_SKEW_SECONDS <= age \
-            <= _CLOUD_PROOF_MAX_AGE_SECONDS:
-        raise AgentActivationError("cloud proof is stale")
-    return CloudDrainProof(True, 0, checked_at)
 
 
 def probe_local_service_loaded(
@@ -156,13 +91,11 @@ def audit_external_effects_readiness(
     repository_root: Path,
     execution_root: Path,
     state_path: Path,
-    cloud_proof_path: Path,
     service_loaded: bool,
     expected_service_loaded: bool,
-    clock: Callable[[], datetime] = lambda: datetime.now(timezone.utc),
     disk_usage: Callable[[Path], object] = shutil.disk_usage,
 ) -> ActivationReadiness:
-    """Prove bounded local and cloud prerequisites without changing state."""
+    """Prove bounded local prerequisites without changing state."""
     if not isinstance(service_loaded, bool) \
             or not isinstance(expected_service_loaded, bool):
         raise AgentActivationError("local service state is invalid")
@@ -223,7 +156,6 @@ def audit_external_effects_readiness(
         raise AgentActivationError("execution-volume free space is unavailable") from exc
     if free_bytes < configuration.agent.minimum_free_bytes:
         raise AgentActivationError("execution-volume free space is insufficient")
-    cloud = read_cloud_drain_proof(Path(cloud_proof_path), clock=clock)
     return ActivationReadiness(
         ready=True,
         external_effects_enabled=False,
@@ -237,8 +169,6 @@ def audit_external_effects_readiness(
         recipient_count=len(secrets.email_to),
         disk_ready=True,
         agent_source_ready=True,
-        cloud_schedule_paused=cloud.schedule_paused,
-        active_cloud_executions=cloud.active_executions,
         service_loaded=service_loaded,
     )
 
@@ -257,8 +187,6 @@ def _readiness_payload(result: ActivationReadiness) -> dict[str, object]:
         "recipient_count": result.recipient_count,
         "disk_ready": result.disk_ready,
         "agent_source_ready": result.agent_source_ready,
-        "cloud_schedule_paused": result.cloud_schedule_paused,
-        "active_cloud_executions": result.active_cloud_executions,
         "service_loaded": result.service_loaded,
     }
 
@@ -268,7 +196,6 @@ def _common_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--repository-root", type=Path, required=True)
     parser.add_argument("--execution-root", type=Path, required=True)
     parser.add_argument("--state", type=Path, required=True)
-    parser.add_argument("--cloud-proof", type=Path, required=True)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -339,7 +266,6 @@ def main(argv: Sequence[str] | None = None) -> int:
                 repository_root=args.repository_root,
                 execution_root=args.execution_root,
                 state_path=args.state,
-                cloud_proof_path=args.cloud_proof,
                 service_loaded=loaded,
                 expected_service_loaded=expected_loaded,
             )

@@ -119,17 +119,16 @@ python -m automation.agent_canary --internal-root <private-root> \
 These examples document interfaces; they are not standing live authorization.
 One canary flag never authorizes either other adapter or automatic activation.
 
-External-effects control is a separate four-command boundary. The cloud proof
-is produced by an ignored host wrapper after querying the exact retained GCP
-resources; it contains only schema version, paused state, active execution
-count, and a UTC observation time. `audit` probes the fixed LaunchDaemon and is
-read-only:
+External-effects control is a separate four-command boundary. `audit` probes
+the fixed LaunchDaemon and is read-only (it used to also require a
+`--cloud-proof` file proving the retained Cloud Scheduler/Cloud Run rollback
+path was paused; that path and the proof requirement were both removed on
+2026-07-18 — see `docs/automation.md`'s "Retired cloud rollback path"):
 
 ```bash
 python -m automation.agent_activation audit \
   --internal-root <private-root> --repository-root <runtime> \
-  --execution-root <execution-root> --state <control-state> \
-  --cloud-proof <fresh-private-cloud-proof>
+  --execution-root <execution-root> --state <control-state>
 ```
 
 `rehearse-disabled`, `activate`, and `rollback` additionally require a stopped
@@ -184,8 +183,7 @@ Git identities stay in a private schema-1 baseline; the tracked command emits
 only booleans for branch, HEAD, status-digest, and remote-count matches. An
 ignored privileged host wrapper may inspect both differently owned canaries,
 then must install the generated proof as a mode-0600 file owned by the service
-role. The proof is valid for 15 minutes, like the separately generated cloud
-proof:
+role. The proof is valid for 15 minutes:
 
 ```bash
 python -m automation.agent_status canary-proof \
@@ -193,7 +191,6 @@ python -m automation.agent_status canary-proof \
 python -m automation.agent_status report \
   --internal-root <private-root> --repository-root <runtime> \
   --execution-root <execution-root> --state <control-state> \
-  --cloud-proof <fresh-private-cloud-proof> \
   --canary-proof <fresh-private-canary-proof>
 ```
 
