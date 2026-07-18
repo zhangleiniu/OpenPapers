@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
-from typing import Callable, Protocol, Sequence
+from typing import Callable, Mapping, Protocol, Sequence
 from zoneinfo import ZoneInfo
 
 from automation.configuration import load_venue_catalog
@@ -14,6 +14,7 @@ from automation.control_state import (
     EventDateScheduleError,
     EventDateScheduleRecord,
     ControlStateRepository,
+    LeaseHandle,
 )
 from automation.discovery import (
     DiscoveryError,
@@ -67,6 +68,7 @@ class EventDateInitializationOutcome:
     scheduled_count: int
     retry_count: int
     deferred_count: int
+    fallback_count: int = 0
 
 
 def _utc(value: datetime, *, field: str) -> datetime:
@@ -86,6 +88,65 @@ def _check_time(event_date: date, observed_at: datetime) -> datetime:
         tzinfo=DEFAULT_EVENT_CHECK_TIMEZONE,
     ).astimezone(timezone.utc)
     return max(local, observed_at)
+
+
+def _fallback_interval(catalog: Mapping[str, object], venue_id: str) -> int:
+    venue = next(
+        (item for item in catalog["venues"] if item["venue_id"] == venue_id),
+        None,
+    )
+    if venue is None:
+        return 1
+    return venue["lifecycle"].get("interval_years") or 1
+
+
+def _calendar_fallback_date(
+    repository: ControlStateRepository, venue_id: str, year: int, interval: int,
+) -> date | None:
+    """Reuse the prior confirmed date, shifted forward by the venue's cadence.
+
+    Returns None when there is no prior confirmed estimate to shift from
+    (e.g. the venue/year has no history) — the caller keeps retrying
+    discovery with no fallback in that case, exactly as before this existed.
+    """
+    prior = repository.get_event_date_schedule(venue_id, year - interval)
+    if prior is None or prior.estimated_event_date is None:
+        return None
+    prior_date = date.fromisoformat(prior.estimated_event_date)
+    try:
+        return prior_date.replace(year=prior_date.year + interval)
+    except ValueError:
+        # Feb 29 landing on a non-leap fallback year.
+        return prior_date.replace(year=prior_date.year + interval, day=28)
+
+
+def _ensure_fallback_schedule(
+    repository: ControlStateRepository,
+    catalog: Mapping[str, object],
+    record: EventDateScheduleRecord,
+    now: datetime,
+    lease: LeaseHandle,
+) -> bool:
+    """Give a venue/year a real coding-agent schedule despite a failed
+    lookup, so it never sits without a next attempt purely because Gemini
+    hasn't found (or currently can't find) a date. This never touches
+    ``event_date_schedule`` itself — that record honestly stays 'pending'
+    and keeps retrying discovery on its own schedule; only a best-effort
+    ``agent_schedule`` row is added, keyed off a calendar-projected date.
+    """
+    interval = _fallback_interval(catalog, record.venue_id)
+    fallback = _calendar_fallback_date(
+        repository, record.venue_id, record.year, interval
+    )
+    if fallback is None:
+        return False
+    repository.ensure_scheduled_agent_target(
+        record.venue_id, record.year,
+        next_check_at=_check_time(fallback, now),
+        registered_at=now,
+        lease=lease,
+    )
+    return True
 
 
 def _validate_estimate(estimate: EventDateEstimate) -> None:
@@ -150,6 +211,7 @@ def initialize_event_dates(
     scheduled_count = 0
     retry_count = 0
     deferred_count = 0
+    fallback_count = 0
     frozen_clock = lambda: now
     with ControlStateRepository(
         Path(state_path),
@@ -240,6 +302,9 @@ def initialize_event_dates(
                         lease=lease,
                     )
                     retry_count += 1
+                    fallback_count += int(_ensure_fallback_schedule(
+                        repository, catalog, record, now, lease
+                    ))
                     continue
                 _validate_estimate(estimate)
                 if estimate.event_date is None:
@@ -251,6 +316,9 @@ def initialize_event_dates(
                         lease=lease,
                     )
                     retry_count += 1
+                    fallback_count += int(_ensure_fallback_schedule(
+                        repository, catalog, record, now, lease
+                    ))
                     continue
                 repository.complete_event_date_success(
                     claim,
@@ -277,4 +345,5 @@ def initialize_event_dates(
         scheduled_count=scheduled_count,
         retry_count=retry_count,
         deferred_count=deferred_count,
+        fallback_count=fallback_count,
     )

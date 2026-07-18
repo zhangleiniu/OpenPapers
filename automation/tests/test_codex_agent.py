@@ -179,6 +179,52 @@ class CodexAgentTests(unittest.TestCase):
                 self.assertEqual(outcome.result.failure_category, category)
                 self.assertTrue(outcome.worktree_path.exists())
 
+    def test_continuous_venue_success_never_terminates_and_prompt_explains_it(self):
+        continuous_state = self.root / "continuous.sqlite3"
+        with ControlStateRepository(
+            continuous_state, writer=Writer.LOCAL_CONTROL_PLANE, clock=lambda: NOW,
+        ) as repository:
+            lease = repository.acquire_lease("fixture-continuous")
+            try:
+                repository.register_continuous_event_date(
+                    "jmlr", 2026, registered_at=NOW, lease=lease,
+                )
+                repository.ensure_scheduled_agent_target(
+                    "jmlr", 2026, next_check_at=NOW, registered_at=NOW,
+                    lease=lease,
+                )
+            finally:
+                repository.release_lease(lease)
+        claim = claim_due_agent_run(continuous_state, clock=lambda: NOW).claim
+        invoker = FakeInvoker()
+
+        outcome = run_claimed_codex_agent(
+            continuous_state, self.repo, self.root / "continuous-runs", claim,
+            clock=lambda: NOW, invoker=invoker,
+        )
+
+        self.assertEqual(outcome.result.disposition, "success")
+        prompt = invoker.invocation.argv[-1]
+        self.assertIn("publishes continuously", prompt)
+        self.assertIn("permanently done", prompt)
+        with ControlStateRepository(
+            continuous_state, writer=Writer.LOCAL_CONTROL_PLANE,
+            clock=lambda: NOW,
+        ) as repository:
+            schedule = repository.get_agent_schedule("jmlr", 2026)
+        self.assertEqual(schedule.status, "scheduled")
+        self.assertIsNotNone(schedule.next_check_at)
+        self.assertEqual(schedule.last_disposition, "success")
+
+    def test_non_continuous_prompt_has_no_continuous_note(self):
+        invoker = FakeInvoker()
+        run_claimed_codex_agent(
+            self.state, self.repo, self.root / "runs", self.claim,
+            clock=lambda: NOW, invoker=invoker,
+        )
+        prompt = invoker.invocation.argv[-1]
+        self.assertNotIn("publishes continuously", prompt)
+
 
 if __name__ == "__main__":
     unittest.main()

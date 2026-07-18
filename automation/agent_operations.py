@@ -157,6 +157,7 @@ def mark_schedule_completed(
     *,
     event_date: str | None = None,
     apply: bool = False,
+    chain_next_year_interval: int | None = None,
     clock: Callable[[], datetime] = _now,
 ) -> dict[str, Any]:
     """Mark one venue/year completed because its canonical scrape exists.
@@ -169,11 +170,28 @@ def mark_schedule_completed(
     ``event_date`` (the approximate first day, operator-attested) so its
     date stage can be closed with explicit ``provider='operator'``
     provenance and a completed agent schedule inserted. Live rows refuse.
+
+    ``chain_next_year_interval``, when given, also registers
+    ``(venue_id, year + chain_next_year_interval)`` for date discovery under
+    the same lease right after completion — the operator's equivalent of
+    the successor chaining an automatic ``success`` disposition triggers
+    (see ``agent_production.AgentProductionEffect._chain_successor``). Pass
+    the venue's real cadence (1 for an annual venue, 2 for ICCV/ECCV); leave
+    it ``None`` for a venue with no reliable interval (e.g. NAACL) so no
+    successor is guessed.
     """
     if event_date is not None:
         canonical = date.fromisoformat(event_date).isoformat()
         if canonical != event_date:
             raise AgentOperationError("event date must be a canonical ISO date")
+    if chain_next_year_interval is not None and (
+        not isinstance(chain_next_year_interval, int)
+        or isinstance(chain_next_year_interval, bool)
+        or chain_next_year_interval < 1
+    ):
+        raise AgentOperationError(
+            "chain_next_year_interval must be a positive integer"
+        )
     now = clock()
     now_text = _utc_text(now)
     with ControlStateRepository(
@@ -215,6 +233,8 @@ def mark_schedule_completed(
             else "complete_agent_schedule",
             "applied": apply,
         }
+        if chain_next_year_interval is not None:
+            summary["chain_successor_year"] = year + chain_next_year_interval
         if not apply:
             return summary
         lease = repository.acquire_lease(_LEASE_OWNER)
@@ -256,6 +276,18 @@ def mark_schedule_completed(
                         raise AgentOperationError(
                             f"{venue_id}/{year} changed state mid-flight"
                         )
+            # A separate transaction, still under the same lease: SQLite has
+            # no nested transactions, so this cannot join the completion
+            # write above atomically. If the process dies in between, the
+            # completion is already durable (a rerun reports
+            # already="completed") and the successor is simply not yet
+            # registered — recoverable by rerunning this command or by the
+            # calendar-rollover safety net in agent_production.py.
+            if chain_next_year_interval is not None:
+                repository.register_event_date_target(
+                    venue_id, year + chain_next_year_interval,
+                    registered_at=now, lease=lease,
+                )
         finally:
             repository.release_lease(lease)
         # Re-read through the validating reader so a constraint this command
@@ -386,6 +418,12 @@ def main(argv: list[str] | None = None) -> int:
     completed.add_argument("--venue", required=True)
     completed.add_argument("--year", required=True, type=int)
     completed.add_argument("--event-date")
+    completed.add_argument(
+        "--chain-next-year-interval", type=int, default=None,
+        help="also register venue/(year + N) for date discovery, e.g. 1 "
+        "for an annual venue or 2 for ICCV/ECCV; omit for a venue with no "
+        "reliable interval (e.g. NAACL)",
+    )
     completed.add_argument("--apply", action="store_true")
 
     default_repository = Path(__file__).resolve().parents[1]
@@ -409,6 +447,7 @@ def main(argv: list[str] | None = None) -> int:
             summary = mark_schedule_completed(
                 args.state, args.venue, args.year,
                 event_date=args.event_date, apply=args.apply,
+                chain_next_year_interval=args.chain_next_year_interval,
             )
         elif args.command == "update-monitor-config":
             os.chdir(args.repository_root)

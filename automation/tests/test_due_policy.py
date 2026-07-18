@@ -55,6 +55,27 @@ def seed(path, targets, *, clock=None, event_date=NOW.date()):
     )
 
 
+def seed_continuous(path, venue_id, year, *, clock=None):
+    """Seed a continuous-lifecycle venue the way it's actually registered in
+    production: register_continuous_event_date + ensure_scheduled_agent_target,
+    never event-date discovery (there is no date to discover)."""
+    resolved_clock = clock or MutableClock()
+    now = resolved_clock()
+    with ControlStateRepository(
+        path, writer=Writer.LOCAL_CONTROL_PLANE, clock=resolved_clock,
+    ) as repository:
+        lease = repository.acquire_lease("fixture-continuous")
+        try:
+            repository.register_continuous_event_date(
+                venue_id, year, registered_at=now, lease=lease,
+            )
+            repository.ensure_scheduled_agent_target(
+                venue_id, year, next_check_at=now, registered_at=now, lease=lease,
+            )
+        finally:
+            repository.release_lease(lease)
+
+
 class DueStatePolicyTests(unittest.TestCase):
     def test_predate_wakeup_is_idle_and_due_claim_has_global_exclusion(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -104,6 +125,63 @@ class DueStatePolicyTests(unittest.TestCase):
                     claim_due_agent_run(path, clock=clock).reason,
                     "nothing_due",
                 )
+
+    def test_continuous_venue_success_recurs_instead_of_terminating(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "state.sqlite3"
+            clock = MutableClock()
+            seed_continuous(path, "jmlr", 2026, clock=clock)
+
+            claim = claim_due_agent_run(path, clock=clock).claim
+            first = complete_agent_run(
+                path, claim, AgentRunResult("success", "New papers scraped."),
+                clock=clock, is_continuous=True,
+            )
+            self.assertEqual(first.status, "scheduled")
+            self.assertEqual(first.last_disposition, "success")
+            self.assertEqual(first.next_check_at, "2026-08-14T14:00:00Z")
+
+            # It really recurs: advance past the recheck time, claim again,
+            # and confirm success never reaches a terminal 'completed' state.
+            clock.value = NOW + timedelta(days=31)
+            second_claim = claim_due_agent_run(path, clock=clock).claim
+            self.assertIsNotNone(second_claim)
+            second = complete_agent_run(
+                path, second_claim, AgentRunResult("success", "Checked again."),
+                clock=clock, is_continuous=True,
+            )
+            self.assertEqual(second.status, "scheduled")
+            self.assertIsNotNone(second.next_check_at)
+
+    def test_continuous_venue_not_ready_and_failed_behave_normally(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "state.sqlite3"
+            clock = MutableClock()
+            seed_continuous(path, "jmlr", 2026, clock=clock)
+            claim = claim_due_agent_run(path, clock=clock).claim
+
+            record = complete_agent_run(
+                path, claim, AgentRunResult("not_ready", "Nothing new yet."),
+                clock=clock, is_continuous=True,
+            )
+
+            self.assertEqual(record.status, "scheduled")
+            self.assertEqual(record.last_disposition, "not_ready")
+
+    def test_non_continuous_success_is_unaffected_by_the_new_parameter(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "state.sqlite3"
+            clock = MutableClock()
+            seed(path, (("icml", 2026),), clock=clock)
+            claim = claim_due_agent_run(path, clock=clock).claim
+
+            record = complete_agent_run(
+                path, claim, AgentRunResult("success", "Fixture outcome."),
+                clock=clock,
+            )
+
+            self.assertEqual(record.status, "completed")
+            self.assertIsNone(record.next_check_at)
 
     def test_not_ready_uses_bounded_suggestion_then_default(self):
         with tempfile.TemporaryDirectory() as directory:

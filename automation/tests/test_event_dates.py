@@ -214,6 +214,58 @@ class EventDateInitializationTests(unittest.TestCase):
                 )
             self.assertEqual(provider.calls, [])
 
+    def test_missing_date_falls_back_to_the_prior_confirmed_cycle(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "state.sqlite3"
+            clock = MutableClock()
+            initialize_event_dates(
+                path, (EventDateTarget("icml", 2025),),
+                FakeProvider(date(2025, 7, 13)), clock=clock,
+            )
+
+            outcome = initialize_event_dates(
+                path, (EventDateTarget("icml", 2026),),
+                FakeProvider(None), clock=clock,
+            )
+
+            self.assertEqual(outcome.retry_count, 1)
+            self.assertEqual(outcome.fallback_count, 1)
+            icml_2026 = next(
+                record for record in outcome.records
+                if record.venue_id == "icml" and record.year == 2026
+            )
+            # The date-discovery record itself stays honestly pending —
+            # Gemini genuinely hasn't found a date — and keeps its own
+            # 30-day retry cadence; only a coding-agent schedule gets the
+            # calendar-projected fallback.
+            self.assertEqual(icml_2026.status, "pending")
+            self.assertEqual(icml_2026.last_failure_category, "date_not_found")
+
+            with ControlStateRepository(
+                path, writer=Writer.LOCAL_CONTROL_PLANE, clock=clock,
+            ) as repository:
+                schedule = repository.get_agent_schedule("icml", 2026)
+            self.assertIsNotNone(schedule)
+            self.assertEqual(schedule.status, "scheduled")
+            # Same month/day as 2025's confirmed date, one cycle forward, at
+            # the standard 08:00 America/Chicago check hour.
+            self.assertEqual(schedule.next_check_at, "2026-07-13T13:00:00Z")
+
+    def test_no_fallback_without_a_prior_confirmed_cycle(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "state.sqlite3"
+
+            outcome = initialize_event_dates(
+                path, (EventDateTarget("icml", 2026),),
+                FakeProvider(None), clock=MutableClock(),
+            )
+
+            self.assertEqual(outcome.fallback_count, 0)
+            with ControlStateRepository(
+                path, writer=Writer.LOCAL_CONTROL_PLANE, clock=MutableClock(),
+            ) as repository:
+                self.assertIsNone(repository.get_agent_schedule("icml", 2026))
+
 
 if __name__ == "__main__":
     unittest.main()

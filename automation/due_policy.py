@@ -38,6 +38,12 @@ class DuePolicy:
     systemic_failure_threshold: int = 3
     systemic_failure_window: timedelta = timedelta(hours=24)
     systemic_circuit_delay: timedelta = timedelta(hours=24)
+    # How soon a continuous-lifecycle venue (e.g. a journal with no discrete
+    # edition) is rechecked after a successful scrape. Unlike every other
+    # delay here this follows a `success`, not a retry: the venue is never
+    # "done", so success must still schedule a future check instead of
+    # terminating.
+    recurring_recheck_interval: timedelta = timedelta(days=30)
 
     def __post_init__(self) -> None:
         for value, field in (
@@ -46,6 +52,7 @@ class DuePolicy:
             (self.max_suggested_retry_delay, "max_suggested_retry_delay"),
             (self.systemic_failure_window, "systemic_failure_window"),
             (self.systemic_circuit_delay, "systemic_circuit_delay"),
+            (self.recurring_recheck_interval, "recurring_recheck_interval"),
         ):
             if not isinstance(value, timedelta) or value <= timedelta(0):
                 raise ValueError(f"{field} must be positive")
@@ -137,8 +144,16 @@ def complete_agent_run(
     changed_files: tuple[str, ...] | None = None,
     returncode: int | None = None,
     timed_out: bool = False,
+    is_continuous: bool = False,
 ) -> AgentScheduleRecord:
-    """Apply one future coding-agent result to its durable schedule."""
+    """Apply one future coding-agent result to its durable schedule.
+
+    ``is_continuous`` marks a venue with no discrete edition (e.g. a
+    journal): a `success` there schedules the next recheck
+    (``policy.recurring_recheck_interval`` out) instead of terminating the
+    schedule — the venue is never "done". Every other disposition behaves
+    identically regardless of ``is_continuous``.
+    """
     if not isinstance(policy, DuePolicy):
         raise ValueError("policy must be a DuePolicy")
     if not isinstance(result, AgentRunResult):
@@ -167,6 +182,7 @@ def complete_agent_run(
             next_check_at = None
             retained_suggestion = None
             pause_after_failure = False
+            recurring = False
             if result.disposition == "not_ready":
                 if (
                     suggested is not None
@@ -185,6 +201,9 @@ def complete_agent_run(
                 if not pause_after_failure:
                     index = min(failure_number, len(policy.failure_backoff)) - 1
                     next_check_at = now + policy.failure_backoff[index]
+            elif result.disposition == "success" and is_continuous:
+                recurring = True
+                next_check_at = now + policy.recurring_recheck_interval
             return repository.complete_agent_run_attempt(
                 claim,
                 disposition=result.disposition,
@@ -198,6 +217,7 @@ def complete_agent_run(
                 changed_files=changed_files,
                 returncode=returncode,
                 timed_out=timed_out,
+                recurring=recurring,
             )
         finally:
             repository.release_lease(lease)

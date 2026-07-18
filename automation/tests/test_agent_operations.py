@@ -153,6 +153,56 @@ class ScheduleOperationTests(unittest.TestCase):
         with self.assertRaisesRegex(AgentOperationError, "not a registered"):
             mark_schedule_completed(self.state, "uai", 2026, apply=True)
 
+    def test_mark_completed_can_chain_the_successor_year(self):
+        with self._repository() as repository:
+            lease = repository.acquire_lease("event-date-initializer")
+            claim = self._claim(repository, lease)
+            repository.complete_event_date_success(
+                claim, estimated_event_date="2026-07-01", estimated_at=NOW,
+                next_check_at=NOW + timedelta(days=3), lease=lease,
+            )
+            repository.release_lease(lease)
+
+        dry = mark_schedule_completed(
+            self.state, "icml", 2026, apply=False,
+            chain_next_year_interval=1, clock=lambda: NOW,
+        )
+        self.assertEqual(dry["chain_successor_year"], 2027)
+        with self._repository() as repository:
+            self.assertIsNone(repository.get_event_date_schedule("icml", 2027))
+
+        applied = mark_schedule_completed(
+            self.state, "icml", 2026, apply=True,
+            chain_next_year_interval=1, clock=lambda: NOW,
+        )
+        self.assertEqual(applied["status"], "completed")
+        with self._repository() as repository:
+            self.assertIsNotNone(repository.get_event_date_schedule("icml", 2027))
+
+    def test_mark_completed_without_interval_does_not_chain(self):
+        with self._repository() as repository:
+            lease = repository.acquire_lease("event-date-initializer")
+            claim = self._claim(repository, lease)
+            repository.complete_event_date_success(
+                claim, estimated_event_date="2026-07-01", estimated_at=NOW,
+                next_check_at=NOW + timedelta(days=3), lease=lease,
+            )
+            repository.release_lease(lease)
+
+        summary = mark_schedule_completed(
+            self.state, "icml", 2026, apply=True, clock=lambda: NOW,
+        )
+        self.assertNotIn("chain_successor_year", summary)
+        with self._repository() as repository:
+            self.assertIsNone(repository.get_event_date_schedule("icml", 2027))
+
+    def test_mark_completed_rejects_a_non_positive_interval(self):
+        with self.assertRaisesRegex(AgentOperationError, "positive integer"):
+            mark_schedule_completed(
+                self.state, "icml", 2026, apply=True,
+                chain_next_year_interval=0,
+            )
+
 
 class MonitorConfigurationOperationTests(unittest.TestCase):
     def setUp(self):

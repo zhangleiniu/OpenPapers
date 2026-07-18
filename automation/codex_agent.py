@@ -89,8 +89,7 @@ class CodexExecutionOutcome:
     timed_out: bool
 
 
-def _network_arguments(venue_id: str) -> tuple[str, ...]:
-    """Return a workspace-sandbox network allowlist for one catalog venue."""
+def _catalog_venue(venue_id: str) -> Mapping[str, object]:
     catalog = load_venue_catalog()
     venue = next(
         (item for item in catalog["venues"] if item["venue_id"] == venue_id),
@@ -98,6 +97,12 @@ def _network_arguments(venue_id: str) -> tuple[str, ...]:
     )
     if venue is None:
         raise ValueError("agent venue is not in the catalog")
+    return venue
+
+
+def _network_arguments(venue_id: str) -> tuple[str, ...]:
+    """Return a workspace-sandbox network allowlist for one catalog venue."""
+    venue = _catalog_venue(venue_id)
     domains = sorted(set(venue["official_domains"] + venue["archival_domains"]))
     rules = ", ".join(f'"{domain}"="allow"' for domain in domains)
     return (
@@ -105,6 +110,10 @@ def _network_arguments(venue_id: str) -> tuple[str, ...]:
         "--config", "features.network_proxy.enabled=true",
         "--config", f"features.network_proxy.domains={{ {rules} }}",
     )
+
+
+def _is_continuous(venue_id: str) -> bool:
+    return _catalog_venue(venue_id)["lifecycle"]["kind"] == "continuous"
 
 
 def _git(root: Path, *args: str) -> str:
@@ -116,12 +125,20 @@ def _git(root: Path, *args: str) -> str:
     return completed.stdout.strip()
 
 
-def _prompt(claim: AgentRunClaim, policy: DuePolicy) -> str:
+def _prompt(claim: AgentRunClaim, policy: DuePolicy, *, is_continuous: bool) -> str:
     started = datetime.fromisoformat(claim.started_at.replace("Z", "+00:00"))
     earliest = (started + policy.minimum_retry_delay).astimezone(timezone.utc)
     latest = (started + policy.max_suggested_retry_delay).astimezone(timezone.utc)
     earliest_text = earliest.isoformat().replace("+00:00", "Z")
     latest_text = latest.isoformat().replace("+00:00", "Z")
+    continuous_note = ""
+    if is_continuous:
+        continuous_note = f"""
+{claim.venue_id} publishes continuously with no discrete edition: success means
+this check's scrape is complete and up to date as of now, not that the venue is
+permanently done. Expect to be invoked again later ({policy.recurring_recheck_interval}
+after this success) to pick up newly published items since this check.
+"""
     return f"""Handle {claim.venue_id} {claim.year} for OpenPapers.
 Decide whether the canonical papers and PDFs are now downloadable. Investigate
 the web and repository, reuse or repair the scraper, run the scrape and required
@@ -130,6 +147,7 @@ commit, push, merge, deploy, edit Git metadata, or modify another checkout.
 Return only the required structured result. Use success only after scrape and
 validation complete; not_ready for unpublished data; needs_human for policy or
 access ambiguity; failed for operational or code failure.
+{continuous_note}
 
 For not_ready, investigate the most relevant next publication signal and set
 suggested_retry_at to a concrete UTC timestamp between {earliest_text} and
@@ -223,6 +241,7 @@ def run_claimed_codex_agent(
             )
         finally:
             repository.release_lease(lease)
+    is_continuous = _is_continuous(claim.venue_id)
     invocation = CodexInvocation(
         (
             config.codex_binary, "--ask-for-approval", "never", "exec",
@@ -230,7 +249,8 @@ def run_claimed_codex_agent(
             "--sandbox", "workspace-write", "--cd", str(worktree),
             "--config", 'mcp_servers={}', "--config", 'web_search="cached"',
             *_network_arguments(claim.venue_id),
-            "--output-schema", str(RESULT_SCHEMA), _prompt(claim, policy),
+            "--output-schema", str(RESULT_SCHEMA),
+            _prompt(claim, policy, is_continuous=is_continuous),
         ),
         worktree,
         config.timeout_seconds,
@@ -271,5 +291,6 @@ def run_claimed_codex_agent(
     complete_agent_run(
         state_path, claim, result, clock=clock, policy=policy,
         changed_files=changed, returncode=returncode, timed_out=timed_out,
+        is_continuous=is_continuous,
     )
     return CodexExecutionOutcome(result, worktree, branch, primary_head, changed, returncode, timed_out)

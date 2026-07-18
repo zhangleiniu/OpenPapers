@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import html
 import json
+import math
 import os
 import stat
 from datetime import date, datetime, timezone
@@ -32,7 +33,16 @@ _BIND = "127.0.0.1"
 _MAX_TARGETS = 100
 _DEFAULT_TIMEZONE = "America/Chicago"
 _ACTIVE_PHASES = frozenset({"Agent running", "Date lookup running"})
-_ATTENTION_PHASES = frozenset({"Needs human", "Paused"})
+# "Data inconsistency" is grouped with the other attention phases for
+# progress/sort purposes (it should stand out, not blend into the ordinary
+# lifecycle words) but is rendered with its own anomaly styling — see
+# _status_view/_status_cell. It should be structurally unreachable for new
+# data (complete_event_date_success inserts the matching agent_schedule row
+# atomically); if it ever appears, it means an event-date row resolved
+# without its agent_schedule counterpart, most likely legacy data from
+# before that atomic insert existed.
+_ATTENTION_PHASES = frozenset({"Needs human", "Paused", "Data inconsistency"})
+_ANOMALY_PHASES = frozenset({"Data inconsistency"})
 _PROGRESS_COLORS = {
     "active": "#a78bfa",
     "due": "#fb923c",
@@ -161,8 +171,15 @@ def _resolve_editions(
 
     Curated (web-verified) entries win over the control state's estimates
     for the same year. When no future edition is known, approximate one
-    from the last edition plus the venue's cadence, month precision only.
+    from the last edition plus the venue's cadence, month precision only —
+    except for a continuous-lifecycle venue (e.g. a journal), which has no
+    discrete "next edition" to project at all: its ``db_dates`` are never
+    passed in (see build_dashboard_model) since they are a registration-time
+    placeholder, not a real date, and no cadence approximation is invented
+    for it either. Its real schedule is ``current_target.next_attempt_at``,
+    rendered separately by the caller.
     """
+    is_continuous = lifecycle.get("kind") == "continuous"
     merged: dict[int, dict[str, Any]] = {}
     for year, iso in db_dates.items():
         merged[year] = {
@@ -182,7 +199,7 @@ def _resolve_editions(
             last = item
         elif next_edition is None:
             next_edition = item
-    if next_edition is None and last is not None:
+    if next_edition is None and last is not None and not is_continuous:
         interval = lifecycle.get("interval_years") or 1
         approx_year = last["year"] + interval
         next_edition = {
@@ -201,7 +218,8 @@ def _edition_view(
 ) -> dict[str, Any] | None:
     if edition is None:
         return None
-    name = edition["label"] or f"{venue_id.upper()} {edition['year']}"
+    label = edition["label"]
+    name = label or f"{venue_id.upper()} {edition['year']}"
     start = edition["start_date"]
     return {
         "name": name,
@@ -209,6 +227,10 @@ def _edition_view(
         else start.isoformat(),
         "iso_date": start.isoformat(),
         "approx": bool(edition["approx"]),
+        # None when `name` above is a synthesized "VENUE YEAR" placeholder;
+        # set only for a real curated label (e.g. JMLR's "v27") that still
+        # carries information once the venue name is dropped from the cell.
+        "curated_label": label,
     }
 
 
@@ -232,7 +254,10 @@ def _target_phase(target: Mapping[str, object]) -> str:
         labels = {
             "pending": "Waiting for date",
             "active": "Date lookup running",
-            "scheduled": "Waiting for agent schedule",
+            # complete_event_date_success inserts the agent_schedule row in
+            # the same transaction as this status flip, so a target should
+            # never actually be observed sitting here — see _ANOMALY_PHASES.
+            "scheduled": "Data inconsistency",
         }
         if status not in labels:
             raise AgentDashboardError("dashboard date status is invalid")
@@ -265,6 +290,35 @@ def _remaining_label(next_attempt: datetime, observed_at: datetime) -> tuple[str
     return text, "far"
 
 
+# Bar-fill breakpoints, in days-until-due. A pure linear scale over a single
+# window makes anything past that window look identically "full" (a check
+# 31 days out and one 300 days out both read as maxed); this piecewise scale
+# keeps the near term (where the exact wait matters most) roughly linear and
+# compresses the long tail logarithmically so far-out rows still shrink
+# visibly relative to each other instead of clipping to the same length.
+_BAR_NEAR_DAYS = 7.0
+_BAR_MID_DAYS = 30.0
+_BAR_FAR_DAYS = 365.0
+_BAR_NEAR_FRACTION = 0.4
+_BAR_MID_FRACTION = 0.7
+
+
+def _progress_fraction(remaining_seconds: float) -> float:
+    """Map remaining time to a [0, 1] bar fraction with whole-horizon resolution."""
+    days = remaining_seconds / 86400.0
+    if days <= 0:
+        return 0.0
+    if days <= _BAR_NEAR_DAYS:
+        return (days / _BAR_NEAR_DAYS) * _BAR_NEAR_FRACTION
+    if days <= _BAR_MID_DAYS:
+        span = (days - _BAR_NEAR_DAYS) / (_BAR_MID_DAYS - _BAR_NEAR_DAYS)
+        return _BAR_NEAR_FRACTION + span * (_BAR_MID_FRACTION - _BAR_NEAR_FRACTION)
+    if days >= _BAR_FAR_DAYS:
+        return 1.0
+    span = math.log(days / _BAR_MID_DAYS) / math.log(_BAR_FAR_DAYS / _BAR_MID_DAYS)
+    return _BAR_MID_FRACTION + span * (1.0 - _BAR_MID_FRACTION)
+
+
 def _cycle_progress(
     current_target: Mapping[str, object] | None,
     next_edition: Mapping[str, Any] | None,
@@ -275,8 +329,8 @@ def _cycle_progress(
     Rows with a scheduled next attempt count down to it. Rows whose current
     collection finished (or that are not enrolled yet) count down to the
     next expected edition instead — the cycle never dead-ends. Active and
-    needs-attention states keep fixed colors. ``fraction`` is the remaining
-    time on a 30-day scale (full = a month or more away, empty = due now).
+    needs-attention states keep fixed colors. ``fraction`` comes from
+    ``_progress_fraction`` (full = far away, empty = due now).
     """
     phase = str(current_target["phase"]) if current_target else None
     if phase in _ACTIVE_PHASES:
@@ -291,7 +345,7 @@ def _cycle_progress(
         text, category = _remaining_label(end, observed_at)
         remaining = (end - observed_at).total_seconds()
         return {
-            "fraction": max(0.0, min(1.0, remaining / (30 * 86400))),
+            "fraction": _progress_fraction(remaining),
             "category": category,
             "label": text,
         }
@@ -303,9 +357,7 @@ def _cycle_progress(
         ).astimezone(timezone.utc)
         text, category = _remaining_label(end, observed_at)
         return {
-            "fraction": max(
-                0.0, min(1.0, (end - observed_at).total_seconds() / (30 * 86400))
-            ),
+            "fraction": _progress_fraction((end - observed_at).total_seconds()),
             "category": category,
             "label": f"next: {next_edition['name']}",
         }
@@ -313,9 +365,19 @@ def _cycle_progress(
 
 
 def _status_view(current_target: Mapping[str, object] | None) -> dict[str, Any]:
-    """Merge phase, last disposition, and report-delivery health."""
+    """Split phase (primary) from historical disposition (secondary).
+
+    The two used to be fused into one string ("Scheduled · not_ready"),
+    which read as a single new status rather than "scheduled, and here's
+    what happened last time" — a phase word is always one of the fixed
+    lifecycle labels; disposition is just context. The year is included so
+    a row's status is never ambiguous about which year it describes.
+    """
     if current_target is None:
-        return {"text": "Not enrolled", "warning": None}
+        return {
+            "phase": "Not enrolled", "year": None, "disposition": None,
+            "warning": None, "anomaly": False,
+        }
     phase = str(current_target["phase"])
     disposition = current_target.get("last_disposition")
     if phase == "Collected":
@@ -323,12 +385,17 @@ def _status_view(current_target: Mapping[str, object] | None) -> dict[str, Any]:
         # A prior failed run remains in history but must not contradict the
         # terminal schedule in the dashboard's single-line summary.
         disposition = None
-    text = phase if disposition is None else f"{phase} · {disposition}"
     report_status = current_target.get("report_status")
     warning = None
     if report_status in {"retryable", "permanent_failure"}:
         warning = f"report delivery {report_status}"
-    return {"text": text, "warning": warning}
+    return {
+        "phase": phase,
+        "year": int(current_target["year"]),
+        "disposition": disposition,
+        "warning": warning,
+        "anomaly": phase in _ANOMALY_PHASES,
+    }
 
 
 def _current_target_priority(target: Mapping[str, object]) -> tuple[int, str, int]:
@@ -424,7 +491,12 @@ def build_dashboard_model(
             if not isinstance(estimated, str):
                 raise AgentDashboardError("dashboard event date is invalid")
             date.fromisoformat(estimated)
-            by_id[str(venue_id)]["db_dates"][year] = estimated
+            # A continuous venue's "estimated_event_date" is a registration-
+            # time placeholder (see control_state.register_continuous_event_
+            # date), never a real edition date — never feed it into the
+            # last/next edition calculation.
+            if by_id[str(venue_id)]["lifecycle_kind"] != "continuous":
+                by_id[str(venue_id)]["db_dates"][year] = estimated
         last_updated = _latest_timestamp(
             event_date.get("updated_at") if isinstance(event_date, Mapping) else None,
             agent.get("updated_at") if isinstance(agent, Mapping) else None,
@@ -515,12 +587,35 @@ def _attempt_cell(value_iso: object) -> str:
     return f'<td><span data-utc="{utc}">{text}</span></td>'
 
 
+# A small fixed palette so the same year always renders in the same color
+# (across every row and both the Last/Next edition columns) and adjacent
+# different years stay visually distinct.
+_YEAR_PALETTE = (
+    "#5eead4", "#93c5fd", "#c4b5fd", "#fca5a5",
+    "#fcd34d", "#86efac", "#f0abfc", "#fdba74",
+)
+
+
+def _year_color(year: int) -> str:
+    return _YEAR_PALETTE[year % len(_YEAR_PALETTE)]
+
+
 def _edition_cell(edition: object) -> str:
     if not isinstance(edition, Mapping):
         return "<td>—</td>"
-    name = html.escape(str(edition["name"]))
-    when = html.escape(str(edition["date"]))
-    return f'<td><span class="edition-name">{name}</span> · {when}</td>'
+    date_text = str(edition["date"])
+    approx = date_text.startswith("~")
+    body = date_text[1:] if approx else date_text
+    year_text, _, rest = body.partition("-")
+    color = _year_color(int(year_text))
+    year_html = html.escape(("~" if approx else "") + year_text)
+    cell = f'<span class="edition-year" style="color:{color};">{year_html}</span>'
+    if rest:
+        cell += f" · {html.escape(rest)}"
+    label = edition.get("curated_label")
+    if label:
+        cell += f' <span class="edition-label">({html.escape(str(label))})</span>'
+    return f"<td>{cell}</td>"
 
 
 def _progress_cell(progress: Mapping[str, object]) -> str:
@@ -541,6 +636,38 @@ def _progress_cell(progress: Mapping[str, object]) -> str:
         f"{html.escape(str(progress.get('label') or '')) or '&#8212;'}</div>"
     )
     return f"<td>{bar}{label}</td>"
+
+
+def _status_cell(status: Mapping[str, object]) -> str:
+    phase = html.escape(str(status.get("phase", "")))
+    year = status.get("year")
+    anomaly = bool(status.get("anomaly"))
+    primary = f'<span class="{"status-anomaly" if anomaly else "status-phase"}">{phase}</span>'
+    if year is not None:
+        primary = (
+            f'<span class="status-year">{html.escape(str(int(year)))}</span> '
+            f"· {primary}"
+        )
+    if anomaly:
+        primary += (
+            ' <span class="badge-warn" title="Data inconsistency: an event '
+            'date resolved without an agent schedule — needs operator '
+            'review">&#9888;</span>'
+        )
+    warning = status.get("warning")
+    if warning:
+        primary += (
+            ' <span class="badge-warn" '
+            f'title="{html.escape(str(warning), quote=True)}">&#9993;</span>'
+        )
+    cell = primary
+    disposition = status.get("disposition")
+    if disposition:
+        cell += (
+            '<div class="status-disposition">last try: '
+            f'{html.escape(str(disposition))}</div>'
+        )
+    return f"<td>{cell}</td>"
 
 
 def render_dashboard(model: Mapping[str, object]) -> str:
@@ -566,13 +693,6 @@ def render_dashboard(model: Mapping[str, object]) -> str:
             'title="No deterministic monitor source configured">&#9888;</span>'
             if venue.get("source_monitor") == "Not configured" else ""
         )
-        warning = status.get("warning")
-        status_html = html.escape(str(status.get("text", "")))
-        if warning:
-            status_html += (
-                ' <span class="badge-warn" '
-                f'title="{html.escape(str(warning), quote=True)}">&#9993;</span>'
-            )
         row = "".join((
             f'<td class="venue" title="{html.escape(display_name, quote=True)}">'
             f"{html.escape(venue_id.upper())}{badge}</td>",
@@ -581,7 +701,7 @@ def render_dashboard(model: Mapping[str, object]) -> str:
             _edition_cell(venue.get("next_edition")),
             _attempt_cell(current.get("next_attempt_at")
                           if isinstance(current, Mapping) else None),
-            f"<td>{status_html}</td>",
+            _status_cell(status),
         ))
         rows.append(f"<tr>{row}</tr>")
     observed_at_iso = str(model.get("observed_at", ""))
@@ -620,12 +740,17 @@ th {{ color: #aab6ca; font-size: 12px; text-transform: uppercase;
   letter-spacing: .05em; background: #151f36; position: sticky; top: 0; }}
 tr:last-child td {{ border-bottom: 0; }}
 .venue {{ font-weight: 700; color: #8bc6ff; font-size: 15px; letter-spacing: .02em; }}
-.edition-name {{ color: #cdd7e8; font-weight: 600; }}
+.edition-year {{ font-weight: 700; }}
+.edition-label {{ color: #8491a8; font-size: 12px; }}
 .badge-warn {{ color: #f2c14e; cursor: help; }}
 .bar-track {{ width: 130px; height: 6px; border-radius: 3px; background: #202b46;
   overflow: hidden; }}
 .bar-fill {{ height: 100%; border-radius: 3px; }}
 .phase-label {{ margin-top: 5px; font-size: 12px; color: #aab6ca; white-space: nowrap; }}
+.status-year {{ color: #8491a8; }}
+.status-phase {{ color: #cdd7e8; }}
+.status-anomaly {{ color: #f87171; font-weight: 700; }}
+.status-disposition {{ margin-top: 3px; font-size: 12px; color: #8491a8; }}
 footer {{ color: #8491a8; margin-top: 18px; font-size: 13px; }}
 </style>
 </head>

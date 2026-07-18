@@ -14,6 +14,7 @@ from automation.agent_production import (
     build_live_agent_production_effect,
     load_agent_production_configuration,
     load_agent_targets,
+    load_continuous_venue_ids,
 )
 from automation.resend_notifications import recipient_fingerprints
 from automation.codex_agent import CodexProcessResult
@@ -57,6 +58,21 @@ class Invoker:
         return CodexProcessResult(0, json.dumps({
             "disposition": "not_ready",
             "explanation": "Proceedings are not available.",
+            "suggested_retry_at": None,
+            "failure_category": None,
+        }), "")
+
+
+class SuccessInvoker:
+    def __init__(self):
+        self.calls = []
+
+    def invoke(self, invocation):
+        self.calls.append(invocation)
+        (invocation.cwd / "agent-change.txt").write_text("scraped\n", encoding="utf-8")
+        return CodexProcessResult(0, json.dumps({
+            "disposition": "success",
+            "explanation": "Scraped and validated the proceedings.",
             "suggested_retry_at": None,
             "failure_category": None,
         }), "")
@@ -119,6 +135,14 @@ class AgentProductionTests(unittest.TestCase):
             "schema_version": 1,
             "targets": [{"venue_id": "icml", "year": 2026}],
         }, indent=2) + "\n", encoding="utf-8")
+        # Empty by default so unrelated tests aren't coupled to JMLR's
+        # perpetual registration; continuous-venue tests below build their
+        # own fixture (or use the real default) explicitly.
+        self.continuous_targets = self.root / "continuous_targets.json"
+        self.continuous_targets.write_text(json.dumps({
+            "schema_version": 1,
+            "venue_ids": [],
+        }, indent=2) + "\n", encoding="utf-8")
         self.payload = {
             "schema_version": 2,
             "targets_sha256": hashlib.sha256(self.targets.read_bytes()).hexdigest(),
@@ -146,7 +170,8 @@ class AgentProductionTests(unittest.TestCase):
             "resend_recipient_sha256": "a" * 64,
         }
         self.configuration = load_agent_production_configuration(
-            self.payload, targets_path=self.targets
+            self.payload, targets_path=self.targets,
+            continuous_targets_path=self.continuous_targets,
         )
         self.state = self.root / "state.sqlite3"
         self.execution = self.root / "execution"
@@ -278,7 +303,9 @@ class AgentProductionTests(unittest.TestCase):
             targets_sha256=hashlib.sha256(TRACKED_TARGETS.read_bytes()).hexdigest(),
         )
         configuration = load_agent_production_configuration(
-            payload, targets_path=TRACKED_TARGETS, target_date=date(2026, 10, 1)
+            payload, targets_path=TRACKED_TARGETS,
+            continuous_targets_path=self.continuous_targets,
+            target_date=date(2026, 10, 1),
         )
         provider = Provider()
         state = self.root / "rollover.sqlite3"
@@ -466,6 +493,210 @@ class AgentProductionTests(unittest.TestCase):
         idle = effect.run(**kwargs)
         self.assertEqual(idle.status, LocalEffectStatus.NO_DUE_WORK)
         self.assertEqual(len(invoker.calls), 1)
+
+    def test_cohort_success_immediately_chains_the_successor_year(self):
+        cohort_targets = self.root / "cohort_targets.json"
+        cohort_targets.write_text(json.dumps({
+            "schema_version": 3,
+            "cohort": {
+                "venue_ids": ["icml"],
+                "initial_year": 2026,
+                "rollover_month": 10,
+                "years_ahead_after_rollover": 1,
+            },
+            "extra_targets": [],
+        }, indent=2) + "\n", encoding="utf-8")
+        payload = dict(
+            self.payload,
+            targets_sha256=hashlib.sha256(cohort_targets.read_bytes()).hexdigest(),
+        )
+        configuration = load_agent_production_configuration(
+            payload, targets_path=cohort_targets, target_date=date(2026, 7, 15),
+        )
+        self.assertEqual(configuration.cohort_venue_ids, frozenset({"icml"}))
+        provider = Provider()
+        invoker = SuccessInvoker()
+        effect = AgentProductionEffect(
+            repository_root=self.repo,
+            configuration=configuration,
+            event_date_provider=provider,
+            codex_invoker=invoker,
+            transport_factory=TransportFactory([TransportReceipt("receipt:1")]),
+        )
+        kwargs = {
+            "state_path": self.state,
+            "execution_root": self.execution,
+            "scheduled_for": NOW,
+            "observed_at": NOW,
+        }
+
+        effect.run(**kwargs)  # wake 1: initializes icml 2026's date estimate
+        effect.run(**kwargs)  # wake 2: claims + runs Codex -> success
+
+        with ControlStateRepository(
+            self.state, writer=Writer.LOCAL_CONTROL_PLANE, clock=lambda: NOW
+        ) as repository:
+            schedules = {
+                (record.venue_id, record.year)
+                for record in repository.list_event_date_schedules()
+            }
+        # icml is cohort-sourced: its successor year is registered the
+        # moment success lands, without waiting for the October rollover.
+        self.assertIn(("icml", 2027), schedules)
+
+    def test_extra_targets_venue_does_not_auto_chain(self):
+        # self.configuration is built from a schema-1 explicit target list
+        # (no "cohort" key at all), so cohort_venue_ids is empty — the same
+        # guard that keeps a real extra_targets venue like NAACL from
+        # chaining applies here too.
+        self.assertEqual(self.configuration.cohort_venue_ids, frozenset())
+        effect = AgentProductionEffect(
+            repository_root=self.repo,
+            configuration=self.configuration,
+            event_date_provider=Provider(),
+            codex_invoker=Invoker(),
+            transport_factory=TransportFactory([]),
+        )
+        with ControlStateRepository(
+            self.state, writer=Writer.LOCAL_CONTROL_PLANE, clock=lambda: NOW
+        ):
+            pass  # initialize the schema only
+
+        effect._chain_successor(self.state, "naacl", 2026, NOW)
+
+        with ControlStateRepository(
+            self.state, writer=Writer.LOCAL_CONTROL_PLANE, clock=lambda: NOW
+        ) as repository:
+            self.assertEqual(repository.list_event_date_schedules(), ())
+
+    def test_periodic_venue_chains_by_its_catalog_interval(self):
+        cohort_targets = self.root / "iccv_targets.json"
+        cohort_targets.write_text(json.dumps({
+            "schema_version": 3,
+            "cohort": {
+                "venue_ids": ["iccv"],
+                "initial_year": 2025,
+                "rollover_month": 10,
+                "years_ahead_after_rollover": 1,
+            },
+            "extra_targets": [],
+        }, indent=2) + "\n", encoding="utf-8")
+        payload = dict(
+            self.payload,
+            targets_sha256=hashlib.sha256(cohort_targets.read_bytes()).hexdigest(),
+        )
+        configuration = load_agent_production_configuration(
+            payload, targets_path=cohort_targets, target_date=date(2025, 7, 15),
+        )
+        effect = AgentProductionEffect(
+            repository_root=self.repo,
+            configuration=configuration,
+            event_date_provider=Provider(),
+            codex_invoker=Invoker(),
+            transport_factory=TransportFactory([]),
+        )
+        with ControlStateRepository(
+            self.state, writer=Writer.LOCAL_CONTROL_PLANE, clock=lambda: NOW
+        ):
+            pass
+
+        # ICCV is biennial (interval_years=2): chaining from 2025 must land
+        # on 2027, not the default annual +1.
+        effect._chain_successor(self.state, "iccv", 2025, NOW)
+
+        with ControlStateRepository(
+            self.state, writer=Writer.LOCAL_CONTROL_PLANE, clock=lambda: NOW
+        ) as repository:
+            schedules = {
+                (record.venue_id, record.year)
+                for record in repository.list_event_date_schedules()
+            }
+        self.assertEqual(schedules, {("iccv", 2027)})
+
+    def test_load_continuous_venue_ids_validates_against_the_catalog(self):
+        self.assertEqual(load_continuous_venue_ids(), frozenset({"jmlr"}))
+
+        bad = self.root / "bad_continuous.json"
+        for payload in (
+            {"schema_version": 1, "venue_ids": ["icml"]},  # not continuous
+            {"schema_version": 1, "venue_ids": ["not-a-venue"]},
+            {"schema_version": 1, "venue_ids": ["jmlr", "jmlr"]},  # not unique
+            {"schema_version": 2, "venue_ids": ["jmlr"]},  # wrong schema
+        ):
+            with self.subTest(payload=payload):
+                bad.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+                with self.assertRaises(AgentProductionConfigurationError):
+                    load_continuous_venue_ids(bad)
+
+    def test_continuous_venue_registers_without_any_gemini_call(self):
+        # Default continuous_targets_path: the real production JMLR entry.
+        configuration = load_agent_production_configuration(
+            self.payload, targets_path=self.targets,
+        )
+        self.assertEqual(configuration.continuous_venue_ids, frozenset({"jmlr"}))
+        provider = Provider()
+        effect = AgentProductionEffect(
+            repository_root=self.repo,
+            configuration=configuration,
+            event_date_provider=provider,
+            codex_invoker=Invoker(),
+            transport_factory=TransportFactory([]),
+        )
+
+        effect.run(
+            state_path=self.state, execution_root=self.execution,
+            scheduled_for=NOW, observed_at=NOW,
+        )
+
+        with ControlStateRepository(
+            self.state, writer=Writer.LOCAL_CONTROL_PLANE, clock=lambda: NOW
+        ) as repository:
+            event = repository.get_event_date_schedule("jmlr", 2026)
+            agent = repository.get_agent_schedule("jmlr", 2026)
+        self.assertEqual(event.status, "scheduled")
+        self.assertEqual(event.provider_name, "continuous_lifecycle")
+        self.assertEqual(agent.status, "scheduled")
+        self.assertIsNotNone(agent.next_check_at)
+        # jmlr has no discrete edition to discover: it never calls Gemini,
+        # even though icml (from self.targets) legitimately does this wake.
+        self.assertNotIn("jmlr", {request.venue_id for request in provider.calls})
+
+    def test_continuous_registration_is_idempotent_across_wakes(self):
+        configuration = load_agent_production_configuration(
+            self.payload, targets_path=self.targets,
+        )
+        effect = AgentProductionEffect(
+            repository_root=self.repo,
+            configuration=configuration,
+            event_date_provider=Provider(),
+            codex_invoker=Invoker(),
+            transport_factory=TransportFactory([TransportReceipt("receipt:1")]),
+        )
+        kwargs = {
+            "state_path": self.state,
+            "execution_root": self.execution,
+            "scheduled_for": NOW,
+            "observed_at": NOW,
+        }
+
+        effect.run(**kwargs)
+        with ControlStateRepository(
+            self.state, writer=Writer.LOCAL_CONTROL_PLANE, clock=lambda: NOW
+        ) as repository:
+            before = repository.get_agent_schedule("jmlr", 2026)
+
+        # wake 2: icml (having just been date-initialized) now wins the
+        # single due-claim slot over jmlr (tie-break is alphabetical), so
+        # this exercises re-registration racing a real Codex run elsewhere
+        # in the same wake, not a no-op wake.
+        effect.run(**kwargs)
+        with ControlStateRepository(
+            self.state, writer=Writer.LOCAL_CONTROL_PLANE, clock=lambda: NOW
+        ) as repository:
+            after = repository.get_agent_schedule("jmlr", 2026)
+        # Re-registering never clobbers a row that Codex may since have
+        # claimed/advanced — this call is a no-op once the row exists.
+        self.assertEqual(before, after)
 
 
 if __name__ == "__main__":

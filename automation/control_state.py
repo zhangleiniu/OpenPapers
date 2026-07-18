@@ -1749,6 +1749,105 @@ class ControlStateRepository:
             ).fetchone()
         return self._event_date_schedule_from_row(row)
 
+    def register_continuous_event_date(
+        self,
+        venue_id: str,
+        year: int,
+        *,
+        registered_at: datetime | str,
+        lease: LeaseHandle,
+    ) -> EventDateScheduleWriteOutcome:
+        """Idempotently register one continuous-lifecycle venue/year with a
+        placeholder 'scheduled' event_date_schedule row.
+
+        A continuous venue (e.g. a journal with no discrete edition) has no
+        event date to discover, so it never goes through the normal
+        register/claim/complete Gemini flow. This exists purely to satisfy
+        the ``agent_schedule`` foreign key: only ``agent_schedule.
+        next_check_at`` drives real scheduling for this venue/year going
+        forward. The placeholder's ``estimated_event_date``/``provider_name``
+        are clearly marked (``'continuous_lifecycle'``) as a registration-time
+        placeholder, never a real estimate.
+        """
+        if self.writer is not Writer.LOCAL_CONTROL_PLANE:
+            raise OwnershipError("event-date schedules require local ownership")
+        _validate_event_date_target(venue_id, year)
+        registered = _timestamp(registered_at, field="event-date registered_at")
+        placeholder_date = registered[:10]
+        with self._write_transaction() as connection:
+            self._require_lease(connection, lease, self._now())
+            existing = connection.execute(
+                "SELECT * FROM event_date_schedule WHERE venue_id = ? AND year = ?",
+                (venue_id, year),
+            ).fetchone()
+            if existing is not None:
+                return EventDateScheduleWriteOutcome(
+                    self._event_date_schedule_from_row(existing), applied=False
+                )
+            connection.execute(
+                """
+                INSERT INTO event_date_schedule (
+                    venue_id, year, status, next_check_at,
+                    estimated_event_date, estimated_at, provider_name,
+                    provider_model, prompt_version, attempt_count,
+                    active_attempt_id, last_failure_category, updated_at
+                ) VALUES (?, ?, 'scheduled', ?, ?, ?, 'continuous_lifecycle',
+                    'continuous_lifecycle', 'continuous_lifecycle', 0, NULL,
+                    NULL, ?)
+                """,
+                (venue_id, year, registered, placeholder_date, registered, registered),
+            )
+            row = connection.execute(
+                "SELECT * FROM event_date_schedule WHERE venue_id = ? AND year = ?",
+                (venue_id, year),
+            ).fetchone()
+        return EventDateScheduleWriteOutcome(
+            self._event_date_schedule_from_row(row), applied=True
+        )
+
+    def ensure_scheduled_agent_target(
+        self,
+        venue_id: str,
+        year: int,
+        *,
+        next_check_at: datetime | str,
+        registered_at: datetime | str,
+        lease: LeaseHandle,
+    ) -> AgentScheduleRecord:
+        """Idempotently ensure one 'scheduled' agent_schedule row exists.
+
+        Used when a venue/year needs a coding-agent check without (or ahead
+        of) a confirmed event-date estimate on this wake: a calendar
+        fallback for a venue whose date discovery keeps failing, or a
+        continuous-lifecycle venue with no discrete edition date at all.
+        The matching ``event_date_schedule`` row must already exist (the
+        foreign key requires it); this method never creates or mutates that
+        row, so it never fabricates a confirmed event-date estimate.
+        """
+        if self.writer is not Writer.LOCAL_CONTROL_PLANE:
+            raise OwnershipError("agent schedules require local ownership")
+        _validate_event_date_target(venue_id, year)
+        next_check = _timestamp(next_check_at, field="agent next_check_at")
+        registered = _timestamp(registered_at, field="agent registered_at")
+        with self._write_transaction() as connection:
+            self._require_lease(connection, lease, self._now())
+            connection.execute(
+                "INSERT INTO agent_schedule (venue_id, year, status, "
+                "next_check_at, attempt_count, active_run_id, "
+                "consecutive_failures, last_disposition, last_run_at, "
+                "suggested_retry_at, last_gate_reason, updated_at) "
+                "VALUES (?, ?, 'scheduled', ?, 0, NULL, 0, NULL, NULL, "
+                "NULL, NULL, ?) ON CONFLICT (venue_id, year) DO NOTHING",
+                (venue_id, year, next_check, registered),
+            )
+            row = connection.execute(
+                "SELECT * FROM agent_schedule WHERE venue_id = ? AND year = ?",
+                (venue_id, year),
+            ).fetchone()
+        if row is None:
+            raise AgentScheduleError("agent schedule was not retained")
+        return self._agent_schedule_from_row(row)
+
     def complete_event_date_retry(
         self,
         claim: EventDateAttemptClaim,
@@ -2187,10 +2286,21 @@ class ControlStateRepository:
         changed_files: tuple[str, ...] | None = None,
         returncode: int | None = None,
         timed_out: bool = False,
+        recurring: bool = False,
     ) -> AgentScheduleRecord:
-        """Complete one claimed run with an already-reduced policy result."""
+        """Complete one claimed run with an already-reduced policy result.
+
+        ``recurring`` is only valid with ``disposition == "success"``: it
+        keeps the schedule at ``'scheduled'`` with the given future
+        ``next_check_at`` instead of moving it to the terminal ``'completed'``
+        state, for a continuous-lifecycle venue (e.g. a journal) that has no
+        single "done" edition and must keep being rechecked for new items
+        after every successful check.
+        """
         if disposition not in {"success", "not_ready", "needs_human", "failed"}:
             raise AgentScheduleError("agent disposition is invalid")
+        if recurring and disposition != "success":
+            raise AgentScheduleError("recurring only applies to a success disposition")
         explanation = _bounded_event_text(
             explanation, field="agent explanation", maximum=4000
         )
@@ -2216,6 +2326,10 @@ class ControlStateRepository:
                 raise AgentScheduleError("failed completion is inconsistent")
             if pause_after_failure != (next_check is None):
                 raise AgentScheduleError("failed pause state is inconsistent")
+        elif recurring:
+            if next_check is None or suggested is not None or failure is not None \
+                    or pause_after_failure:
+                raise AgentScheduleError("recurring completion is inconsistent")
         elif any((next_check, suggested, failure)) or pause_after_failure:
             raise AgentScheduleError("terminal completion is inconsistent")
         completed_dt = _parse_timestamp(completed, field="agent run completed_at")
@@ -2263,7 +2377,7 @@ class ControlStateRepository:
             if disposition != "failed":
                 failures = 0
             if disposition == "success":
-                status = "completed"
+                status = "scheduled" if recurring else "completed"
             elif disposition == "needs_human":
                 status = "needs_human"
             elif disposition == "failed" and pause_after_failure:

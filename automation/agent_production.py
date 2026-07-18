@@ -45,8 +45,13 @@ from automation.resend_notifications import (
 DEFAULT_AGENT_TARGETS = (
     Path(__file__).with_name("config") / "agent_targets.v1.json"
 )
+DEFAULT_CONTINUOUS_TARGETS = (
+    Path(__file__).with_name("config") / "continuous_targets.v1.json"
+)
 _ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 _COHORT_TIMEZONE = ZoneInfo("America/Chicago")
+_SUCCESSOR_CHAIN_OWNER_ID = "agent-successor-chain"
+_CONTINUOUS_REGISTRATION_OWNER_ID = "agent-continuous-registration"
 
 
 class AgentProductionConfigurationError(ValueError):
@@ -74,6 +79,15 @@ class AgentProductionConfiguration:
     due_policy: DuePolicy
     retention: WorktreeRetentionPolicy
     resend_recipient_sha256s: tuple[str, ...]
+    # Formulaic (annual/periodic) cohort venue ids, distinct from
+    # extra_targets — see load_cohort_venue_ids. Drives perpetual successor
+    # chaining: only these venues get their next edition auto-registered
+    # the moment the current one completes.
+    cohort_venue_ids: frozenset[str] = frozenset()
+    # Continuous-lifecycle venue ids (e.g. JMLR) — see
+    # load_continuous_venue_ids. Never go through event-date discovery and
+    # never terminate on success.
+    continuous_venue_ids: frozenset[str] = frozenset()
 
     @property
     def resend_recipient_sha256(self) -> str:
@@ -183,6 +197,71 @@ def _expand_cohort(
     ]
 
 
+def load_cohort_venue_ids(path: Path = DEFAULT_AGENT_TARGETS) -> frozenset[str]:
+    """Return the formulaic cohort's venue ids, distinct from extra_targets.
+
+    Perpetual successor chaining (see ``AgentProductionEffect._chain_successor``
+    and ``agent_operations.mark_schedule_completed``) only ever applies to
+    these venues: ``extra_targets`` covers irregular-cadence venues (e.g.
+    NAACL) with no reliable interval to chain a successor year from, so a
+    completed run there must never auto-register a next edition.
+    """
+    try:
+        payload = json.loads(Path(path).read_bytes())
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise AgentProductionConfigurationError(
+            "agent targets are unavailable"
+        ) from exc
+    cohort = payload.get("cohort") if isinstance(payload, dict) else None
+    if not isinstance(cohort, dict):
+        return frozenset()
+    venue_ids = cohort.get("venue_ids")
+    if not isinstance(venue_ids, list):
+        return frozenset()
+    return frozenset(item for item in venue_ids if isinstance(item, str))
+
+
+def load_continuous_venue_ids(
+    path: Path = DEFAULT_CONTINUOUS_TARGETS,
+) -> frozenset[str]:
+    """Return the enrolled continuous-lifecycle venue ids (e.g. JMLR).
+
+    These never go through event-date discovery (there is no discrete
+    edition date to find) and never terminate on success (there is no
+    "done" state for an ongoing journal) — see
+    ``AgentProductionEffect._register_continuous_targets`` and
+    ``due_policy.complete_agent_run``'s ``is_continuous`` handling. Every
+    listed id must name a catalog venue whose ``lifecycle.kind`` is
+    ``"continuous"``.
+    """
+    try:
+        payload = json.loads(Path(path).read_bytes())
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise AgentProductionConfigurationError(
+            "continuous venue targets are unavailable"
+        ) from exc
+    if not isinstance(payload, dict) or payload.get("schema_version") != 1 \
+            or set(payload) != {"schema_version", "venue_ids"} \
+            or not isinstance(payload["venue_ids"], list):
+        raise AgentProductionConfigurationError(
+            "continuous venue targets are invalid"
+        )
+    venue_ids = payload["venue_ids"]
+    if len(venue_ids) != len(set(venue_ids)) or venue_ids != sorted(venue_ids):
+        raise AgentProductionConfigurationError(
+            "continuous venue targets must be unique and canonically ordered"
+        )
+    catalog = load_venue_catalog()
+    lifecycle_by_id = {item["venue_id"]: item["lifecycle"] for item in catalog["venues"]}
+    for venue_id in venue_ids:
+        if not isinstance(venue_id, str) or venue_id not in lifecycle_by_id \
+                or lifecycle_by_id[venue_id].get("kind") != "continuous":
+            raise AgentProductionConfigurationError(
+                f"{venue_id!r} is not a catalog continuous-lifecycle venue"
+            )
+    return frozenset(venue_ids)
+
+
 def load_agent_targets(
     path: Path = DEFAULT_AGENT_TARGETS,
     *,
@@ -241,6 +320,7 @@ def load_agent_production_configuration(
     payload: Mapping[str, Any],
     *,
     targets_path: Path = DEFAULT_AGENT_TARGETS,
+    continuous_targets_path: Path = DEFAULT_CONTINUOUS_TARGETS,
     target_date: date | None = None,
 ) -> AgentProductionConfiguration:
     """Validate private, credential-free production policy configuration."""
@@ -357,9 +437,14 @@ def load_agent_production_configuration(
         )
     except (TypeError, ValueError) as exc:
         raise AgentProductionConfigurationError("agent policy is invalid") from exc
+    cohort_venue_ids = load_cohort_venue_ids(targets_path)
+    if hashlib.sha256(targets_path.read_bytes()).hexdigest() != targets_hash:
+        raise AgentProductionConfigurationError("agent targets changed while loading")
+    continuous_venue_ids = load_continuous_venue_ids(continuous_targets_path)
     return AgentProductionConfiguration(
         targets, targets_hash, project, location, model, date_limit,
         minimum_free_bytes, codex, due, retention, fingerprints,
+        cohort_venue_ids, continuous_venue_ids,
     )
 
 
@@ -410,6 +495,7 @@ class AgentProductionEffect:
                 "agent execution volume has insufficient free space"
             )
         actions = 0
+        self._register_continuous_targets(state_path, observed_at)
         initialized = initialize_event_dates(
             state_path,
             self._configuration.targets,
@@ -427,7 +513,7 @@ class AgentProductionEffect:
             )
             if claimed.claim is not None:
                 run_id = claimed.claim.run_id
-                run_claimed_codex_agent(
+                outcome = run_claimed_codex_agent(
                     state_path,
                     self._repository_root,
                     runs_root,
@@ -438,6 +524,11 @@ class AgentProductionEffect:
                     config=self._configuration.codex,
                 )
                 actions += 1
+                if outcome.result.disposition == "success":
+                    self._chain_successor(
+                        state_path, claimed.claim.venue_id,
+                        claimed.claim.year, observed_at,
+                    )
         if run_id is None:
             with ControlStateRepository(
                 state_path, writer=Writer.LOCAL_CONTROL_PLANE,
@@ -463,6 +554,68 @@ class AgentProductionEffect:
             LocalEffectStatus.COMPLETED if actions else LocalEffectStatus.NO_DUE_WORK,
             actions,
         )
+
+    def _chain_successor(
+        self, state_path: Path, venue_id: str, year: int, observed_at: datetime,
+    ) -> None:
+        """Register the next perpetual-cycle target the moment a cohort
+        venue's current year reaches a real ``success``, instead of waiting
+        for the calendar cohort rollover (``rollover_month``) to add it.
+        extra_targets venues (irregular cadence, e.g. NAACL) are excluded —
+        there is no reliable interval to chain a successor year from for
+        them; the calendar rollover remains a redundant safety net for any
+        cohort venue this ever misses.
+        """
+        if venue_id not in self._configuration.cohort_venue_ids:
+            return
+        catalog = load_venue_catalog()
+        venue = next(
+            (item for item in catalog["venues"] if item["venue_id"] == venue_id),
+            None,
+        )
+        interval = (venue["lifecycle"].get("interval_years") or 1) if venue else 1
+        with ControlStateRepository(
+            state_path, writer=Writer.LOCAL_CONTROL_PLANE,
+            clock=lambda: observed_at,
+        ) as repository:
+            lease = repository.acquire_lease(_SUCCESSOR_CHAIN_OWNER_ID)
+            try:
+                repository.register_event_date_target(
+                    venue_id, year + interval,
+                    registered_at=observed_at, lease=lease,
+                )
+            finally:
+                repository.release_lease(lease)
+
+    def _register_continuous_targets(
+        self, state_path: Path, observed_at: datetime,
+    ) -> None:
+        """Ensure every configured continuous venue (e.g. JMLR) has a live,
+        due 'scheduled' agent_schedule row — no event-date discovery, no
+        Gemini call, no per-wake budget consumed. Safe to call every wake:
+        both underlying inserts are idempotent (``ON CONFLICT DO NOTHING``),
+        so after the first wake this is a no-op read-then-skip.
+        """
+        if not self._configuration.continuous_venue_ids:
+            return
+        year = observed_at.astimezone(_COHORT_TIMEZONE).year
+        with ControlStateRepository(
+            state_path, writer=Writer.LOCAL_CONTROL_PLANE,
+            clock=lambda: observed_at,
+        ) as repository:
+            lease = repository.acquire_lease(_CONTINUOUS_REGISTRATION_OWNER_ID)
+            try:
+                for venue_id in sorted(self._configuration.continuous_venue_ids):
+                    repository.register_continuous_event_date(
+                        venue_id, year, registered_at=observed_at, lease=lease,
+                    )
+                    repository.ensure_scheduled_agent_target(
+                        venue_id, year,
+                        next_check_at=observed_at, registered_at=observed_at,
+                        lease=lease,
+                    )
+            finally:
+                repository.release_lease(lease)
 
 
 def build_live_agent_production_effect(

@@ -7,6 +7,7 @@ from pathlib import Path
 
 from automation.control_state import (
     CONTROL_SCHEMA_VERSION,
+    AgentScheduleError,
     ControlStateError,
     ControlStateRepository,
     LeaseConflictError,
@@ -256,6 +257,130 @@ class LeaseTests(unittest.TestCase):
                 clock.value = datetime(2026, 7, 13, 20, 31)
                 with self.assertRaisesRegex(ControlStateError, "timezone"):
                     repository.acquire_lease("flow-two")
+
+
+class EnsureScheduledAgentTargetTests(unittest.TestCase):
+    def test_requires_a_matching_event_date_schedule_row(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with ControlStateRepository(
+                Path(directory) / "state.sqlite3",
+                writer=Writer.LOCAL_CONTROL_PLANE, clock=MutableClock(),
+            ) as repository:
+                lease = repository.acquire_lease("fixture")
+                with self.assertRaises(ControlStateError):
+                    repository.ensure_scheduled_agent_target(
+                        "icml", 2099,
+                        next_check_at=NOW + timedelta(days=1),
+                        registered_at=NOW, lease=lease,
+                    )
+
+    def test_idempotent_and_never_overwrites_an_existing_row(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with ControlStateRepository(
+                Path(directory) / "state.sqlite3",
+                writer=Writer.LOCAL_CONTROL_PLANE, clock=MutableClock(),
+            ) as repository:
+                lease = repository.acquire_lease("fixture")
+                repository.register_event_date_target(
+                    "icml", 2099, registered_at=NOW, lease=lease
+                )
+
+                first = repository.ensure_scheduled_agent_target(
+                    "icml", 2099,
+                    next_check_at=NOW + timedelta(days=1),
+                    registered_at=NOW, lease=lease,
+                )
+                self.assertEqual(first.status, "scheduled")
+                self.assertEqual(first.next_check_at, "2026-07-14T20:30:00Z")
+
+                second = repository.ensure_scheduled_agent_target(
+                    "icml", 2099,
+                    next_check_at=NOW + timedelta(days=30),
+                    registered_at=NOW, lease=lease,
+                )
+                # ON CONFLICT DO NOTHING: a second call never clobbers.
+                self.assertEqual(second.next_check_at, first.next_check_at)
+
+
+class ContinuousEventDateTests(unittest.TestCase):
+    def test_placeholder_satisfies_the_agent_schedule_foreign_key(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with ControlStateRepository(
+                Path(directory) / "state.sqlite3",
+                writer=Writer.LOCAL_CONTROL_PLANE, clock=MutableClock(),
+            ) as repository:
+                lease = repository.acquire_lease("fixture")
+                outcome = repository.register_continuous_event_date(
+                    "jmlr", 2026, registered_at=NOW, lease=lease
+                )
+                self.assertTrue(outcome.applied)
+                self.assertEqual(outcome.record.status, "scheduled")
+                self.assertEqual(outcome.record.provider_name, "continuous_lifecycle")
+
+                # The FK this exists for: agent_schedule now accepts a row.
+                agent = repository.ensure_scheduled_agent_target(
+                    "jmlr", 2026,
+                    next_check_at=NOW, registered_at=NOW, lease=lease,
+                )
+                self.assertEqual(agent.status, "scheduled")
+
+    def test_idempotent_registration(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with ControlStateRepository(
+                Path(directory) / "state.sqlite3",
+                writer=Writer.LOCAL_CONTROL_PLANE, clock=MutableClock(),
+            ) as repository:
+                lease = repository.acquire_lease("fixture")
+                first = repository.register_continuous_event_date(
+                    "jmlr", 2026, registered_at=NOW, lease=lease
+                )
+                second = repository.register_continuous_event_date(
+                    "jmlr", 2026,
+                    registered_at=NOW + timedelta(days=1), lease=lease,
+                )
+                self.assertTrue(first.applied)
+                self.assertFalse(second.applied)
+                self.assertEqual(
+                    first.record.estimated_at, second.record.estimated_at
+                )
+
+
+class RecurringCompletionGuardTests(unittest.TestCase):
+    def test_recurring_is_only_valid_for_a_success_disposition(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with ControlStateRepository(
+                Path(directory) / "state.sqlite3",
+                writer=Writer.LOCAL_CONTROL_PLANE, clock=MutableClock(),
+            ) as repository:
+                lease = repository.acquire_lease("fixture")
+                repository.register_continuous_event_date(
+                    "jmlr", 2026, registered_at=NOW, lease=lease
+                )
+                repository.ensure_scheduled_agent_target(
+                    "jmlr", 2026, next_check_at=NOW, registered_at=NOW,
+                    lease=lease,
+                )
+                claimed = repository.claim_due_agent_run(
+                    claimed_at=NOW, monthly_run_limit=10,
+                    systemic_failure_threshold=3,
+                    systemic_failure_window=timedelta(hours=24),
+                    systemic_circuit_delay=timedelta(hours=24),
+                    lease=lease,
+                )
+
+                with self.assertRaisesRegex(AgentScheduleError, "recurring only"):
+                    repository.complete_agent_run_attempt(
+                        claimed.claim,
+                        disposition="not_ready",
+                        explanation="fixture",
+                        completed_at=NOW,
+                        next_check_at=NOW + timedelta(days=1),
+                        suggested_retry_at=None,
+                        failure_category=None,
+                        pause_after_failure=False,
+                        lease=lease,
+                        recurring=True,
+                    )
 
 
 if __name__ == "__main__":

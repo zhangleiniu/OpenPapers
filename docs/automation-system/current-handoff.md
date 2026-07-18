@@ -83,20 +83,15 @@ verification/job/case design stays retired.
 
 Known follow-up gates:
 
-1. **Rotate the OpenReview credential.** A broad diagnostic earlier in the
-   2026-07-18 maintenance session rendered the LaunchDaemon environment in
-   session output. No value was copied into this repository, but rotation is
-   still required; use a separately authorized credential-maintenance action
-   and never print the replacement.
-2. **Review the upgrade hardening.** Schema 11 state simplification is now
+1. **Review the upgrade hardening.** Schema 11 state simplification is now
    installed and verified. The working tree adds tracked, fault-injected
    upgrade safety checks and the operator-owned wrapper delegates to them, but
    this hardening change has not itself been installed as a new runtime and
    the wrapper has not been rerun. Review it with the rest of the current
    working tree before the next upgrade.
-3. **Continuous JMLR enrollment.** Design recurring non-terminal success
+2. **Continuous JMLR enrollment.** Design recurring non-terminal success
    semantics; do not force JMLR through the annual cohort.
-4. **Certificate renewal** (operator maintenance; see `operations.md`).
+3. **Certificate renewal** (operator maintenance; see `operations.md`).
 
 ## Safe pickup procedure
 

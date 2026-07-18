@@ -11,8 +11,12 @@ from urllib.request import Request, urlopen
 
 from automation.agent_dashboard import (
     AgentDashboardError,
+    _edition_cell,
+    _progress_fraction,
     _remaining_label,
     _resolve_editions,
+    _status_cell,
+    _year_color,
     build_dashboard_model,
     create_dashboard_server,
     load_venue_editions,
@@ -115,6 +119,94 @@ class VenueEditionTests(unittest.TestCase):
                     _remaining_label(NOW + delta, NOW), (text, category)
                 )
 
+    def test_edition_cell_drops_the_redundant_venue_name(self):
+        no_label = {
+            "name": "AISTATS 2026", "date": "2026-05-02",
+            "iso_date": "2026-05-02", "approx": False, "curated_label": None,
+        }
+        rendered = _edition_cell(no_label)
+        self.assertNotIn("AISTATS", rendered)
+        self.assertIn(">2026<", rendered)
+        self.assertIn("· 05-02", rendered)
+        self.assertIn(f'color:{_year_color(2026)};', rendered)
+
+    def test_edition_cell_keeps_a_real_curated_label(self):
+        jmlr = {
+            "name": "v27", "date": "2026-01-01",
+            "iso_date": "2026-01-01", "approx": False, "curated_label": "v27",
+        }
+        self.assertIn("(v27)", _edition_cell(jmlr))
+
+    def test_edition_cell_marks_approximate_month_only_dates(self):
+        approx = {
+            "name": "ICML 2027", "date": "~2027-07",
+            "iso_date": "2027-07-01", "approx": True, "curated_label": None,
+        }
+        rendered = _edition_cell(approx)
+        self.assertIn(">~2027<", rendered)
+        self.assertIn("· 07", rendered)
+
+    def test_same_year_gets_the_same_color_in_both_edition_columns(self):
+        last = {"name": "X 2026", "date": "2026-05-02", "iso_date": "2026-05-02",
+                "approx": False, "curated_label": None}
+        following = {"name": "X 2026", "date": "2026-11-02",
+                     "iso_date": "2026-11-02", "approx": False,
+                     "curated_label": None}
+        different_year = {"name": "X 2027", "date": "2027-05-02",
+                           "iso_date": "2027-05-02", "approx": False,
+                           "curated_label": None}
+        self.assertIn(f'color:{_year_color(2026)};', _edition_cell(last))
+        self.assertIn(f'color:{_year_color(2026)};', _edition_cell(following))
+        self.assertNotEqual(_year_color(2026), _year_color(2027))
+        self.assertIn(f'color:{_year_color(2027)};', _edition_cell(different_year))
+
+    def test_progress_fraction_keeps_resolution_across_the_whole_horizon(self):
+        day = 86400.0
+        durations = (3600, 1 * day, 7 * day, 30 * day, 90 * day, 300 * day, 365 * day)
+        values = [_progress_fraction(seconds) for seconds in durations]
+        self.assertEqual(values, sorted(values))
+        self.assertTrue(all(a < b for a, b in zip(values, values[1:])))
+        # A linear 30-day scale (the prior behavior) clips both of these to
+        # 1.0; the new scale must keep far-out rows distinguishable.
+        self.assertLess(_progress_fraction(31 * day), _progress_fraction(300 * day))
+        self.assertLessEqual(_progress_fraction(365 * day), 1.0)
+        self.assertEqual(_progress_fraction(0), 0.0)
+        self.assertEqual(_progress_fraction(-3600), 0.0)
+
+    def test_status_cell_shows_year_and_splits_disposition_from_phase(self):
+        rendered = _status_cell({
+            "phase": "Scheduled", "year": 2026, "disposition": "not_ready",
+            "warning": None, "anomaly": False,
+        })
+        self.assertIn(">2026<", rendered)
+        self.assertIn(">Scheduled<", rendered)
+        self.assertIn('class="status-disposition"', rendered)
+        self.assertIn("last try: not_ready", rendered)
+        self.assertNotIn("Scheduled · not_ready<", rendered)
+
+    def test_status_cell_omits_disposition_line_when_absent(self):
+        rendered = _status_cell({
+            "phase": "Collected", "year": 2026, "disposition": None,
+            "warning": None, "anomaly": False,
+        })
+        self.assertNotIn("status-disposition", rendered)
+
+    def test_status_cell_not_enrolled_has_no_year(self):
+        rendered = _status_cell({
+            "phase": "Not enrolled", "year": None, "disposition": None,
+            "warning": None, "anomaly": False,
+        })
+        self.assertNotIn("status-year", rendered)
+        self.assertIn("Not enrolled", rendered)
+
+    def test_status_cell_renders_the_anomaly_badge(self):
+        rendered = _status_cell({
+            "phase": "Data inconsistency", "year": 2026, "disposition": None,
+            "warning": None, "anomaly": True,
+        })
+        self.assertIn("status-anomaly", rendered)
+        self.assertIn("Data inconsistency: an event", rendered)
+
 
 class AgentDashboardTests(unittest.TestCase):
     def setUp(self):
@@ -147,6 +239,38 @@ class AgentDashboardTests(unittest.TestCase):
         return build_dashboard_model(
             load_venue_catalog(), targets, observed_at=NOW,
             editions=editions if editions is not None else load_venue_editions(),
+        )
+
+    def test_continuous_venue_never_gets_a_fabricated_next_edition(self):
+        with ControlStateRepository(
+            self.state, writer=Writer.LOCAL_CONTROL_PLANE, clock=lambda: NOW
+        ) as repository:
+            lease = repository.acquire_lease("fixture-continuous")
+            try:
+                repository.register_continuous_event_date(
+                    "jmlr", 2026, registered_at=NOW, lease=lease,
+                )
+                repository.ensure_scheduled_agent_target(
+                    "jmlr", 2026, next_check_at=NOW + timedelta(days=10),
+                    registered_at=NOW, lease=lease,
+                )
+            finally:
+                repository.release_lease(lease)
+
+        model = self._model()
+
+        venues = {venue["venue_id"]: venue for venue in model["venues"]}
+        jmlr = venues["jmlr"]
+        # No fabricated cadence approximation for a venue with no discrete
+        # edition — only the curated entry (its real volume label) survives,
+        # and the registration-time placeholder date never leaks in.
+        self.assertIsNone(jmlr["next_edition"])
+        self.assertEqual(jmlr["last_edition"]["name"], "v27")
+        self.assertEqual(jmlr["last_edition"]["date"], "2026-01-01")
+        # The real recurring schedule still drives the next-attempt column.
+        self.assertEqual(
+            jmlr["current_target"]["next_attempt_at"],
+            self._time(NOW + timedelta(days=10)),
         )
 
     def test_model_gives_every_venue_cycle_columns(self):
@@ -196,7 +320,8 @@ class AgentDashboardTests(unittest.TestCase):
         self.assertIsNone(acl["current_target"]["next_attempt_at"])
         # Cycle continues: countdown targets the (approximate) next edition.
         self.assertEqual(acl["progress"]["label"], "next: ACL 2027")
-        self.assertEqual(acl["status"]["text"], "Collected")
+        self.assertEqual(acl["status"]["phase"], "Collected")
+        self.assertIsNone(acl["status"]["disposition"])
         # Curated verified date beats the operator estimate for the same year.
         self.assertEqual(acl["last_edition"]["date"], "2026-07-02")
 
@@ -218,7 +343,10 @@ class AgentDashboardTests(unittest.TestCase):
         model = self._model(targets=targets)
 
         iclr = next(v for v in model["venues"] if v["venue_id"] == "iclr")
-        self.assertEqual(iclr["status"]["text"], "Collected")
+        self.assertEqual(iclr["status"]["phase"], "Collected")
+        # The stale 'failed' disposition from before the operator
+        # completion must not contradict the terminal phase.
+        self.assertIsNone(iclr["status"]["disposition"])
 
     def test_older_actionable_target_beats_newer_terminal_target(self):
         targets = [
@@ -254,7 +382,42 @@ class AgentDashboardTests(unittest.TestCase):
 
         icml = next(v for v in model["venues"] if v["venue_id"] == "icml")
         self.assertEqual(icml["current_target"]["year"], 2026)
-        self.assertEqual(icml["status"]["text"], "Scheduled · not_ready")
+        self.assertEqual(icml["status"]["year"], 2026)
+        self.assertEqual(icml["status"]["phase"], "Scheduled")
+        self.assertEqual(icml["status"]["disposition"], "not_ready")
+
+    def test_orphaned_event_date_without_agent_schedule_renders_as_anomaly(self):
+        # complete_event_date_success inserts the agent_schedule row in the
+        # same transaction as this status flip, so this shape (event_date
+        # 'scheduled' with no matching agent record) should be unreachable
+        # for new data — this fixture stands in for legacy/pre-atomic-insert
+        # rows and proves the dashboard flags rather than mislabels them.
+        targets = [{
+            "venue_id": "uai",
+            "year": 2026,
+            "event_date": {
+                "status": "scheduled",
+                "next_check_at": self._time(NOW + timedelta(days=1)),
+                "estimated_event_date": "2026-08-01",
+                "updated_at": self._time(NOW),
+            },
+            "agent": None,
+            "latest_attempt": None,
+            "latest_report": None,
+        }]
+
+        model = self._model(targets=targets)
+        document = render_dashboard(model)
+
+        uai = next(v for v in model["venues"] if v["venue_id"] == "uai")
+        self.assertEqual(uai["current_target"]["phase"], "Data inconsistency")
+        self.assertEqual(uai["status"]["phase"], "Data inconsistency")
+        self.assertTrue(uai["status"]["anomaly"])
+        # It sorts and colors like the other attention phases (never
+        # silently ignored), but renders with its own distinct badge.
+        self.assertEqual(uai["progress"]["category"], "attention")
+        self.assertIn("status-anomaly", document)
+        self.assertIn("Data inconsistency: an event", document)
 
     def test_edition_day_uses_chicago_calendar_not_utc_calendar(self):
         after_utc_midnight = datetime(2026, 7, 18, 1, tzinfo=timezone.utc)
@@ -295,7 +458,14 @@ class AgentDashboardTests(unittest.TestCase):
         # icml is the only venue with a real next attempt: it sorts first;
         # everyone else orders by next expected edition.
         self.assertEqual(order[0], "icml")
-        cycle = [venues for venues in model["venues"][1:]]
+        # JMLR (continuous) never gets a next_edition — it sorts by venue_id
+        # in its own tail category instead; exclude it from the "ordered by
+        # next expected edition" check, which only applies to venues that
+        # have one.
+        cycle = [
+            venue for venue in model["venues"][1:]
+            if venue["next_edition"] is not None
+        ]
         dates = [venue["next_edition"]["iso_date"] for venue in cycle]
         self.assertEqual(dates, sorted(dates))
 
@@ -344,7 +514,10 @@ class AgentDashboardTests(unittest.TestCase):
                 self.assertIn("default-src 'none'", policy)
                 self.assertIn("script-src 'unsafe-inline'", policy)
             self.assertIn("International Conference on Machine Learning", body)
-            self.assertIn("ICML 2026", body)
+            # ICML's last edition: compact "{year} · {month-day}" cell, not
+            # the old "ICML 2026" repeat of the venue name.
+            self.assertIn(">2026<", body)
+            self.assertIn("· 07-07", body)
             with urlopen(base + "/healthz", timeout=3) as response:
                 self.assertEqual(response.read(), b'{"status":"ok"}\n')
             with self.assertRaises(HTTPError) as error:
