@@ -26,13 +26,23 @@ As of 2026-07-18, production has these properties:
   gate is enabled and its private SQLite database is schema 11. The migration
   preserved 15 event-date schedules, 16 date attempts, 13 agent schedules,
   and five each of run, artifact, report, and report-attempt records.
-- The local-control runtime is the manifest-verified 167-file candidate built
-  on source commit `0389f5e89db8`; the pinned no-remote agent source remains at
-  that commit. The dashboard was restarted on the same runtime; it remains a
-  separately managed persistent service and may be upgraded independently.
-  Confirm each installed component rather than treating one Git revision as
-  proof for all services; repository commits are not deployed merely by
-  existing on `main`.
+- The local-control runtime is the manifest-verified 167-file candidate
+  (`candidate-20260718T133609Z`, inventory sha256 `366e83ab…`). Its code and
+  config files byte-match commit `383bee3` — not the `0389f5e89db8` its
+  manifest records: the candidate was built from the then-uncommitted working
+  tree that was committed as `383bee3` later that morning, so the manifest
+  captured the build-time HEAD. Only the runtime-embedded documentation is a
+  pre-commit snapshot; `automation/upgrade_safety.py` postdates the build and
+  is not installed. A 2026-07-18 read-only installed-runtime audit
+  (`verify-installed-revision.py`) confirmed the hash, file count, schema-11
+  code, absent legacy modules, and database `user_version` 11. The pinned
+  no-remote agent source is a separate component and remains a clean checkout
+  of `0389f5e89db8`. The next candidate must be built from a clean committed
+  snapshot and bound with `upgrade_safety candidate --expected-commit`. The
+  dashboard was restarted on the same runtime; it remains a separately managed
+  persistent service and may be upgraded independently. Confirm each installed
+  component rather than treating one Git revision as proof for all services;
+  repository commits are not deployed merely by existing on `main`.
 - The deterministic monitor registry covers all 15 catalog venues (18
   sources); the private monitor configuration matches
   (`expected_source_count=18`).
@@ -95,7 +105,7 @@ Start every continuation with read-only repository inspection:
 ```bash
 git status --short
 git log --oneline --decorate -12
-git log --oneline 0389f5e89db8..HEAD  # inspect each installed service separately
+git log --oneline 383bee3..HEAD  # inspect each installed service separately
 python postprocessing/generate_statistics.py --check
 ```
 
