@@ -83,6 +83,106 @@ sudo -u _openpapers "$PYTHON" "$RUNTIME/automation/monitor.py" \
   --state "$INTERNAL/monitor/state.sqlite3"
 ```
 
+## Diagnosing an orphaned event-date target
+
+`event_date_schedule` has no deletion path by design — cohort/`extra_targets`
+config changes (a biennial-cadence fix, a venue moving in or out of
+`extra_targets`) never retroactively remove a row that no longer matches the
+current config; they simply stop reprocessing it. Both
+`initialize_event_dates` and `_chain_successor` only ever look at rows whose
+`(venue_id, year)` is in the *current* `load_agent_targets()` output, so an
+orphaned row sits `'pending'` forever, invisible to normal operation — except
+on the dashboard, where its stale `next_check_at` can win
+`_current_target_priority`'s tie-break over a venue's real target and hijack
+its Status/Next-attempt columns. Sweep for these (read-only; the state file
+is `staff`-group-readable, see the handoff's permission note) with:
+
+```bash
+"$PYTHON" - <<'PY'
+from datetime import date
+from automation.agent_production import load_agent_targets, load_continuous_venue_ids
+import sqlite3
+conn = sqlite3.connect("file:$STATE?mode=ro", uri=True)
+conn.row_factory = sqlite3.Row
+valid = {(t.venue_id, t.year) for t in load_agent_targets(today=date.today())}
+continuous = load_continuous_venue_ids()
+for r in conn.execute("SELECT venue_id, year, status, next_check_at FROM event_date_schedule"):
+    if (r["venue_id"], r["year"]) not in valid and r["venue_id"] not in continuous:
+        print(dict(r))
+PY
+```
+
+A row this flags is not automatically wrong — a freshly `_chain_successor`'d
+or manually-backfilled future year is *expected* to be outside the current
+cohort window until the calendar rollover (`rollover_month`) reaches it; only
+a row for a year that will **never** become valid again (a cadence mismatch,
+a venue no longer in `extra_targets`) is a true orphan. For a true orphan,
+the only allowed edit is `next_check_at` (`status` stays `'pending'`; the
+CHECK constraint forbids setting `estimated_event_date` without also
+supplying real provider metadata, so never fabricate a confirmed date) —
+align it with the venue's real next edition so it stops winning priority
+ties, run as the service role in one transaction:
+
+```bash
+sudo -u _openpapers sqlite3 "$STATE" <<'SQL'
+BEGIN IMMEDIATE;
+UPDATE event_date_schedule
+SET next_check_at = '<real-next-edition-iso-timestamp>',
+    updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+WHERE venue_id = '<venue>' AND year = <year> AND status = 'pending';
+COMMIT;
+SQL
+```
+
+This is the one legitimate hand-edit exception to "never hand-edit state
+outside the commands" above — it is scoped narrowly to `next_check_at` on an
+already-orphaned `'pending'` row, never to the marker/config chain.
+
+To give an operator-completed venue with no successor a real 2027-style
+target instead of a blank "Next attempt" forever, reuse the exact fallback
+mechanism `event_dates.py` already applies when Gemini fails
+(`_calendar_fallback_date` + `ensure_scheduled_agent_target`) rather than
+hand-writing a row:
+
+```bash
+cd "$RUNTIME"
+sudo -u _openpapers "$PYTHON" - "$STATE" <<'PY'
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+from automation.control_state import ControlStateRepository
+from automation.domain import Writer
+from automation.event_dates import _calendar_fallback_date, _check_time
+
+state_path = Path(sys.argv[1])
+now = datetime.now(timezone.utc)
+venue_id, year, interval = "<venue>", <successor_year>, <interval_years>
+with ControlStateRepository(state_path, writer=Writer.LOCAL_CONTROL_PLANE, clock=lambda: now) as repository:
+    lease = repository.acquire_lease("manual-successor-backfill")
+    try:
+        repository.register_event_date_target(venue_id, year, registered_at=now, lease=lease)
+        fallback = _calendar_fallback_date(repository, venue_id, year, interval)
+        assert fallback is not None, "no prior confirmed date in the database to shift forward"
+        repository.ensure_scheduled_agent_target(
+            venue_id, year, next_check_at=_check_time(fallback, now),
+            registered_at=now, lease=lease,
+        )
+    finally:
+        repository.release_lease(lease)
+PY
+```
+
+If `_calendar_fallback_date` returns `None` (no database-recorded prior
+estimate — e.g. the venue's most recent edition predates automation
+entirely), source the "prior" date from the curated
+`config/venue_editions.v2.json` file instead and compute the same
+`prior_date.replace(year=prior_date.year + interval)` shift by hand before
+calling `ensure_scheduled_agent_target`. Either way this is a temporary
+bridge: the new row sits outside the current cohort window until the next
+calendar rollover, at which point a normal wake attempts a real Gemini
+lookup and overwrites the fallback — no code changes, only the same
+repository methods production already calls.
+
 ## Updating the monitor registry (end to end)
 
 1. Change `automation/conferences.json` in the repository, verify each new

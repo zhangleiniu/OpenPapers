@@ -28,7 +28,7 @@ As of 2026-07-18, production has these properties:
   going in as coming out).
 - The local-control runtime is the manifest-verified 153-file candidate
   (`candidate-20260718T215017Z`), installed via `upgrade-enabled.zsh` at
-  2026-07-18T21:5x UTC. Code and config byte-match commit `95a6b7c` exactly —
+  2026-07-18T21:53 UTC. Code and config byte-match commit `95a6b7c` exactly —
   built from a clean committed snapshot (working tree was clean at build
   time) and bound with `upgrade_safety candidate --expected-commit`, so
   unlike the prior candidate there is no manifest/commit mismatch. The
@@ -56,17 +56,66 @@ As of 2026-07-18, production has these properties:
   (`expected_source_count=18`).
 - The agent cohort is the 13 formulaic venues (ICCV/ECCV on their two-year
   cadence) plus the manually confirmed `extra_targets` entry NAACL 2027.
-  ICLR/AAAI/CVPR/COLT/ACL 2026 were operator-marked completed (canonical
-  scrapes predate enrollment); ICML/AISTATS/IJCAI 2026 remain active with
-  `not_ready` rechecks pending archival proceedings. JMLR is now enrolled
-  under recurring non-terminal success semantics (`continuous_targets.v1.json`
-  → `agent_production.py::_register_continuous_targets`): the installed
+  ICML/AISTATS/IJCAI 2026 remain active with `not_ready` rechecks pending
+  archival proceedings. JMLR is now enrolled under recurring non-terminal
+  success semantics (`continuous_targets.v1.json` →
+  `agent_production.py::_register_continuous_targets`): the installed
   LaunchDaemon's own post-restart wake (independent of the upgrade script's
   manual verification wake, which itself saw `no_due_work`) already claimed
   and completed one full JMLR cycle — the live dashboard shows
   `status=Scheduled, last try: success` with `next_check_at` ≈ 30 days out,
   confirming the recurring-success path (status never reaches `"completed"`)
   works in production, not just in tests.
+- **State read access was loosened 2026-07-18** (deliberate, not a leftover):
+  `/var/db/openpapers-production` and `.../control` are now `0750`
+  (`_openpapers:staff`) and `state.sqlite3` is `0640`, so any `staff`-group
+  account can read it directly without `sudo`. Write access is unchanged —
+  still `_openpapers`-only. This was requested explicitly (the system is
+  internal-only, campus-network-scoped; the prior 0600 blanket lockdown was
+  judged unnecessarily strict for a single-maintainer setup).
+- **Two stale `event_date_schedule` targets and one auto-registration gap
+  were found and manually corrected 2026-07-18**, using the new read access
+  above:
+  - `iccv/2026` and `naacl/2026` were orphaned rows from earlier config
+    revisions (pre-biennial-cohort-fix code for ICCV; an earlier cohort
+    membership for NAACL) — neither year is reachable by the current cohort
+    logic, so nothing would ever reprocess them, yet their near-term
+    `next_check_at` was winning `_current_target_priority`'s tie-break over
+    the venues' real targets, hijacking the dashboard's Status/Next-attempt
+    columns (NAACL) or leaving a permanently-misleading "Waiting for date"
+    (ICCV). Fixed by hand-updating `next_check_at` only (status stays
+    `'pending'`, no fabricated confirmed date — the CHECK constraint
+    forbids setting `estimated_event_date` on a pending row anyway) to align
+    with each venue's real next edition. Rows were **not deleted** — this
+    codebase has no deletion path for `event_date_schedule` by design: only
+    edit fields a CHECK constraint allows for the existing status.
+  - ICLR/AAAI/CVPR/COLT/ACL 2026 were operator-marked completed (canonical
+    scrapes predate enrollment) *before* `_chain_successor` existed, so they
+    never got a 2027 successor and sat with a blank "Next attempt"
+    indefinitely. Backfilled by manually invoking the exact same
+    calendar-fallback mechanism `event_dates.py` already uses when Gemini
+    fails to find a date (`_calendar_fallback_date` +
+    `ensure_scheduled_agent_target`): each venue's last confirmed 2026 date
+    shifted forward by its cadence, written as a real `agent_schedule`
+    row (`'scheduled'`), while the paired `event_date_schedule` row for 2027
+    honestly stays `'pending'`. ICCV had no database-recorded 2025 date at
+    all (predates enrollment even further back than the 2026 zombie), so its
+    fallback was sourced from the curated `venue_editions.v2.json` value
+    (2025-10-19) instead.
+  - **This is a temporary bridge, not a permanent fix**: none of these new
+    2027 rows are inside the *current* cohort's calendar window
+    (`rollover_month=10`, so `self._configuration.targets` only reaches 2026
+    until October). They sit dormant — by design, not broken — until the
+    October rollover naturally includes 2027, at which point a normal wake's
+    `initialize_event_dates` will attempt a real Gemini lookup and overwrite
+    the fallback with a confirmed date, exactly as it would for any other
+    freshly-registered target. No code changed to produce this backfill;
+    it reused existing repository methods (`register_event_date_target`,
+    `ensure_scheduled_agent_target`) exactly as production code calls them.
+  - A full sweep of all 22 `event_date_schedule` rows against the live
+    cohort/`extra_targets`/`continuous_targets` configuration found no other
+    orphaned targets. See `operations.md`'s "Diagnosing an orphaned
+    event-date target" for the reusable query if this needs checking again.
 - OpenReview credentials for the role live in the local-control plist's
   `EnvironmentVariables` (plist is 0600 for that reason). Codex/ADC/Resend
   credentials live in the dedicated role's private credential root. Do not
