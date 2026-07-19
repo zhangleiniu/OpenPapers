@@ -53,7 +53,10 @@ def _safe_directory(path: Path, *, create: bool) -> None:
         not stat.S_ISDIR(metadata.st_mode)
         or path.is_symlink()
         or metadata.st_uid != os.geteuid()
-        or metadata.st_mode & (stat.S_IRWXG | stat.S_IRWXO)
+        # Group read/traverse allowed (2026-07-19, matching
+        # local_service/production.py); group write and any "other" access
+        # remain forbidden.
+        or metadata.st_mode & (stat.S_IWGRP | stat.S_IRWXO)
         or not os.access(path, os.R_OK | os.W_OK | os.X_OK)
     ):
         raise ServiceRecordError("service record directory is unsafe")
@@ -70,7 +73,10 @@ def _safe_target(path: Path) -> None:
         not stat.S_ISREG(metadata.st_mode)
         or path.is_symlink()
         or metadata.st_uid != os.geteuid()
-        or metadata.st_mode & (stat.S_IRWXG | stat.S_IRWXO)
+        # Group read allowed (2026-07-19, matching local_service/
+        # production.py); group write and any "other" access remain
+        # forbidden.
+        or metadata.st_mode & (stat.S_IWGRP | stat.S_IRWXO)
     ):
         raise ServiceRecordError("service record target is unsafe")
 

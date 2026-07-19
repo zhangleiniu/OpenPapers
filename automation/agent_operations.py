@@ -1,16 +1,14 @@
 """Operator commands for states the automation deliberately fail-closes.
 
 The control plane is strict and one-way by design: interrupted work becomes
-a durable ambiguity, integrity markers chain over the private configuration,
-and completion normally only comes from a successful agent run. Each command
-here is the audited exit for one of those states, replacing the hand-rolled
-SQL and marker surgery that the 2026-07-17 production incident required.
+a durable ambiguity, and completion normally only comes from a successful
+agent run. Each command here is the audited exit for one of those states,
+replacing hand-rolled SQL surgery.
 
 Every command defaults to a read-only dry run and mutates only with
 ``--apply``. Database work happens under the single-writer lease; file work
-writes atomically and marker-last, then re-validates the full chain. Output
-is bounded JSON and never contains credentials, addresses, or private file
-contents.
+writes atomically, then re-validates. Output is bounded JSON and never
+contains credentials, addresses, or private file contents.
 
 Run as the dedicated service role from the installed runtime, e.g.:
 
@@ -34,16 +32,9 @@ from automation.control_state import (
     EventDateAttemptClaim,
 )
 from automation.domain import Writer
-from automation.local_service.agent_control import (
-    AGENT_PRODUCTION_CONFIG,
-    AGENT_PRODUCTION_MARKER,
-    AGENT_PRODUCTION_SECRETS,
-    _agent_marker,
-    validate_agent_production_root,
-)
+from automation.local_service.agent_control import validate_agent_production_root
 from automation.local_service.production import (
     PRODUCTION_CONFIG,
-    PRODUCTION_MARKER,
     ProductionControlError,
     _canonical,
     _configuration,
@@ -51,7 +42,6 @@ from automation.local_service.production import (
     _private_file,
     validate_production_root,
 )
-from automation.local_service.service import LOCAL_SERVICE_LABEL
 
 
 _LEASE_OWNER = "event-date-initializer"
@@ -298,27 +288,6 @@ def mark_schedule_completed(
         return summary
 
 
-def _regenerate_markers(internal_root: Path) -> None:
-    """Rewrite both integrity markers from the current private file bytes."""
-    config_bytes = _private_file(internal_root / PRODUCTION_CONFIG)
-    configuration = _configuration(json.loads(config_bytes))
-    marker = {
-        "schema_version": 1,
-        "label": LOCAL_SERVICE_LABEL,
-        "mode": "production_control",
-        "configuration_sha256": _fingerprint(config_bytes),
-        "backup_sha256": configuration.backup_sha256,
-        "remote_state_generation": configuration.remote_state_generation,
-    }
-    _atomic_private_write(internal_root / PRODUCTION_MARKER, _canonical(marker))
-    agent_config_bytes = _private_file(internal_root / AGENT_PRODUCTION_CONFIG)
-    agent_secret_bytes = _private_file(internal_root / AGENT_PRODUCTION_SECRETS)
-    _atomic_private_write(
-        internal_root / AGENT_PRODUCTION_MARKER,
-        _agent_marker(agent_config_bytes, agent_secret_bytes, internal_root),
-    )
-
-
 def update_monitor_configuration(
     internal_root: Path,
     repository_root: Path,
@@ -326,15 +295,11 @@ def update_monitor_configuration(
     apply: bool = False,
 ) -> dict[str, Any]:
     """Update registry_sha256/expected_source_count to match the deployed
-    registry, regenerating the full marker chain.
+    registry.
 
     The private monitor configuration pins both the exact bytes and the
-    total source count of ``automation/conferences.json``; the agent marker
-    chains over the monitor config and marker in turn. Editing any of them
-    in isolation fail-closes every subsequent wake (the 2026-07-17
-    incident), so this command is the one front door: it rewrites the config
-    and both markers in order and finishes with full-chain validation. Run
-    it whenever a deployed runtime changes the registry.
+    total source count of ``automation/conferences.json``. Run this whenever
+    a deployed runtime changes the registry.
     """
     internal_root = Path(internal_root)
     repository_root = Path(repository_root)
@@ -369,37 +334,7 @@ def update_monitor_configuration(
     _atomic_private_write(
         internal_root / PRODUCTION_CONFIG, _canonical(payload)
     )
-    _regenerate_markers(internal_root)
     validate_agent_production_root(internal_root, repository_root)
-    summary["validated"] = True
-    return summary
-
-
-def repair_markers(
-    internal_root: Path,
-    repository_root: Path,
-    *,
-    apply: bool = False,
-) -> dict[str, Any]:
-    """Regenerate both markers from the current config/secret bytes.
-
-    For recovery after an interrupted or partial configuration change left
-    the marker chain inconsistent. Unlike ``update-monitor-config`` this
-    does not require the chain to validate first — that is the situation it
-    exists to fix — but it still finishes with full-chain validation.
-    """
-    internal_root = Path(internal_root)
-    summary: dict[str, Any] = {"command": "repair-markers", "applied": apply}
-    try:
-        validate_agent_production_root(internal_root, Path(repository_root))
-        summary["chain"] = "already_valid"
-        return summary
-    except ProductionControlError as exc:
-        summary["chain"] = f"invalid: {exc}"
-    if not apply:
-        return summary
-    _regenerate_markers(internal_root)
-    validate_agent_production_root(internal_root, Path(repository_root))
     summary["validated"] = True
     return summary
 
@@ -427,13 +362,12 @@ def main(argv: list[str] | None = None) -> int:
     completed.add_argument("--apply", action="store_true")
 
     default_repository = Path(__file__).resolve().parents[1]
-    for name in ("update-monitor-config", "repair-markers"):
-        sub = commands.add_parser(name)
-        sub.add_argument("--internal-root", required=True, type=Path)
-        sub.add_argument(
-            "--repository-root", default=default_repository, type=Path
-        )
-        sub.add_argument("--apply", action="store_true")
+    update_config = commands.add_parser("update-monitor-config")
+    update_config.add_argument("--internal-root", required=True, type=Path)
+    update_config.add_argument(
+        "--repository-root", default=default_repository, type=Path
+    )
+    update_config.add_argument("--apply", action="store_true")
 
     args = parser.parse_args(argv)
     try:
@@ -449,13 +383,9 @@ def main(argv: list[str] | None = None) -> int:
                 event_date=args.event_date, apply=args.apply,
                 chain_next_year_interval=args.chain_next_year_interval,
             )
-        elif args.command == "update-monitor-config":
+        else:
             os.chdir(args.repository_root)
             summary = update_monitor_configuration(
-                args.internal_root, args.repository_root, apply=args.apply
-            )
-        else:
-            summary = repair_markers(
                 args.internal_root, args.repository_root, apply=args.apply
             )
     except (AgentOperationError, ProductionControlError, ValueError) as exc:

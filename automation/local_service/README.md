@@ -71,28 +71,29 @@ that equals or sits inside the managed runs root.
 Post-install operations use `automation.agent_credentials` for a fixed private
 credential layout and `automation.agent_canary` for three independently gated
 Gemini, Codex, and Resend checks. Disabled runtime/source updates must call the
-marker-last `replace_disabled_agent_production_root` boundary while the service
-is stopped. That boundary rejects enabled state on either side; it is not an
+`replace_disabled_agent_production_root` boundary while the service is
+stopped. That boundary rejects enabled state on either side; it is not an
 activation interface.
 
 `automation.agent_activation` is the separate activation boundary. Its
 read-only audit combines the exact v1/v2 files with exact-schema idle state,
-credential/recipient/source/disk checks, the fixed LaunchDaemon probe, and a
-fresh paused/drained cloud proof. `rehearse-disabled` backs up, replays, and
-restores the disabled binding. `activate` changes only the gate bit after its
-own exact authorization; `rollback` restores the retained disabled files even
-from a marker-invalid partial transition. All writes are marker-last while the
-service is stopped. Repository implementation and disabled rehearsal do not
-authorize activation; the current enabled state came from a separate explicit
-production activation and retains its exact disabled rollback backup.
+credential/recipient/source/disk checks, and the fixed LaunchDaemon probe.
+`rehearse-disabled` backs up, replays, and restores the disabled binding.
+`activate` changes only the gate bit after its own exact authorization;
+`rollback` restores the retained disabled files. Repository implementation
+and disabled rehearsal do not authorize activation; the current enabled
+state came from a separate explicit production activation and retains its
+exact disabled rollback backup.
 
-`automation.agent_status` is the separate enabled-state diagnostic boundary.
-It reads exact-version state and bounded service records without preparing a writer,
-requires fresh cloud and two-canary proofs, and emits only secret/path-free
-lifecycle evidence. Its canary proof compares against an explicit private Git
-baseline, so a reviewed dirty canary remains healthy until its status digest,
-branch, HEAD, or remote count changes. This repository capability is not proof
-that the installed runtime has been refreshed to include it.
+**Removed 2026-07-19**: the integrity-marker chain that used to bind
+config+secrets+baseline together (writes were "marker-last": interruption
+between file replaces used to fail validation closed) and the
+`automation.agent_status` two-worktree canary drift proof (Codex/ICML HEAD/
+branch/status/remote-count comparison) — both defended against tampering,
+which has no realistic actor on this single-maintainer, physically-
+controlled host. Config/secrets files are now validated independently
+against their own schema only; `agent_status` no longer requires or reads
+a canary proof. See `docs/automation.md`'s security-posture note.
 
 `automation.agent_dashboard` is a narrower loopback-only scheduling view. It
 uses the immutable safe target summary, lists every catalog venue, and exposes

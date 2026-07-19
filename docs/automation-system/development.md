@@ -153,55 +153,46 @@ Run those commands as the dedicated service role for production evidence.
 They do not authorize installation or production migration. See
 [`installation-readiness.md`](./installation-readiness.md).
 
-Runtime-upgrade safety logic is tracked and independently testable even though
-the host wrapper and private paths remain ignored. It is read-only: these
-commands validate artifacts, service-role permission bits, fresh bounded-wake
-evidence, or rollback phase ordering; they do not stop services or alter
-production:
+**Removed 2026-07-19**: `automation/upgrade_safety.py` (byte-exact whole-tree
+SHA256 manifest verification against a `--expected-commit`, and a 7-stage
+`UpgradeStage` state machine with enforced `stage+1`-only transitions and a
+`rollback-plan` generator). It verified that the runtime being installed was
+a tamper-free copy of a specific commit — a threat model with no realistic
+actor on this single-maintainer, physically-controlled host — at the cost of
+requiring every upgrade to start from a clean `git commit` before the
+candidate could even be built. `upgrade-enabled.zsh` (untracked,
+`data/automation/agent-upgrade/`) now does a plain backup →
+swap-runtime-directory → restart → single post-restart health read instead;
+the git-commit/clean-worktree check that confirms *which* commit is running
+is still worth keeping for your own bookkeeping and stayed in the script,
+just without the parallel manifest+hash system re-proving what git already
+proves. See `docs/automation.md`'s security-posture note for the fuller
+reassessment.
+
+Enabled production status is also read-only:
 
 ```bash
-python -m unittest automation.tests.test_upgrade_safety -v
-python -m automation.upgrade_safety candidate \
-  --runtime <candidate-runtime> --manifest <manifest> \
-  --expected-commit <40-character-commit>
-python -m automation.upgrade_safety staged-runtime \
-  --runtime <staged-runtime> --manifest <manifest>
-python -m automation.upgrade_safety fresh-record \
-  --records <runs.v1.json> --started-at <canonical-UTC-time>
-python -m automation.upgrade_safety rollback-plan \
-  --stage <phase> [--backup-exists]
-```
-
-Tests cover immutable manifests, bytecode/symlink contamination, the
-non-owner permissions needed by the service role, capped run histories, stale
-or unhealthy wake records, every rollback phase, and failure before a complete
-backup. See [`operations.md`](./operations.md) for the only supported live
-sequence.
-
-Enabled production status is also read-only. Exact canary paths and expected
-Git identities stay in a private schema-1 baseline; the tracked command emits
-only booleans for branch, HEAD, status-digest, and remote-count matches. An
-ignored privileged host wrapper may inspect both differently owned canaries,
-then must install the generated proof as a mode-0600 file owned by the service
-role. The proof is valid for 15 minutes:
-
-```bash
-python -m automation.agent_status canary-proof \
-  --baseline <private-canary-baseline>
 python -m automation.agent_status report \
   --internal-root <private-root> --repository-root <runtime> \
-  --execution-root <execution-root> --state <control-state> \
-  --canary-proof <fresh-private-canary-proof>
+  --execution-root <execution-root> --state <control-state>
 ```
 
-The private baseline has exact fields `schema_version` and `canaries`. It has
-exactly two entries named `codex_installed` and `icml_2026`; each entry contains
-`path`, `head`, `branch`, `status_sha256`, and `remote_count`. Baseline creation
-is an explicit operator act because it blesses the current Git state. Neither
-command writes SQLite, calls a provider, sends email, or changes service/cloud
-state. The module is installed in enabled production. Generating its required
-fresh private proofs remains an operator action. The disabled-only refresh
-command rejects enabled production and must not be used for future upgrades.
+The command writes no SQLite, calls no provider, sends no email, and changes
+no service/cloud state. The disabled-only refresh command rejects enabled
+production and must not be used for future upgrades.
+
+**Removed 2026-07-19**: the two-retained-worktree canary drift proof
+(`agent_status.py::create_canary_proof`/`read_canary_proof`, a
+`--canary-proof` flag on `report`, and the `canary-proof` subcommand) that
+used to compare `codex_installed`/`icml_2026` worktree HEAD/branch/status/
+remote-count against a private baseline. It existed to catch the installed
+runtime being modified outside the deploy pipeline — a threat model with no
+realistic actor on this single-maintainer, physically-controlled host. See
+`docs/automation.md`'s security-posture note for the fuller reassessment;
+this was one of three tamper-detection mechanisms cut in that pass (the
+others: `upgrade_safety.py`'s byte-exact whole-tree hashing and the
+`.production-control.v1.json`/`.agent-production-control.v2.json`
+integrity-marker chain).
 
 The venue dashboard is a narrower scheduling view and does not need cloud or
 canary proofs. Run it as the account that can read the installed database from

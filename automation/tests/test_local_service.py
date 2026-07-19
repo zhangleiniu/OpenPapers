@@ -21,7 +21,7 @@ from automation.local_service import (
     LocalServiceConfig,
     LocalServiceRunCode,
     LocalServiceRunStatus,
-    PRODUCTION_MARKER,
+    PRODUCTION_CONFIG,
     ProductionMonitorEffect,
     build_rollback_scope,
     collect_local_service_health,
@@ -685,17 +685,16 @@ class ProductionControlTests(LocalServiceFixture):
         configuration, secrets = validate_production_root(self.internal)
         self.assertEqual(configuration.expected_source_count, 18)
         self.assertEqual(secrets.smtp_password, "smtp-password")
-        marker = self.internal / PRODUCTION_MARKER
-        self.assertEqual(marker.stat().st_mode & 0o777, 0o600)
+        config_path = self.internal / PRODUCTION_CONFIG
+        self.assertEqual(config_path.stat().st_mode & 0o777, 0o600)
         initialize_production_root(
             self.internal, self.configuration, self.secrets
         )
 
-        marker.write_text('{"mode":"wrong"}\n', encoding="utf-8")
-        with self.assertRaisesRegex(ValueError, "marker is invalid"):
+        config_path.write_text('{"mode":"wrong"}\n', encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "configuration is invalid"):
             validate_production_root(self.internal)
 
-        marker.unlink()
         (self.internal / ".isolated-shadow.v1.json").write_text(
             "{}\n", encoding="utf-8"
         )
@@ -863,8 +862,8 @@ class ProductionControlTests(LocalServiceFixture):
             (self.internal / "monitor" / "production-wakeups.sqlite3").exists()
         )
 
-    def test_production_cli_fails_before_network_without_marker(self):
-        (self.internal / PRODUCTION_MARKER).unlink()
+    def test_production_cli_fails_before_network_without_config(self):
+        (self.internal / PRODUCTION_CONFIG).unlink()
         args = [
             "--repository-root", str(self.repository),
             "--python-executable", str(self.python),

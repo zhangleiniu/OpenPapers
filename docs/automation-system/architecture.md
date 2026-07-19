@@ -224,18 +224,22 @@ forward or require intervention; they must not create a tight retry loop.
 - **Email recipients are an explicit allowlist.** Private schema-3 Resend
   configuration accepts 1-10 unique plain addresses, while tracked/private
   policy stores only their sorted SHA-256 fingerprints. Changing the allowlist
-  requires a stopped-service marker-last replacement and never implies a send.
+  requires a stopped-service replacement and never implies a send.
 - **Activation is a separate authority.** Readiness, canary, refresh,
   rehearsal, and rollback permissions cannot open the production gate.
   Activation requires the fixed service stopped, exact current schema with no
   active/in-flight work, valid credentials and recipient binding, sufficient
   disk, a safe pinned source, and a fresh proof that cloud is paused and
   drained.
-- **Activation replacement is marker-last and recoverable.** A fresh exact
-  disabled backup is retained before changing only the effects bit. The marker
-  binding config/secrets is installed last; interruption therefore fails
-  validation closed. Rollback restores the exact disabled files marker-last
-  while the service remains stopped and never resumes cloud.
+- **Activation replacement is recoverable.** A fresh exact disabled backup is
+  retained before changing only the effects bit. Rollback restores the exact
+  disabled files while the service remains stopped and never resumes cloud.
+  **Removed 2026-07-19**: the integrity-marker chain that used to bind
+  config+secrets+baseline together and fail validation closed on any
+  interruption between file replaces — config and secrets are now validated
+  independently against their own schema only, a deliberate simplification
+  for this single-maintainer, physically-controlled host (see
+  `docs/automation.md`'s security-posture note).
 
 ## Current and retired components
 

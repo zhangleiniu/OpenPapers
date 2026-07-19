@@ -10,19 +10,15 @@ from automation.agent_operations import (
     AgentOperationError,
     mark_schedule_completed,
     recover_interrupted_event_date,
-    repair_markers,
     update_monitor_configuration,
 )
 from automation.control_state import ControlStateRepository
 from automation.domain import Writer
 from automation.local_service.agent_control import (
-    AGENT_PRODUCTION_MARKER,
     initialize_agent_production_root,
     validate_agent_production_root,
 )
 from automation.local_service.production import (
-    PRODUCTION_CONFIG,
-    PRODUCTION_MARKER,
     initialize_production_root,
     validate_production_root,
 )
@@ -304,7 +300,7 @@ class MonitorConfigurationOperationTests(unittest.TestCase):
     def tearDown(self):
         self.temp.cleanup()
 
-    def test_update_rewrites_config_and_full_marker_chain(self):
+    def test_update_rewrites_registry_configuration(self):
         dry = update_monitor_configuration(
             self.internal, self.repository, apply=False
         )
@@ -333,36 +329,6 @@ class MonitorConfigurationOperationTests(unittest.TestCase):
             self.internal, self.repository, apply=True
         )
         self.assertFalse(replay["changed"])
-
-    def test_repair_markers_recovers_a_broken_chain(self):
-        untouched = repair_markers(self.internal, self.repository, apply=True)
-        self.assertEqual(untouched["chain"], "already_valid")
-
-        # Simulate the incident: config edited without regenerating markers.
-        config_path = self.internal / PRODUCTION_CONFIG
-        payload = json.loads(config_path.read_bytes())
-        payload["expected_source_count"] = 18
-        canonical = (
-            json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n"
-        ).encode()
-        config_path.write_bytes(canonical)
-        config_path.chmod(0o600)
-        with self.assertRaises(Exception):
-            validate_agent_production_root(self.internal, self.repository)
-
-        dry = repair_markers(self.internal, self.repository, apply=False)
-        self.assertIn("invalid", dry["chain"])
-        with self.assertRaises(Exception):
-            validate_agent_production_root(self.internal, self.repository)
-
-        applied = repair_markers(self.internal, self.repository, apply=True)
-        self.assertTrue(applied["validated"])
-        validate_agent_production_root(self.internal, self.repository)
-        marker_bytes = (self.internal / PRODUCTION_MARKER).read_bytes()
-        self.assertIn(
-            hashlib.sha256(canonical).hexdigest(), marker_bytes.decode()
-        )
-        self.assertTrue((self.internal / AGENT_PRODUCTION_MARKER).exists())
 
 
 if __name__ == "__main__":

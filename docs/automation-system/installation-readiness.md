@@ -106,8 +106,8 @@ rehearsal:
 1. Stop and verify the current LaunchDaemon is inactive.
 2. Create a fresh timestamped private SQLite backup and verify it before any
    migration.
-3. Install versioned private agent configuration/secrets and a new marker
-   fingerprint with byte-exact rollback copies.
+3. Install versioned private agent configuration/secrets with byte-exact
+   rollback copies.
 4. Migrate the production database once, using the same code revision that
    passed rehearsal.
 5. Replace/reload only the fixed OpenPapers LaunchDaemon and verify one
@@ -116,7 +116,7 @@ rehearsal:
    canary. A canary permission does not authorize the next canary.
 
 A later refresh must use a fresh candidate runtime and clean no-remote source,
-retain byte-exact rollback copies, and replace v2 bindings marker-last through
+retain byte-exact rollback copies, and replace v2 bindings through
 `replace_disabled_agent_production_root`. Both installed and candidate
 configuration must remain `external_effects_enabled=false`; refresh permission
 cannot be reused for activation. A schema-11 runtime refresh must include the
@@ -124,7 +124,7 @@ separately authorized stopped-service backup and isolated-copy migration;
 ordinary refresh authority cannot migrate or downgrade the schema.
 
 If any step fails, stop the service. Restore the pre-migration database and
-private config/marker/plist as one set before restarting; never attempt an
+private config/plist as one set before restarting; never attempt an
 in-place schema downgrade.
 
 ## Activation readiness and disabled rehearsal

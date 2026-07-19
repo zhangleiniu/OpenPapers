@@ -74,9 +74,11 @@ def _validate_journal(path: Path) -> Path:
         metadata = journal.lstat()
     except OSError as exc:
         raise SourceChangeHintError("production wakeup journal is unavailable") from exc
+    # Group read allowed (2026-07-19, matching local_service/production.py);
+    # group write and any "other" access remain forbidden.
     if not stat.S_ISREG(metadata.st_mode) or journal.is_symlink() \
             or metadata.st_uid != os.geteuid() \
-            or metadata.st_mode & (stat.S_IRWXG | stat.S_IRWXO):
+            or metadata.st_mode & (stat.S_IWGRP | stat.S_IRWXO):
         raise SourceChangeHintError("production wakeup journal is unsafe")
     return journal
 

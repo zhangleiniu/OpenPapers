@@ -65,14 +65,16 @@ sudo -u _openpapers "$PYTHON" -m automation.agent_operations <subcommand> …
 |---|---|
 | A wake was killed mid-date-lookup; every wake now fails with "event-date attempt is active or ambiguously interrupted" | `recover-event-date --state $INTERNAL/control/state.sqlite3 [--retry-minutes N] --apply` |
 | A venue/year's canonical scrape already exists on disk (manual scrape predating enrollment); stop the automation from re-scraping it | `mark-completed --state … --venue V --year Y [--event-date YYYY-MM-DD] --apply` (`--event-date` required when the target never got a successful date lookup) |
-| `automation/conferences.json` changed in a deployed runtime; wakes fail with "registry fingerprint changed" or "source count changed" | `update-monitor-config --internal-root $INTERNAL --apply` (rewrites the private config and regenerates **both** integrity markers, in order) |
-| The marker chain is inconsistent after an interrupted/partial config change | `repair-markers --internal-root $INTERNAL --apply` |
+| `automation/conferences.json` changed in a deployed runtime; wakes fail with "registry fingerprint changed" or "source count changed" | `update-monitor-config --internal-root $INTERNAL --apply` (rewrites the private config) |
 
-Background: the private monitor config is bound by
-`.production-control.v1.json`, and `.agent-production-control.v2.json`
-chains over both of those plus the agent config/secrets. Editing any file in
-that chain by hand invalidates everything above it — always use the
-commands, never hand-edit.
+**Removed 2026-07-19**: the `.production-control.v1.json`/
+`.agent-production-control.v2.json` integrity-marker chain (and the
+`repair-markers` command that existed only to recover from it going
+inconsistent) — see `docs/automation.md`'s security-posture note. Config and
+secrets files can now be hand-edited directly; each still gets its own
+schema validation (type/shape/range checks) independent of the others, but
+nothing cross-checks them against each other or against a recorded
+baseline anymore.
 
 The monitor's persisted state must also hold exactly one row per registered
 source before a wake will run it; after adding sources, prime once:

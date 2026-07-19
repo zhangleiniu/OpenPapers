@@ -9,7 +9,6 @@ from automation.local_service.launchd import (
 )
 from automation.local_service.production import (
     PRODUCTION_CONFIG,
-    PRODUCTION_MARKER,
     PRODUCTION_SECRETS,
     ProductionConfiguration,
     ProductionControlError,
@@ -57,7 +56,6 @@ __all__ = [
     "LocalServiceRunStatus",
     "LocalWakeupEffect",
     "PRODUCTION_CONFIG",
-    "PRODUCTION_MARKER",
     "PRODUCTION_SECRETS",
     "ProductionConfiguration",
     "ProductionControlError",

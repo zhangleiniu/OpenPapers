@@ -175,9 +175,12 @@ def create_control_state_backup(source: Path, destination: Path) -> Path:
         parent = destination.parent.lstat()
     except OSError as exc:
         raise ControlStateMigrationError("control backup directory is unavailable") from exc
+    # Group read/traverse allowed (2026-07-19, matching
+    # local_service/production.py); group write and any "other" access
+    # remain forbidden.
     if not stat.S_ISDIR(parent.st_mode) or destination.parent.is_symlink() \
             or parent.st_uid != os.geteuid() \
-            or parent.st_mode & (stat.S_IRWXG | stat.S_IRWXO):
+            or parent.st_mode & (stat.S_IWGRP | stat.S_IRWXO):
         raise ControlStateMigrationError("control backup directory is unsafe")
     audit = audit_control_state(source)
     if not audit.quick_check_ok:

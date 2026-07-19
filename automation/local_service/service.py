@@ -326,7 +326,10 @@ def _private_directory(path: Path) -> bool:
             stat.S_ISDIR(metadata.st_mode)
             and not path.is_symlink()
             and metadata.st_uid == os.geteuid()
-            and metadata.st_mode & (stat.S_IRWXG | stat.S_IRWXO) == 0
+            # Group read/traverse allowed (2026-07-19, matching
+            # local_service/production.py); group write and any "other"
+            # access remain forbidden.
+            and metadata.st_mode & (stat.S_IWGRP | stat.S_IRWXO) == 0
             and os.access(path, os.R_OK | os.W_OK | os.X_OK)
         )
     except OSError:

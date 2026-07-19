@@ -96,9 +96,12 @@ def _codex(args) -> dict[str, object]:
     canary_root = Path(args.external_root).resolve() / "agent-canaries"
     canary_root.mkdir(mode=0o700, exist_ok=True)
     metadata = canary_root.lstat()
+    # Group read/traverse allowed (2026-07-19, matching
+    # local_service/production.py); group write and any "other" access
+    # remain forbidden.
     if not stat.S_ISDIR(metadata.st_mode) or canary_root.is_symlink() \
             or metadata.st_uid != os.geteuid() \
-            or metadata.st_mode & (stat.S_IRWXG | stat.S_IRWXO):
+            or metadata.st_mode & (stat.S_IWGRP | stat.S_IRWXO):
         raise AgentCanaryError("Codex canary root is unsafe")
     worktree = canary_root / authorization
     if worktree.exists():

@@ -58,9 +58,12 @@ def _private_directory(path: Path, *, create: bool = False) -> Path:
     if create:
         path.mkdir(mode=0o700, parents=False, exist_ok=False)
     metadata = path.lstat()
+    # Group read/traverse allowed (2026-07-19, matching
+    # local_service/production.py); group write and any "other" access
+    # remain forbidden.
     if not stat.S_ISDIR(metadata.st_mode) or path.is_symlink() \
             or metadata.st_uid != os.geteuid() \
-            or metadata.st_mode & (stat.S_IRWXG | stat.S_IRWXO):
+            or metadata.st_mode & (stat.S_IWGRP | stat.S_IRWXO):
         raise AgentSuccessRehearsalError("rehearsal directory is unsafe")
     return path
 

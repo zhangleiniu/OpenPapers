@@ -19,7 +19,7 @@ Valid phase statuses are `Planned`, `In progress`, `Implemented`, and
 | Agent execution | Codex in an isolated worktree, broad scraper judgment, narrow authority | Implemented |
 | Run notification | One replay-safe email per agent run | Implemented |
 | Production composition | Explicit cohort/config plus one bounded agent wakeup effect | Implemented |
-| Installation, activation, rollback | Private config, marker-last transitions, exact recovery, enabled gate | Implemented |
+| Installation, activation, rollback | Private config, exact recovery, enabled gate | Implemented |
 | Post-install operations | Credentials, canaries, read-only status, dashboard, operator commands, failure alerting | Implemented |
 | State simplification | Migrate away from vestigial verification/case/job/notification schema | Deployed and verified in production (2026-07-18) |
 | JMLR enrollment | Recurring, non-terminal success semantics for a continuous journal | Planned |
@@ -65,9 +65,10 @@ decision-relevant:
   venue/year is closed with `agent_operations mark-completed`.
 - **Operations hardening.** Failed wakes carry a bounded secret-free
   failure category; three consecutive failures alert by email. The private
-  monitor configuration and its two chained integrity markers are updated
-  only through `agent_operations update-monitor-config` /
-  `repair-markers`.
+  monitor configuration is updated through `agent_operations
+  update-monitor-config`; config/secrets files can otherwise be edited
+  directly (the integrity-marker chain and `repair-markers` were removed
+  2026-07-19, see `docs/automation.md`'s security-posture note).
 
 ## State simplification (Deployed)
 

@@ -87,7 +87,7 @@ scrape predates enrollment can be closed with
 
 - Change/error and run-report emails, plus the wake-failure alert.
 - `automation.agent_status`: a secret-free read-only summary CLI for
-  enabled production, including the strict private two-canary proof format.
+  enabled production.
 - The read-only dashboard: loopback backend (`automation.agent_dashboard`)
   behind an authenticated NIU-private HTTPS Caddy proxy at
   `https://archer.cs.niu.edu:8443/` (username `openpapers`; password
@@ -142,6 +142,87 @@ implementing code (`automation/prefect_flows.py`, `run_monitor_flow.py`,
 repository. The code is still recoverable from git history if a cloud path
 is ever needed again; see `docs/automation-system/local-first-decision.md`
 for why local-first was chosen in the first place.
+
+## Security posture
+
+This system runs on one Mac that only its maintainer has account or physical
+access to, with no other writer and no adversarial network — the dev
+machine is the production machine. A recurring theme in the codebase's early
+history was security/integrity machinery sized for a multi-tenant or
+adversarial-network deployment, carried forward past the point it matched
+that reality. On 2026-07-19 a deliberate pass reassessed and cut three
+mechanisms whose only job was catching *tampering*, a threat model with no
+realistic actor here:
+
+- **`automation/upgrade_safety.py`** (deleted): byte-exact whole-runtime-tree
+  SHA256 verification against a manifest, plus a 7-stage `UpgradeStage`
+  state machine with enforced single-step transitions and a `rollback-plan`
+  generator. `upgrade-enabled.zsh` (untracked,
+  `data/automation/agent-upgrade/`) now does backup → swap → restart → a
+  real post-restart health check (a fresh bounded wake actually completing
+  healthily, inlined directly rather than going through a separate module)
+  instead. The git-commit/clean-worktree check on the agent-source
+  candidate stayed — it answers "is this actually the commit I think it
+  is," a different and still-useful question from "did someone tamper with
+  it."
+- **The `.production-control.v1.json` / `.agent-production-control.v2.json`
+  integrity-marker chain** (removed from `local_service/production.py` and
+  `local_service/agent_control.py`): each marker recorded a SHA-256 hash of
+  the config/secrets bytes it was written together with, and every read
+  path recomputed and compared. Editing any file in the chain by hand
+  invalidated everything above it — this was the direct cause of the
+  2026-07-17 production incident that `agent_operations.py`'s now-deleted
+  `repair-markers` command existed to recover from. Config and secrets
+  files are now validated independently against their own schema (type,
+  shape, range) with no cross-file or baseline check. Concrete, accepted
+  trade-off: hand-editing `external_effects_enabled` directly in a
+  well-formed config file now takes effect on the next read, the same as
+  going through the dedicated activation function — see
+  `test_hand_editing_the_effects_bit_now_takes_effect_directly` in
+  `automation/tests/test_agent_control.py`. An interruption between the
+  (now two, not three) file replaces during a write can also leave config
+  and secrets from different "generations" without failing validation
+  closed; in practice this is low-risk because secrets content rarely
+  changes across a normal replacement.
+- **The `agent_status.py` two-worktree canary drift proof**
+  (`create_canary_proof`/`read_canary_proof`, a `--canary-proof` flag on
+  `report`, and the `canary-proof` subcommand): compared the
+  `codex_installed`/`icml_2026` worktrees' HEAD/branch/status/remote-count
+  against a private baseline to catch the installed runtime being modified
+  outside the deploy pipeline.
+
+Kept, deliberately, because they answer a different question than "was this
+tampered with":
+
+- **The coding agent's own sandbox boundaries** — isolated worktree, no
+  push/commit/merge/deploy, `workspace-write` Codex sandbox, no sudo. This
+  bounds what an LLM agent running with some autonomy can do to the host,
+  independent of who else has access to the machine.
+- **External-effect budgets, cooldowns, and the systemic-failure circuit**
+  on Gemini/Codex/Resend calls — cost control and being a considerate web
+  citizen, not security theater.
+- **Backup-before-upgrade and `control_state_migration.py`'s
+  rehearse-on-a-copy-first pattern** — cheap (a `cp` and a rerun of the
+  migration against the copy) and guards against a real, still-plausible
+  mistake (a schema-migration bug), not against an adversary.
+- **Secret-scrubbing on read-only status output**
+  (`domain.assert_secret_free`, no paths/addresses/credentials in
+  `agent_status`/dashboard output) — this protects against exactly the kind
+  of exposure that happens when status output gets pasted into a chat, a
+  ticket, or an AI coding session, which is a real and current usage
+  pattern, not a hypothetical one.
+
+The staff-group read loosening on `/var/db/openpapers-production` (see
+[`current-handoff.md`](./automation-system/current-handoff.md)) was the
+first pass at this; the "zero group/other permission bits" pattern it left
+behind in `agent_canary.py`, `agent_status.py`,
+`control_state_migration.py`, `source_change_hints.py`,
+`local_service/records.py`, `dashboard_deployment.py`,
+`agent_success_rehearsal.py`, `local_service/agent_control.py::
+validate_agent_source`, and two more spots inside `local_service/
+production.py`/`local_service/service.py` found in this pass were all
+loosened to the same group-read-allowed/group-write-and-other-forbidden
+standard in the same change.
 
 ## Historical material
 

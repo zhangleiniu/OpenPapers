@@ -8,7 +8,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from automation.local_service.agent_control import (
-    AGENT_PRODUCTION_MARKER,
     InstalledAgentProductionEffect,
     activate_agent_production_root,
     create_agent_activation_backup,
@@ -233,17 +232,7 @@ class AgentControlTests(unittest.TestCase):
         self.assertNotIn("placeholder-key", repr(builds[0]["secrets"]))
         self.assertIs(builds[0]["credentials"].__class__, credentials.__class__)
 
-    def test_marker_binds_baseline_and_agent_files(self):
-        initialize_agent_production_root(
-            self.internal, self.repository, self._configuration(),
-            {"schema_version": 2, "resend": None},
-        )
-        marker = self.internal / AGENT_PRODUCTION_MARKER
-        marker.write_text('{"schema_version":2}\n', encoding="utf-8")
-        with self.assertRaisesRegex(ValueError, "marker is invalid"):
-            validate_agent_production_root(self.internal, self.repository)
-
-    def test_disabled_replacement_is_marker_last_and_rejects_activation(self):
+    def test_disabled_replacement_replaces_both_files_and_rejects_activation(self):
         initialize_agent_production_root(
             self.internal, self.repository, self._configuration(),
             {"schema_version": 2, "resend": None},
@@ -263,7 +252,10 @@ class AgentControlTests(unittest.TestCase):
             replacement, {"schema_version": 2, "resend": None},
             replace_file=replace,
         )
-        self.assertEqual(calls[-1], AGENT_PRODUCTION_MARKER)
+        self.assertEqual(
+            set(calls),
+            {".agent-production-config.v2.json", ".agent-production-secrets.v2.json"},
+        )
         configuration, _ = validate_agent_production_root(
             self.internal, self.repository
         )
@@ -275,7 +267,16 @@ class AgentControlTests(unittest.TestCase):
                 {"schema_version": 2, "resend": None},
             )
 
-    def test_partial_disabled_replacement_fails_closed(self):
+    def test_partial_disabled_replacement_leaves_each_file_independently_valid(self):
+        # Without a cross-file marker, an interruption between the two
+        # independent file replaces (config succeeds, secrets does not
+        # reach its target) no longer fails validation closed the way a
+        # marker mismatch used to -- each file is still independently
+        # well-formed and schema-valid on its own, just not necessarily
+        # from the same "generation". This is an accepted trade-off (see
+        # docs/automation.md's security-posture note): the realistic
+        # blast radius is small because secrets content rarely changes
+        # across a normal replacement.
         initialize_agent_production_root(
             self.internal, self.repository, self._configuration(),
             {"schema_version": 2, "resend": None},
@@ -299,10 +300,12 @@ class AgentControlTests(unittest.TestCase):
                 replacement, {"schema_version": 2, "resend": None},
                 replace_file=interrupt,
             )
-        with self.assertRaisesRegex(ValueError, "marker is invalid"):
-            validate_agent_production_root(self.internal, self.repository)
+        configuration, _ = validate_agent_production_root(
+            self.internal, self.repository
+        )
+        self.assertEqual(configuration.agent.due_policy.monthly_run_limit, 121)
 
-    def test_enabled_replacement_is_marker_last_and_changes_policy(self):
+    def test_enabled_replacement_replaces_both_files_and_changes_policy(self):
         secrets = {"schema_version": 2, "resend": {
             "api_key": "placeholder-key",
             "email_from": "from@example.test",
@@ -326,7 +329,10 @@ class AgentControlTests(unittest.TestCase):
             replacement, secrets, replace_file=replace,
         )
 
-        self.assertEqual(calls[-1], AGENT_PRODUCTION_MARKER)
+        self.assertEqual(
+            set(calls),
+            {".agent-production-config.v2.json", ".agent-production-secrets.v2.json"},
+        )
         configuration, installed_secrets = validate_agent_production_root(
             self.internal, self.repository
         )
@@ -357,7 +363,6 @@ class AgentControlTests(unittest.TestCase):
         names = (
             ".agent-production-config.v2.json",
             ".agent-production-secrets.v2.json",
-            ".agent-production-control.v2.json",
         )
         before = {name: (self.internal / name).read_bytes() for name in names}
         replacement = self._configuration(enabled=True)
@@ -433,7 +438,7 @@ class AgentControlTests(unittest.TestCase):
         )
         self.assertNotIn("placeholder-key", repr(secrets))
 
-    def test_activation_is_marker_last_and_retains_disabled_backup(self):
+    def test_activation_replaces_both_files_and_retains_disabled_backup(self):
         secrets = {"schema_version": 2, "resend": {
             "api_key": "placeholder-key",
             "email_from": "from@example.test",
@@ -456,7 +461,10 @@ class AgentControlTests(unittest.TestCase):
             replace_file=replace,
         )
 
-        self.assertEqual(calls[-1], AGENT_PRODUCTION_MARKER)
+        self.assertEqual(
+            set(calls),
+            {".agent-production-config.v2.json", ".agent-production-secrets.v2.json"},
+        )
         configuration, installed_secrets = validate_agent_production_root(
             self.internal, self.repository
         )
@@ -476,7 +484,6 @@ class AgentControlTests(unittest.TestCase):
         names = (
             ".agent-production-config.v2.json",
             ".agent-production-secrets.v2.json",
-            ".agent-production-control.v2.json",
         )
         before = {name: (self.internal / name).read_bytes() for name in names}
         calls = 0
@@ -505,7 +512,7 @@ class AgentControlTests(unittest.TestCase):
             {name: (self.internal / name).read_bytes() for name in names},
         )
 
-    def test_explicit_restore_recovers_invalid_partial_activation(self):
+    def test_explicit_restore_recovers_malformed_configuration(self):
         secrets = {"schema_version": 2, "resend": {
             "api_key": "placeholder-key",
             "email_from": "from@example.test",
@@ -519,13 +526,8 @@ class AgentControlTests(unittest.TestCase):
             self.internal, self.repository, backup
         )
         config = self.internal / ".agent-production-config.v2.json"
-        payload = json.loads(config.read_text(encoding="utf-8"))
-        payload["external_effects_enabled"] = True
-        config.write_text(
-            json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n",
-            encoding="utf-8",
-        )
-        with self.assertRaisesRegex(ValueError, "marker is invalid"):
+        config.write_text("{not valid json", encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "invalid"):
             validate_agent_production_root(self.internal, self.repository)
 
         restore_disabled_agent_production_root(
@@ -536,6 +538,39 @@ class AgentControlTests(unittest.TestCase):
             self.internal, self.repository
         )
         self.assertFalse(configuration.external_effects_enabled)
+
+    def test_hand_editing_the_effects_bit_now_takes_effect_directly(self):
+        # Intentional behavior change (2026-07-19): activation used to be
+        # gated by a marker binding config+secrets+baseline together, so a
+        # raw hand-edit of external_effects_enabled left the marker stale
+        # and validation refused it -- only activate_agent_production_root
+        # (which recomputed the marker) could really flip the bit. Without
+        # a marker, each file validates on its own schema merits, so a
+        # direct edit of a well-formed config file now takes effect on the
+        # next validation, same as calling the dedicated activation
+        # function would. Accepted trade-off for a single-maintainer host
+        # with no other writer: see docs/automation.md's security-posture
+        # note.
+        secrets = {"schema_version": 2, "resend": {
+            "api_key": "placeholder-key",
+            "email_from": "from@example.test",
+            "email_to": "to@example.test",
+        }}
+        initialize_agent_production_root(
+            self.internal, self.repository, self._configuration(), secrets,
+        )
+        config = self.internal / ".agent-production-config.v2.json"
+        payload = json.loads(config.read_text(encoding="utf-8"))
+        payload["external_effects_enabled"] = True
+        config.write_text(
+            json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n",
+            encoding="utf-8",
+        )
+        configuration, secrets_out = validate_agent_production_root(
+            self.internal, self.repository
+        )
+        self.assertTrue(configuration.external_effects_enabled)
+        self.assertIsNotNone(secrets_out)
 
     def test_disabled_activation_rehearsal_is_byte_exact(self):
         secrets = {"schema_version": 2, "resend": {
@@ -549,7 +584,6 @@ class AgentControlTests(unittest.TestCase):
         names = (
             ".agent-production-config.v2.json",
             ".agent-production-secrets.v2.json",
-            ".agent-production-control.v2.json",
         )
         before = {name: (self.internal / name).read_bytes() for name in names}
 

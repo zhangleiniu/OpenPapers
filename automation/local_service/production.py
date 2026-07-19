@@ -23,13 +23,11 @@ from automation.source_change_hints import (
     record_source_change_hints,
 )
 from automation.local_service.service import (
-    LOCAL_SERVICE_LABEL,
     LocalEffectOutcome,
     LocalEffectStatus,
 )
 
 
-PRODUCTION_MARKER = ".production-control.v1.json"
 PRODUCTION_CONFIG = ".production-config.v1.json"
 PRODUCTION_SECRETS = ".production-secrets.v1.json"
 _MAX_FILE_BYTES = 16_384
@@ -246,7 +244,6 @@ def validate_production_root(
     _private_directory(root / "monitor")
     if (root / _RETIRED_SHADOW_MARKER).exists():
         raise ProductionControlError("production and shadow markers cannot coexist")
-    marker = _json_file(root / PRODUCTION_MARKER)
     configuration_bytes = _private_file(root / PRODUCTION_CONFIG)
     try:
         configuration_payload = json.loads(configuration_bytes)
@@ -256,16 +253,6 @@ def validate_production_root(
         raise ProductionControlError("production configuration is invalid")
     configuration = _configuration(configuration_payload)
     secrets = _secrets(_json_file(root / PRODUCTION_SECRETS))
-    expected_marker = {
-        "schema_version": 1,
-        "label": LOCAL_SERVICE_LABEL,
-        "mode": "production_control",
-        "configuration_sha256": _fingerprint(configuration_bytes),
-        "backup_sha256": configuration.backup_sha256,
-        "remote_state_generation": configuration.remote_state_generation,
-    }
-    if marker != expected_marker:
-        raise ProductionControlError("production marker is invalid")
     return configuration, secrets
 
 
@@ -273,7 +260,7 @@ def initialize_production_root(
     internal_root: Path,
     configuration: Mapping[str, Any],
     secrets: Mapping[str, Any],
-) -> tuple[Path, Path, Path]:
+) -> tuple[Path, Path]:
     """Create exact production files, accepting only byte-equivalent replay."""
     root = Path(internal_root)
     _private_directory(root)
@@ -281,22 +268,13 @@ def initialize_production_root(
     _private_directory(root / "monitor")
     if (root / _RETIRED_SHADOW_MARKER).exists():
         raise ProductionControlError("production and shadow markers cannot coexist")
-    config = _configuration(configuration)
+    _configuration(configuration)
     _secrets(secrets)
     config_bytes = _canonical(configuration)
     secret_bytes = _canonical(secrets)
-    marker_payload = {
-        "schema_version": 1,
-        "label": LOCAL_SERVICE_LABEL,
-        "mode": "production_control",
-        "configuration_sha256": _fingerprint(config_bytes),
-        "backup_sha256": config.backup_sha256,
-        "remote_state_generation": config.remote_state_generation,
-    }
     files = (
         (root / PRODUCTION_CONFIG, config_bytes),
         (root / PRODUCTION_SECRETS, secret_bytes),
-        (root / PRODUCTION_MARKER, _canonical(marker_payload)),
     )
     for path, encoded in files:
         try:
@@ -316,7 +294,7 @@ def initialize_production_root(
             file_obj.flush()
             os.fsync(file_obj.fileno())
     validate_production_root(root)
-    return files[0][0], files[1][0], files[2][0]
+    return files[0][0], files[1][0]
 
 
 @contextmanager
@@ -464,7 +442,9 @@ def _validate_monitor_state(path: Path, expected_source_count: int) -> None:
         not stat.S_ISREG(metadata.st_mode)
         or path.is_symlink()
         or metadata.st_uid != os.geteuid()
-        or metadata.st_mode & (stat.S_IRWXG | stat.S_IRWXO)
+        # Group read allowed (2026-07-19, matching _private_file above);
+        # group write and any "other" access remain forbidden.
+        or metadata.st_mode & (stat.S_IWGRP | stat.S_IRWXO)
     ):
         raise ProductionControlError("restored monitor state is unsafe")
     try:
@@ -547,7 +527,10 @@ class ProductionMonitorEffect:
                 not stat.S_ISREG(metadata.st_mode)
                 or journal_path.is_symlink()
                 or metadata.st_uid != os.geteuid()
-                or metadata.st_mode & (stat.S_IRWXG | stat.S_IRWXO)
+                # Group read allowed (2026-07-19, matching _private_file
+                # above); group write and any "other" access remain
+                # forbidden.
+                or metadata.st_mode & (stat.S_IWGRP | stat.S_IRWXO)
             ):
                 raise ProductionControlError("production wakeup journal is unsafe")
         with sqlite3.connect(journal_path) as journal:

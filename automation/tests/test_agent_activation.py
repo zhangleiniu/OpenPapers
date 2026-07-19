@@ -166,7 +166,6 @@ class AgentActivationTests(unittest.TestCase):
             (self.internal / name).read_bytes() for name in (
                 ".agent-production-config.v2.json",
                 ".agent-production-secrets.v2.json",
-                ".agent-production-control.v2.json",
             )
         )
         result = self._audit()
@@ -183,7 +182,6 @@ class AgentActivationTests(unittest.TestCase):
             (self.internal / name).read_bytes() for name in (
                 ".agent-production-config.v2.json",
                 ".agent-production-secrets.v2.json",
-                ".agent-production-control.v2.json",
             )
         ))
 
