@@ -1,3 +1,4 @@
+import json
 import subprocess
 import sys
 import tempfile
@@ -240,6 +241,92 @@ class SourceLifecycleTests(unittest.TestCase):
 
         self.assertEqual(existing["title"], "Camera-ready title")
         self.assertEqual(existing["abstract"], "Camera-ready abstract")
+
+    def test_archival_upgrade_redownloads_pdf_even_though_one_already_exists(self):
+        # A provisional (OpenReview) record already has a PDF on disk. Once
+        # the canonical archival source (PMLR) becomes available and the
+        # scraper re-runs, the merge upgrades every metadata field to the
+        # canonical version -- but before this fix, the *PDF file* was left
+        # untouched forever because the redownload check only looked at
+        # whether pdf_path was already set, not at whether the record had
+        # just been promoted from provisional to archival.
+        existing = {
+            "id": "openreview-id", "title": "A Useful Paper",
+            "url": "https://openreview.net/forum?id=x",
+            "authors": ["Ada Lovelace"], "abstract": "Draft",
+            "metadata_source": "openreview", "source_id": "openreview-id",
+            "source_ids": {"openreview": "openreview-id"},
+            "publication_status": "provisional",
+            "pdf_url": "https://openreview.net/pdf/x.pdf",
+            "pdf_path": "papers/icml/2026/old.pdf", "pdf_downloaded": True,
+            "year": 2026, "conference": "icml",
+        }
+
+        class FakeArchivalScraper(BaseScraper):
+            NAME = "Fake"
+            BASE_URL = "https://example.test/"
+
+            def get_paper_urls(self, year):
+                return ["https://proceedings.mlr.press/v999/lovelace26a.html"]
+
+            def parse_paper(self, url):
+                return {
+                    "id": "lovelace26a", "title": "A Useful Paper",
+                    "authors": ["Ada Lovelace"], "abstract": "Camera ready",
+                    "metadata_source": "pmlr", "source_id": "lovelace26a",
+                    "source_ids": {"pmlr": "lovelace26a"},
+                    "publication_status": "archival",
+                    "pdf_url":
+                        "https://proceedings.mlr.press/v999/lovelace26a.pdf",
+                    "url": url,
+                }
+
+        scraper = FakeArchivalScraper("icml")
+        downloaded = []
+        scraper.download_pdf = (
+            lambda paper, year: downloaded.append(paper["id"]) or True)
+
+        with patch("scrapers.base.load_papers", return_value=[existing]), \
+                patch("scrapers.base.save_papers"), \
+                patch("scrapers.base.assign_bibtex"), \
+                patch.object(BaseScraper, "_has_valid_local_pdf",
+                             return_value=True):
+            papers = scraper.scrape_year(2026, download_pdfs=True, resume=True)
+
+        self.assertEqual(len(papers), 1)
+        self.assertEqual(papers[0]["id"], "openreview-id")
+        self.assertEqual(papers[0]["publication_status"], "archival")
+        self.assertEqual(papers[0]["pdf_url"],
+                          "https://proceedings.mlr.press/v999/lovelace26a.pdf")
+        self.assertEqual(downloaded, ["openreview-id"])
+
+    def test_save_papers_updates_pdf_completeness_index(self):
+        # The dashboard reads this sidecar instead of the full metadata
+        # corpus (see automation/agent_dashboard.py::read_pdf_completeness_
+        # index) -- save_papers must keep it current from the same
+        # in-memory paper list it just wrote, for every venue/year, without
+        # clobbering entries for other venues/years already in the file.
+        from utils import save_papers
+
+        with tempfile.TemporaryDirectory() as temp:
+            metadata_dir = Path(temp) / "metadata"
+            with patch("config.METADATA_DIR", metadata_dir):
+                save_papers(
+                    [{"id": "a", "pdf_path": "papers/icml/2026/a.pdf"}],
+                    "icml", 2026)
+                save_papers([{"id": "b", "pdf_path": None}], "icml", 2025)
+                save_papers(
+                    [{"id": "c", "pdf_path": "papers/aistats/2026/c.pdf"}],
+                    "aistats", 2026)
+
+            index = json.loads(
+                (metadata_dir / "pdf_completeness.v1.json").read_text())
+
+        self.assertEqual(index["schema_version"], 1)
+        self.assertEqual(index["completeness"], {
+            "icml": {"2026": True, "2025": False},
+            "aistats": {"2026": True},
+        })
 
     def test_openreview_note_preserves_provenance_and_direct_pdf(self):
         note = {

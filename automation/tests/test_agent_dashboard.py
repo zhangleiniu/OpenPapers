@@ -1,5 +1,6 @@
 import copy
 import json
+import os
 import sqlite3
 import tempfile
 import threading
@@ -20,6 +21,7 @@ from automation.agent_dashboard import (
     build_dashboard_model,
     create_dashboard_server,
     load_venue_editions,
+    read_pdf_completeness_index,
     render_dashboard,
     scan_pdf_completeness,
 )
@@ -453,7 +455,7 @@ class AgentDashboardTests(unittest.TestCase):
         self.assertIsNone(aistats["last_edition"])
         self.assertEqual(aistats["next_edition"]["name"], "AISTATS 2026")
         self.assertFalse(aistats["next_edition"]["approx"])
-        self.assertFalse(aistats["status"]["waiting_for_pdf"])
+        self.assertIsNone(aistats["status"]["pdf_status"])
 
         model = build_dashboard_model(
             load_venue_catalog(), targets, observed_at=NOW,
@@ -461,20 +463,25 @@ class AgentDashboardTests(unittest.TestCase):
             pdf_completeness={"aistats": {2026: False}},
         )
         aistats = next(v for v in model["venues"] if v["venue_id"] == "aistats")
-        self.assertTrue(aistats["status"]["waiting_for_pdf"])
+        self.assertEqual(aistats["status"]["pdf_status"], "waiting")
         document = render_dashboard(model)
-        self.assertIn("badge-info", document)
+        self.assertIn('class="badge-info"', document)
         self.assertIn("PDF download is still in progress", document)
 
         # A venue whose metadata scan says the year IS fully downloaded
-        # never gets the badge, even mid-retry for an unrelated reason.
+        # gets a distinct "collected" badge instead -- it must not look
+        # identical to a year with no data at all (no badge either way),
+        # nor to a year still genuinely missing PDFs.
         model = build_dashboard_model(
             load_venue_catalog(), targets, observed_at=NOW,
             editions=load_venue_editions(),
             pdf_completeness={"aistats": {2026: True}},
         )
         aistats = next(v for v in model["venues"] if v["venue_id"] == "aistats")
-        self.assertFalse(aistats["status"]["waiting_for_pdf"])
+        self.assertEqual(aistats["status"]["pdf_status"], "collected")
+        document = render_dashboard(model)
+        self.assertIn('class="badge-success"', document)
+        self.assertNotIn('class="badge-info"', document)
 
     def test_scan_pdf_completeness_reads_metadata_and_skips_bad_entries(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -502,6 +509,42 @@ class AgentDashboardTests(unittest.TestCase):
 
         missing = scan_pdf_completeness(Path("/nonexistent-openpapers-root"))
         self.assertEqual(missing, {})
+
+    def test_read_pdf_completeness_index_parses_the_sidecar_file(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / "pdf_completeness.v1.json").write_text(json.dumps({
+                "schema_version": 1,
+                "completeness": {
+                    "icml": {"2026": True},
+                    "aistats": {"2026": False, "not-a-year": True},
+                    "bad-venue": "not-a-dict",
+                },
+            }), encoding="utf-8")
+
+            result = read_pdf_completeness_index(root)
+
+        self.assertEqual(result, {
+            "icml": {2026: True},
+            "aistats": {2026: False},
+        })
+
+    def test_read_pdf_completeness_index_tolerates_missing_or_bad_file(self):
+        self.assertEqual(
+            read_pdf_completeness_index(Path("/nonexistent-openpapers-root")),
+            {},
+        )
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / "pdf_completeness.v1.json").write_text(
+                "not json", encoding="utf-8"
+            )
+            self.assertEqual(read_pdf_completeness_index(root), {})
+
+            (root / "pdf_completeness.v1.json").write_text(json.dumps({
+                "schema_version": 2, "completeness": {"icml": {"2026": True}},
+            }), encoding="utf-8")
+            self.assertEqual(read_pdf_completeness_index(root), {})
 
     def test_orphaned_event_date_without_agent_schedule_renders_as_anomaly(self):
         # complete_event_date_success inserts the agent_schedule row in the

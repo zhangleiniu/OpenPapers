@@ -199,10 +199,14 @@ class BaseScraper(ABC):
                             break
 
                     if matched is not None:
+                        was_archival = matched.get('publication_status') == 'archival'
                         self._merge_record(matched, paper)
                         existing_urls.add(url)
+                        becoming_archival = (
+                            not was_archival and
+                            matched.get('publication_status') == 'archival')
                         if (download_pdfs and matched.get('pdf_url') and
-                                not matched.get('pdf_path')):
+                                (not matched.get('pdf_path') or becoming_archival)):
                             self.download_pdf(matched, year)
                         continue
 

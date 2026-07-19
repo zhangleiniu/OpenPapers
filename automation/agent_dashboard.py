@@ -9,9 +9,10 @@ back to a cadence approximation marked with ``~``. A year with a real
 agent_schedule row that has not reached "Collected" is never reported as a
 finished "last edition" even once its calendar date has passed — it stays
 "next edition" until it is actually done, optionally paired with a
-waiting-for-PDF badge sourced from scraper metadata JSON (``--metadata-
-root``, a lightweight pdf_path-presence check, not the fuller on-disk
-validity ``postprocessing/generate_statistics.py`` performs). Timestamps
+waiting-for-PDF or already-collected badge sourced from a scraper-maintained
+metadata index (``--metadata-root``, a lightweight pdf_path-presence check,
+not the fuller on-disk validity ``postprocessing/generate_statistics.py``
+performs). Timestamps
 default to America/Chicago; a client-side selector re-renders them in other
 zones (inline script only — the strict no-external-resource CSP still
 applies).
@@ -255,17 +256,20 @@ def _paper_has_pdf(paper: Any) -> bool:
 
 
 def scan_pdf_completeness(metadata_root: Path) -> dict[str, dict[int, bool]]:
-    """Per-venue-year PDF completeness, read from scraper metadata JSON.
+    """Per-venue-year PDF completeness, computed from a full corpus scan.
 
     A lightweight signal only: it checks whether each paper record in
     ``metadata/{venue}/{venue}_{year}.json`` carries a non-empty
     ``pdf_path`` field, not on-disk file validity —
     ``postprocessing/generate_statistics.py`` does that fuller check for the
-    canonical coverage report. This is enough to distinguish "PDFs still
-    pending" from "fully collected" for the dashboard's own indicator,
-    without stat-ing every PDF on every render. Unreadable or malformed
-    files are skipped rather than raised: this is a best-effort display
-    hint, never scheduling or readiness authority.
+    canonical coverage report. Reading and parsing every metadata file is
+    too expensive to run on every dashboard page load (hence
+    :func:`read_pdf_completeness_index`, which the live dashboard actually
+    uses) — this full scan exists to (re)build that index, e.g. once via a
+    one-off backfill for a metadata root that predates the index, or to
+    resynchronize it if it and the corpus ever drift apart. Unreadable or
+    malformed files are skipped rather than raised: this is a best-effort
+    display hint, never scheduling or readiness authority.
     """
     result: dict[str, dict[int, bool]] = {}
     root = Path(metadata_root)
@@ -284,6 +288,40 @@ def scan_pdf_completeness(metadata_root: Path) -> dict[str, dict[int, bool]]:
         result.setdefault(venue_id, {})[int(year_text)] = all(
             _paper_has_pdf(paper) for paper in papers
         )
+    return result
+
+
+def read_pdf_completeness_index(metadata_root: Path) -> dict[str, dict[int, bool]]:
+    """Read the scraper-maintained PDF-completeness sidecar index.
+
+    ``utils.save_papers`` keeps ``pdf_completeness.v1.json`` (at the
+    metadata root, alongside the per-venue directories) current every time
+    it writes a venue/year, from the same in-memory paper list it just
+    wrote — so the dashboard's hot path costs one small, O(venue count)
+    file read, never a scan of the whole corpus. A missing, unreadable, or
+    malformed index is treated the same as "no signal" (empty result) —
+    this is a best-effort display hint, never scheduling or readiness
+    authority.
+    """
+    path = Path(metadata_root) / "pdf_completeness.v1.json"
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+        return {}
+    if not isinstance(payload, dict) or payload.get("schema_version") != 1:
+        return {}
+    completeness = payload.get("completeness")
+    if not isinstance(completeness, dict):
+        return {}
+    result: dict[str, dict[int, bool]] = {}
+    for venue_id, years in completeness.items():
+        if not isinstance(venue_id, str) or not isinstance(years, dict):
+            continue
+        for year_text, complete in years.items():
+            if not isinstance(year_text, str) or not year_text.isdigit() \
+                    or not isinstance(complete, bool):
+                continue
+            result.setdefault(venue_id, {})[int(year_text)] = complete
     return result
 
 
@@ -441,7 +479,7 @@ def _cycle_progress(
 def _status_view(
     current_target: Mapping[str, object] | None,
     *,
-    waiting_for_pdf: bool = False,
+    pdf_status: str | None = None,
 ) -> dict[str, Any]:
     """Split phase (primary) from historical disposition (secondary).
 
@@ -450,11 +488,21 @@ def _status_view(
     what happened last time" — a phase word is always one of the fixed
     lifecycle labels; disposition is just context. The year is included so
     a row's status is never ambiguous about which year it describes.
+
+    ``pdf_status`` is one of ``"collected"`` (the metadata scan says every
+    paper already has a PDF — most often a provisional/preprint source,
+    ahead of the canonical archival one the agent is actually waiting on),
+    ``"waiting"`` (the scan says PDFs are still missing), or ``None`` (no
+    metadata scan result for this year, so no claim is made either way).
+    Without this split, a fully-downloaded-but-still-`not_ready` year (e.g.
+    ICML's OpenReview preprint set ahead of PMLR) rendered identically to a
+    year with no data at all — both just showed phase "Scheduled" and
+    disposition "not_ready".
     """
     if current_target is None:
         return {
             "phase": "Not enrolled", "year": None, "disposition": None,
-            "warning": None, "anomaly": False, "waiting_for_pdf": False,
+            "warning": None, "anomaly": False, "pdf_status": None,
         }
     phase = str(current_target["phase"])
     disposition = current_target.get("last_disposition")
@@ -473,7 +521,7 @@ def _status_view(
         "disposition": disposition,
         "warning": warning,
         "anomaly": phase in _ANOMALY_PHASES,
-        "waiting_for_pdf": bool(waiting_for_pdf),
+        "pdf_status": pdf_status,
     }
 
 
@@ -622,12 +670,15 @@ def build_dashboard_model(
             venue_id, lifecycles[venue_id], editions.get(venue_id, ()),
             db_dates, today, incomplete_years,
         )
-        pdf_pending = False
+        pdf_status = None
         if current is not None and current["phase"] in _AGENT_INCOMPLETE_PHASES:
             year_complete = (pdf_completeness or {}).get(
                 venue_id, {}
             ).get(int(current["year"]))
-            pdf_pending = year_complete is False
+            if year_complete is True:
+                pdf_status = "collected"
+            elif year_complete is False:
+                pdf_status = "waiting"
         venue["enrolled"] = bool(target_rows)
         venue["current_target"] = current
         venue["last_edition"] = _edition_view(venue_id, last)
@@ -635,7 +686,7 @@ def build_dashboard_model(
         venue["progress"] = _cycle_progress(
             current, venue["next_edition"], observed_at
         )
-        venue["status"] = _status_view(current, waiting_for_pdf=pdf_pending)
+        venue["status"] = _status_view(current, pdf_status=pdf_status)
         resolved.append(venue)
 
     def _sort_key(venue: Mapping[str, Any]) -> tuple:
@@ -750,10 +801,18 @@ def _status_cell(status: Mapping[str, object]) -> str:
             ' <span class="badge-warn" '
             f'title="{html.escape(str(warning), quote=True)}">&#9993;</span>'
         )
-    if status.get("waiting_for_pdf"):
+    pdf_status = status.get("pdf_status")
+    if pdf_status == "waiting":
         primary += (
             ' <span class="badge-info" title="Metadata collected for this '
             'year; PDF download is still in progress">&#128196;</span>'
+        )
+    elif pdf_status == "collected":
+        primary += (
+            ' <span class="badge-success" title="Papers already downloaded '
+            'for this year from a provisional source; automation is still '
+            'waiting for the canonical archival version before marking it '
+            'collected">&#9989;</span>'
         )
     cell = primary
     disposition = status.get("disposition")
@@ -839,6 +898,7 @@ tr:last-child td {{ border-bottom: 0; }}
 .edition-label {{ color: #8491a8; font-size: 12px; }}
 .badge-warn {{ color: #f2c14e; cursor: help; }}
 .badge-info {{ color: #60a5fa; cursor: help; }}
+.badge-success {{ color: #86efac; cursor: help; }}
 .bar-track {{ width: 130px; height: 6px; border-radius: 3px; background: #202b46;
   overflow: hidden; }}
 .bar-fill {{ height: 100%; border-radius: 3px; }}
@@ -928,7 +988,7 @@ def build_dashboard_document(
         observed_at=clock(),
         editions=load_venue_editions(editions_path),
         pdf_completeness=(
-            scan_pdf_completeness(metadata_root) if metadata_root else None
+            read_pdf_completeness_index(metadata_root) if metadata_root else None
         ),
     )
     return render_dashboard(model).encode("utf-8")

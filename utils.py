@@ -259,27 +259,72 @@ class RobustSession:
             return False
 
 
+def _update_pdf_completeness_index(
+    metadata_dir: Path, conference: str, year: int, papers: List[Dict]
+) -> None:
+    """Best-effort update of the dashboard's PDF-completeness sidecar index.
+
+    The dashboard used to answer "are this year's PDFs all downloaded?" by
+    re-reading and JSON-parsing every venue's full metadata file on every
+    page load — expensive on a large, external-volume corpus. This index is
+    updated once, right here, from the ``papers`` list this function
+    already has in memory, so the dashboard only ever needs to read one
+    small file instead of the whole corpus. Never raises: a failed update
+    only means a stale display hint, not a scraper failure.
+    """
+    index_path = metadata_dir / "pdf_completeness.v1.json"
+    complete = bool(papers) and all(
+        isinstance(paper, dict) and bool(paper.get("pdf_path"))
+        for paper in papers
+    )
+    try:
+        try:
+            payload = json.loads(index_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            payload = {}
+        completeness = payload.get("completeness") if isinstance(payload, dict) else None
+        if not isinstance(completeness, dict):
+            completeness = {}
+        venue_entry = completeness.get(conference)
+        completeness[conference] = {
+            **(venue_entry if isinstance(venue_entry, dict) else {}),
+            str(year): complete,
+        }
+        tmp_path = index_path.with_suffix(".json.tmp")
+        tmp_path.write_text(
+            json.dumps(
+                {"schema_version": 1, "completeness": completeness},
+                indent=2, sort_keys=True,
+            ),
+            encoding="utf-8",
+        )
+        tmp_path.replace(index_path)
+    except OSError as e:
+        logger.error(f"Failed to update PDF completeness index: {e}")
+
+
 def save_papers(papers: List[Dict], conference: str, year: int):
     """Save papers to JSON with error handling."""
     try:
         from config import METADATA_DIR
-        
+
         conf_dir = METADATA_DIR / conference
         conf_dir.mkdir(parents=True, exist_ok=True)
-        
+
         filepath = conf_dir / f"{conference}_{year}.json"
-        
+
         # Create backup if file exists
         if filepath.exists():
             backup_path = filepath.with_suffix('.json.bak')
             filepath.rename(backup_path)
             logger.info(f"Created backup: {backup_path}")
-        
+
         with open(filepath, 'w', encoding='utf-8') as f:
             json.dump(papers, f, indent=2, ensure_ascii=False)
-        
+
         logger.info(f"Saved {len(papers)} papers to {filepath}")
-        
+        _update_pdf_completeness_index(METADATA_DIR, conference, year, papers)
+
     except Exception as e:
         logger.error(f"Failed to save papers: {e}")
 
