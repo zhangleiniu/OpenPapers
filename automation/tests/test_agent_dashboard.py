@@ -112,14 +112,18 @@ class VenueEditionTests(unittest.TestCase):
         # AISTATS-shaped case: metadata scraped, PDFs still pending, so the
         # agent_schedule row for 2026 has not reached "Collected" even
         # though its curated date has already passed. It must not be
-        # reported as a finished "last edition", and it must not be skipped
-        # in favor of a guessed future year either.
+        # reported as a *finished* "last edition", and it must not be
+        # skipped in favor of a guessed future year either. With no earlier
+        # completed year available, it is still surfaced as "last edition"
+        # (rather than left blank) but marked in_progress so it isn't read
+        # as done.
         curated = [{"year": 2026, "start_date": date(2026, 5, 2), "label": None}]
         last, next_edition = _resolve_editions(
             "aistats", {"kind": "annual"}, curated, {}, TODAY,
             incomplete_years=frozenset({2026}),
         )
-        self.assertIsNone(last)
+        self.assertEqual(last["year"], 2026)
+        self.assertTrue(last["in_progress"])
         self.assertEqual(next_edition["year"], 2026)
         self.assertFalse(next_edition["approx"])
         self.assertEqual(next_edition["start_date"], date(2026, 5, 2))
@@ -452,7 +456,11 @@ class AgentDashboardTests(unittest.TestCase):
 
         model = self._model(targets=targets)
         aistats = next(v for v in model["venues"] if v["venue_id"] == "aistats")
-        self.assertIsNone(aistats["last_edition"])
+        # No earlier completed edition exists, so the still-open 2026 year
+        # is surfaced as "last edition" too (in_progress=True) rather than
+        # left blank.
+        self.assertEqual(aistats["last_edition"]["name"], "AISTATS 2026")
+        self.assertTrue(aistats["last_edition"]["in_progress"])
         self.assertEqual(aistats["next_edition"]["name"], "AISTATS 2026")
         self.assertFalse(aistats["next_edition"]["approx"])
         self.assertIsNone(aistats["status"]["pdf_status"])
@@ -482,6 +490,51 @@ class AgentDashboardTests(unittest.TestCase):
         document = render_dashboard(model)
         self.assertIn('class="badge-success"', document)
         self.assertNotIn('class="badge-info"', document)
+
+    def test_continuous_venue_never_gets_the_pdf_badge(self):
+        # The "collected" checkmark badge means "provisional source ahead of
+        # canonical archival" -- a continuous venue like JMLR has no such
+        # split (it just downloads PDFs incrementally) and its phase never
+        # leaves "Scheduled" by design, so without an explicit guard this
+        # badge would render permanently and misleadingly.
+        with ControlStateRepository(
+            self.state, writer=Writer.LOCAL_CONTROL_PLANE, clock=lambda: NOW
+        ) as repository:
+            lease = repository.acquire_lease("fixture-continuous")
+            try:
+                repository.register_continuous_event_date(
+                    "jmlr", 2026, registered_at=NOW, lease=lease,
+                )
+                repository.ensure_scheduled_agent_target(
+                    "jmlr", 2026, next_check_at=NOW + timedelta(days=10),
+                    registered_at=NOW, lease=lease,
+                )
+            finally:
+                repository.release_lease(lease)
+
+        model = build_dashboard_model(
+            load_venue_catalog(), read_agent_state_summary(self.state),
+            observed_at=NOW, editions=load_venue_editions(),
+            pdf_completeness={"jmlr": {2026: True}},
+        )
+        jmlr = next(v for v in model["venues"] if v["venue_id"] == "jmlr")
+        self.assertEqual(jmlr["status"]["phase"], "Scheduled")
+        self.assertIsNone(jmlr["status"]["pdf_status"])
+        document = render_dashboard(model)
+        self.assertNotIn('class="badge-success"', document)
+
+    def test_venue_with_no_monitor_source_gets_the_warning_badge(self):
+        catalog = {"venues": [{
+            "venue_id": "testvenue",
+            "display_name": "Test Venue",
+            "lifecycle": {"kind": "annual"},
+            "scraper": {"monitor_registered": False},
+        }]}
+        model = build_dashboard_model(catalog, [], observed_at=NOW)
+        document = render_dashboard(model)
+        self.assertIn(
+            'title="No deterministic monitor source configured"', document
+        )
 
     def test_scan_pdf_completeness_reads_metadata_and_skips_bad_entries(self):
         with tempfile.TemporaryDirectory() as temp:

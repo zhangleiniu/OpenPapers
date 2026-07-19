@@ -48,10 +48,19 @@ def render_caddyfile(
     bind_address: str,
     public_port: int,
     backend_port: int,
-    username: str,
-    password_hash: str,
+    username: str | None = None,
+    password_hash: str | None = None,
 ) -> bytes:
-    """Render private-CA HTTPS and authentication for one fixed endpoint."""
+    """Render private-CA HTTPS for one fixed endpoint.
+
+    ``username``/``password_hash`` are optional together: pass both to add a
+    ``basic_auth`` gate in front of the reverse proxy, or leave both unset to
+    serve the endpoint with only TLS and the private-IPv4 network scope. The
+    backend itself is read-only with no input surface, so the login prompt is
+    not load-bearing for it today; it becomes relevant again once an editing
+    surface (e.g. hand-adjusting ``next_check_at``) is added in front of the
+    same proxy.
+    """
     if not isinstance(hostname, str) or not _HOSTNAME.fullmatch(hostname):
         raise DashboardDeploymentError("dashboard hostname is invalid")
     try:
@@ -72,10 +81,20 @@ def render_caddyfile(
     backend = _port(backend_port, field="dashboard backend port")
     if public == backend:
         raise DashboardDeploymentError("dashboard ports must be distinct")
-    if not isinstance(username, str) or not _IDENTITY.fullmatch(username):
-        raise DashboardDeploymentError("dashboard username is invalid")
-    if not isinstance(password_hash, str) or not _BCRYPT.fullmatch(password_hash):
-        raise DashboardDeploymentError("dashboard password hash is invalid")
+    if (username is None) != (password_hash is None):
+        raise DashboardDeploymentError(
+            "dashboard auth requires both username and password hash, or neither"
+        )
+    auth_block = ""
+    if username is not None:
+        if not isinstance(username, str) or not _IDENTITY.fullmatch(username):
+            raise DashboardDeploymentError("dashboard username is invalid")
+        if not isinstance(password_hash, str) or not _BCRYPT.fullmatch(password_hash):
+            raise DashboardDeploymentError("dashboard password hash is invalid")
+        auth_block = f"""    basic_auth {{
+        {username} {password_hash}
+    }}
+"""
     document = f"""{{
     admin off
     auto_https disable_redirects
@@ -85,10 +104,7 @@ def render_caddyfile(
 https://{hostname}:{public} {{
     bind {address}
     tls internal
-    basic_auth {{
-        {username} {password_hash}
-    }}
-    reverse_proxy 127.0.0.1:{backend}
+{auth_block}    reverse_proxy 127.0.0.1:{backend}
     header {{
         Strict-Transport-Security "max-age=31536000"
         X-Content-Type-Options "nosniff"
@@ -203,8 +219,8 @@ def render_dashboard_deployment(
     bind_address: str,
     public_port: int,
     backend_port: int,
-    username: str,
-    password_hash: str,
+    username: str | None = None,
+    password_hash: str | None = None,
 ) -> dict[str, object]:
     """Create a new private staging set and return a password-free manifest."""
     root = Path(output_root)
@@ -215,9 +231,12 @@ def render_dashboard_deployment(
         metadata = parent.lstat()
     except OSError as exc:
         raise DashboardDeploymentError("dashboard staging parent is unavailable") from exc
+    # Group read/traverse allowed (2026-07-19, matching
+    # local_service/production.py); group write and any "other" access
+    # remain forbidden.
     if not stat.S_ISDIR(metadata.st_mode) or parent.is_symlink() \
             or metadata.st_uid != os.geteuid() \
-            or metadata.st_mode & (stat.S_IRWXG | stat.S_IRWXO):
+            or metadata.st_mode & (stat.S_IWGRP | stat.S_IRWXO):
         raise DashboardDeploymentError("dashboard staging parent is unsafe")
     root.mkdir(mode=0o700)
     try:
@@ -258,6 +277,7 @@ def render_dashboard_deployment(
             "bind_address": bind_address,
             "public_port": public_port,
             "backend_port": backend_port,
+            "auth_enabled": username is not None,
             "caddy_sha256": hashlib.sha256(source_caddy.read_bytes()).hexdigest(),
             "files": {
                 name: hashlib.sha256(encoded).hexdigest()
@@ -298,9 +318,21 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--bind-address", required=True)
     parser.add_argument("--public-port", type=int, default=8443)
     parser.add_argument("--backend-port", type=int, default=8765)
-    parser.add_argument("--username", default="openpapers")
+    parser.add_argument("--username", default=None)
+    parser.add_argument(
+        "--no-auth", action="store_true",
+        help="serve the proxy without basic_auth (TLS and the private-IPv4 "
+        "network scope still apply); reads no password from stdin",
+    )
     args = parser.parse_args(argv)
-    password_hash = sys.stdin.readline().rstrip("\n")
+    if args.no_auth:
+        if args.username is not None:
+            parser.error("--username and --no-auth are mutually exclusive")
+        username = None
+        password_hash = None
+    else:
+        username = args.username or "openpapers"
+        password_hash = sys.stdin.readline().rstrip("\n")
     try:
         manifest = render_dashboard_deployment(
             args.output_root,
@@ -316,7 +348,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             bind_address=args.bind_address,
             public_port=args.public_port,
             backend_port=args.backend_port,
-            username=args.username,
+            username=username,
             password_hash=password_hash,
         )
     except (DashboardDeploymentError, OSError):

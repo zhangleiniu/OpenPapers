@@ -202,10 +202,15 @@ def _resolve_editions(
     agent_schedule row exists and has not reached "Collected"), even though
     the year's calendar date may already be in the past — e.g. a venue whose
     metadata is scraped but PDFs are still pending. The most recent such
-    year is never reported as "last edition" (it is not actually done) and
-    always becomes "next edition" with its own real date, pre-empting the
-    cadence approximation — the row stays on the venue/year that is
-    genuinely in progress instead of jumping ahead to a guessed future one.
+    year is never reported as a *finished* "last edition" (it is not
+    actually done) and always becomes "next edition" with its own real
+    date, pre-empting the cadence approximation — the row stays on the
+    venue/year that is genuinely in progress instead of jumping ahead to a
+    guessed future one. If that leaves no earlier completed year to show as
+    "last edition" (e.g. the venue's only tracked year is this in-progress
+    one), the in-progress year is shown there too, marked ``in_progress``,
+    rather than left blank — a same-year "in progress" note carries more
+    information than an empty cell.
     """
     is_continuous = lifecycle.get("kind") == "continuous"
     merged: dict[int, dict[str, Any]] = {}
@@ -234,6 +239,8 @@ def _resolve_editions(
             next_edition = item
     if pending is not None:
         next_edition = pending
+        if last is None and pending["start_date"] <= today:
+            last = {**pending, "in_progress": True}
     elif next_edition is None and last is not None and not is_continuous:
         interval = lifecycle.get("interval_years") or 1
         approx_year = last["year"] + interval
@@ -343,6 +350,9 @@ def _edition_view(
         # set only for a real curated label (e.g. JMLR's "v27") that still
         # carries information once the venue name is dropped from the cell.
         "curated_label": label,
+        # True when this is a "last edition" cell reusing a still-open year
+        # (see _resolve_editions) rather than an actually-finished one.
+        "in_progress": bool(edition.get("in_progress", False)),
     }
 
 
@@ -671,7 +681,15 @@ def build_dashboard_model(
             db_dates, today, incomplete_years,
         )
         pdf_status = None
-        if current is not None and current["phase"] in _AGENT_INCOMPLETE_PHASES:
+        # A continuous venue (e.g. JMLR) has no provisional-vs-archival split
+        # for the "collected" badge to describe — it just downloads PDFs
+        # incrementally and its phase never leaves _AGENT_INCOMPLETE_PHASES
+        # by design (see the recurring-success note above), so without this
+        # guard the badge would render as a permanent, meaningless fixture
+        # rather than the "provisional source ahead of canonical" signal it
+        # was designed for.
+        if current is not None and current["phase"] in _AGENT_INCOMPLETE_PHASES \
+                and venue["lifecycle_kind"] != "continuous":
             year_complete = (pdf_completeness or {}).get(
                 venue_id, {}
             ).get(int(current["year"]))
@@ -756,6 +774,12 @@ def _edition_cell(edition: object) -> str:
     label = edition.get("curated_label")
     if label:
         cell += f' <span class="edition-label">({html.escape(str(label))})</span>'
+    if edition.get("in_progress"):
+        cell += (
+            ' <span class="edition-label" title="This year is not finished '
+            'yet (see Status) — shown here because no earlier finished '
+            'edition exists">in progress</span>'
+        )
     return f"<td>{cell}</td>"
 
 
@@ -801,18 +825,24 @@ def _status_cell(status: Mapping[str, object]) -> str:
             ' <span class="badge-warn" '
             f'title="{html.escape(str(warning), quote=True)}">&#9993;</span>'
         )
+    # Text alongside the icon, not hidden behind hover-only title tooltips —
+    # an icon whose meaning only shows up on mouseover reads as unexplained
+    # at a glance (reported confusing on AISTATS/ICML's badges).
     pdf_status = status.get("pdf_status")
     if pdf_status == "waiting":
         primary += (
             ' <span class="badge-info" title="Metadata collected for this '
-            'year; PDF download is still in progress">&#128196;</span>'
+            'year; PDF download is still in progress">&#128196;</span> '
+            '<span class="status-note">PDF pending</span>'
         )
     elif pdf_status == "collected":
         primary += (
             ' <span class="badge-success" title="Papers already downloaded '
             'for this year from a provisional source; automation is still '
             'waiting for the canonical archival version before marking it '
-            'collected">&#9989;</span>'
+            'collected">&#9989;</span> '
+            '<span class="status-note">provisional copy ready, '
+            'awaiting archival</span>'
         )
     cell = primary
     disposition = status.get("disposition")
@@ -845,7 +875,7 @@ def render_dashboard(model: Mapping[str, object]) -> str:
         badge = (
             ' <span class="badge-warn" '
             'title="No deterministic monitor source configured">&#9888;</span>'
-            if venue.get("source_monitor") == "Not configured" else ""
+            if venue.get("source_monitor") == "Registry missing" else ""
         )
         row = "".join((
             f'<td class="venue" title="{html.escape(display_name, quote=True)}">'
@@ -907,6 +937,7 @@ tr:last-child td {{ border-bottom: 0; }}
 .status-phase {{ color: #cdd7e8; }}
 .status-anomaly {{ color: #f87171; font-weight: 700; }}
 .status-disposition {{ margin-top: 3px; font-size: 12px; color: #8491a8; }}
+.status-note {{ color: #8491a8; font-size: 12px; }}
 footer {{ color: #8491a8; margin-top: 18px; font-size: 13px; }}
 </style>
 </head>

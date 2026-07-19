@@ -79,6 +79,42 @@ class DashboardDeploymentTests(unittest.TestCase):
         self.assertEqual(proxy["ProgramArguments"][0],
                          str(self.paths["installed_caddy"]))
 
+    def test_no_auth_omits_basic_auth_and_manifest_records_it(self):
+        caddyfile = render_caddyfile(
+            hostname="archer.cs.niu.edu",
+            bind_address="10.158.56.37",
+            public_port=8443,
+            backend_port=8765,
+        ).decode()
+        self.assertNotIn("basic_auth", caddyfile)
+        self.assertIn("tls internal", caddyfile)
+        self.assertIn("reverse_proxy 127.0.0.1:8765", caddyfile)
+
+        staging = self.root / "staging-no-auth"
+        manifest = render_dashboard_deployment(
+            staging,
+            **self.paths,
+            role_user="_openpapers",
+            role_group="_openpapers",
+            hostname="archer.cs.niu.edu",
+            bind_address="10.158.56.37",
+            public_port=8443,
+            backend_port=8765,
+        )
+        self.assertFalse(manifest["auth_enabled"])
+        self.assertNotIn(
+            "basic_auth", (staging / "Caddyfile").read_text()
+        )
+
+        with self.assertRaisesRegex(DashboardDeploymentError, "requires both"):
+            render_caddyfile(
+                hostname="archer.cs.niu.edu",
+                bind_address="10.158.56.37",
+                public_port=8443,
+                backend_port=8765,
+                username="openpapers",
+            )
+
     def test_staging_is_private_canonical_and_password_free_in_manifest(self):
         staging = self.root / "staging"
 
