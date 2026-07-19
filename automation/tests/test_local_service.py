@@ -704,6 +704,33 @@ class ProductionControlTests(LocalServiceFixture):
                 self.internal, self.configuration, self.secrets
             )
 
+    def test_group_read_is_trusted_but_group_write_and_other_are_not(self):
+        # This host's staff group is a small trusted set of accounts (not
+        # the public) — group read/traverse on the production root and its
+        # files is a deliberate exception; group write and any "other"
+        # access must still be rejected.
+        from automation.local_service.production import (
+            PRODUCTION_SECRETS,
+            ProductionControlError,
+        )
+
+        control = self.internal / "control"
+        secrets_path = self.internal / PRODUCTION_SECRETS
+        self.internal.chmod(0o750)
+        control.chmod(0o750)
+        secrets_path.chmod(0o640)
+        validate_production_root(self.internal)
+
+        secrets_path.chmod(0o660)
+        with self.assertRaisesRegex(ProductionControlError, "file is unsafe"):
+            validate_production_root(self.internal)
+        secrets_path.chmod(0o640)
+
+        self.internal.chmod(0o755)
+        with self.assertRaisesRegex(ProductionControlError, "directory is unsafe"):
+            validate_production_root(self.internal)
+        self.internal.chmod(0o750)
+
     def test_wake_failure_alert_uses_validated_config_and_bounded_content(self):
         from automation.local_service.production import send_wake_failure_alert
 

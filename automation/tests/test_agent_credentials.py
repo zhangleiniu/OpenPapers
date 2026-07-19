@@ -43,7 +43,20 @@ class AgentCredentialTests(unittest.TestCase):
         validate_agent_credential_context(
             self.internal, require_codex_auth=True, require_google_adc=True
         )
+        # Group read is a deliberate, trusted exception (this host's staff
+        # group is a small trusted set of accounts, not the public).
         os.chmod(context.google_adc, 0o640)
+        validate_agent_credential_context(
+            self.internal, require_google_adc=True
+        )
+
+        # Group write and any "other" access remain forbidden.
+        os.chmod(context.google_adc, 0o660)
+        with self.assertRaisesRegex(AgentCredentialError, "file is unsafe"):
+            validate_agent_credential_context(
+                self.internal, require_google_adc=True
+            )
+        os.chmod(context.google_adc, 0o644)
         with self.assertRaisesRegex(AgentCredentialError, "file is unsafe"):
             validate_agent_credential_context(
                 self.internal, require_google_adc=True

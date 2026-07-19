@@ -44,9 +44,12 @@ def _private_directory(path: Path) -> None:
         metadata = path.lstat()
     except OSError as exc:
         raise AgentCredentialError("agent credential directory is unavailable") from exc
+    # Group read/traverse is a deliberate, trusted exception (2026-07-19 —
+    # this host's staff group is a small trusted set of accounts, not the
+    # public); group write and any "other" access remain forbidden.
     if not stat.S_ISDIR(metadata.st_mode) or path.is_symlink() \
             or metadata.st_uid != os.geteuid() \
-            or metadata.st_mode & (stat.S_IRWXG | stat.S_IRWXO) \
+            or metadata.st_mode & (stat.S_IWGRP | stat.S_IRWXO) \
             or not os.access(path, os.R_OK | os.W_OK | os.X_OK):
         raise AgentCredentialError("agent credential directory is unsafe")
 
@@ -58,7 +61,7 @@ def _private_file(path: Path) -> None:
         raise AgentCredentialError("agent credential file is unavailable") from exc
     if not stat.S_ISREG(metadata.st_mode) or path.is_symlink() \
             or metadata.st_uid != os.geteuid() \
-            or metadata.st_mode & (stat.S_IRWXG | stat.S_IRWXO) \
+            or metadata.st_mode & (stat.S_IWGRP | stat.S_IRWXO) \
             or not 2 <= metadata.st_size <= 1_048_576:
         raise AgentCredentialError("agent credential file is unsafe")
 

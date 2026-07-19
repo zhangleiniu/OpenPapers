@@ -97,7 +97,10 @@ def _private_directory(path: Path) -> None:
         not stat.S_ISDIR(metadata.st_mode)
         or path.is_symlink()
         or metadata.st_uid != os.geteuid()
-        or metadata.st_mode & (stat.S_IRWXG | stat.S_IRWXO)
+        # Group read/traverse is allowed (deliberate, 2026-07-18/19 — this
+        # host's staff group is a trusted small set of accounts, not the
+        # public); group write and any "other" access are still forbidden.
+        or metadata.st_mode & (stat.S_IWGRP | stat.S_IRWXO)
         or not os.access(path, os.R_OK | os.W_OK | os.X_OK)
     ):
         raise ProductionControlError("production directory is unsafe")
@@ -112,7 +115,9 @@ def _private_file(path: Path) -> bytes:
         not stat.S_ISREG(metadata.st_mode)
         or path.is_symlink()
         or metadata.st_uid != os.geteuid()
-        or metadata.st_mode & (stat.S_IRWXG | stat.S_IRWXO)
+        # See _private_directory: group read is a deliberate, trusted
+        # exception; group write and "other" access remain forbidden.
+        or metadata.st_mode & (stat.S_IWGRP | stat.S_IRWXO)
         or metadata.st_size < 2
         or metadata.st_size > _MAX_FILE_BYTES
     ):
