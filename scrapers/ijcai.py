@@ -48,6 +48,10 @@ logger = logging.getLogger(__name__)
 
 _LABELED_PATH = CACHE_DIR / "ijcai_tracks.json"
 
+_ACCEPTED_LISTS = {
+    2026: "https://2026.ijcai.org/accepted-papers/?ijtrack=main-track",
+}
+
 _SYSTEM_PROMPT = """\
 You are a helper that classifies academic conference proceedings tracks.
 Given a conference name, year, and a list of track titles, decide which
@@ -79,7 +83,9 @@ class IJCAIScraper(BaseScraper):
 
     def __init__(self):
         super().__init__('ijcai')
-        self.model = create_gemini_model(_SYSTEM_PROMPT)
+        self.model = None
+        self._model_initialized = False
+        self._accepted_papers: Dict[str, Dict] = {}
 
     # ------------------------------------------------------------------
     # Public interface
@@ -95,8 +101,7 @@ class IJCAIScraper(BaseScraper):
 
         all_tracks = self.get_track_names(year)
         if not all_tracks:
-            logger.error(f"No tracks found for IJCAI {year}")
-            return []
+            return self._get_accepted_list_urls(year)
 
         relevant_tracks = self._get_relevant_tracks(year, all_tracks)
         if not relevant_tracks:
@@ -131,6 +136,10 @@ class IJCAIScraper(BaseScraper):
     def parse_paper(self, url: str) -> Optional[Dict]:
         """Parse a single IJCAI paper from its proceedings page."""
         try:
+            if "accepted-papers" in url:
+                paper_id = self._extract_accepted_id(url)
+                return self._accepted_papers.get(paper_id)
+
             response = self.session.get(url)
             if not response:
                 return None
@@ -153,6 +162,10 @@ class IJCAIScraper(BaseScraper):
                 'authors':  authors,
                 'abstract': abstract,
                 'pdf_url':  pdf_url,
+                'metadata_source': 'ijcai_proceedings',
+                'source_id': paper_id,
+                'source_ids': {'ijcai_proceedings': paper_id},
+                'publication_status': 'archival',
             }
 
             logger.debug(f"Parsed: {title!r} ({len(authors)} authors)")
@@ -161,6 +174,71 @@ class IJCAIScraper(BaseScraper):
         except Exception as e:
             logger.error(f"Failed to parse {url}: {e}")
             return None
+
+    def _get_accepted_list_urls(self, year: int) -> List[str]:
+        """Use the official early accepted-paper page before proceedings exist."""
+        page_url = _ACCEPTED_LISTS.get(year)
+        if not page_url:
+            logger.error(f"No tracks or accepted-paper fallback found for IJCAI {year}")
+            return []
+        logger.info("IJCAI %s proceedings unavailable; trying %s", year, page_url)
+        response = self.session.get(page_url)
+        if not response:
+            return []
+        papers = self._parse_accepted_list(response.content, year, page_url)
+        self._accepted_papers = {paper["id"]: paper for paper in papers}
+        logger.info("Found %d IJCAI %s Main Track papers", len(papers), year)
+        return [paper["url"] for paper in papers]
+
+    @staticmethod
+    def _parse_accepted_list(html: bytes, year: int,
+                             page_url: str) -> List[Dict]:
+        """Parse one official, already-filtered accepted-paper listing."""
+        soup = BeautifulSoup(html, 'html.parser')
+        papers = []
+        for item in soup.select("li.ij-paper"):
+            pid_node = item.select_one(".ij-pid")
+            title_node = item.select_one(".ij-ptitle")
+            if not pid_node or not title_node:
+                continue
+            source_id = pid_node.get_text(strip=True).lstrip("#")
+            paper_id = f"{year}-{source_id}"
+            authors = [
+                node.get_text(" ", strip=True)
+                for node in item.select(".ij-author")
+                if node.get_text(strip=True)
+            ]
+            abstract_node = item.select_one(".ij-abstract")
+            keywords = [
+                node.get("title", node.get_text(" ", strip=True))
+                for node in item.select(".ij-kw")
+            ]
+            url = f"{page_url}#paper-{source_id}"
+            papers.append({
+                "id": paper_id,
+                "title": title_node.get_text(" ", strip=True),
+                "authors": authors,
+                "abstract": (abstract_node.get_text(" ", strip=True)
+                             if abstract_node else ""),
+                "keywords": keywords,
+                "track": "Main Track",
+                "pdf_url": "",
+                "metadata_source": "official_accepted_list",
+                "source_id": source_id,
+                "source_ids": {"ijcai_accepted_list": source_id},
+                "publication_status": "provisional",
+                "accepted_list_url": page_url,
+                "url": url,
+            })
+        return papers
+
+    @staticmethod
+    def _extract_accepted_id(url: str) -> str:
+        match = re.search(r"#paper-(\d+)$", url)
+        if not match:
+            return ""
+        year_match = re.search(r"https://(\d{4})\.ijcai\.org", url)
+        return f"{year_match.group(1)}-{match.group(1)}" if year_match else ""
 
     # ------------------------------------------------------------------
     # Track helpers
@@ -221,6 +299,9 @@ class IJCAIScraper(BaseScraper):
 
     def _auto_label(self, year: int, track_names: list) -> Optional[dict]:
         """Call Gemini API to label tracks. Returns dict or None on failure."""
+        if not self._model_initialized:
+            self.model = create_gemini_model(_SYSTEM_PROMPT)
+            self._model_initialized = True
         if not self.model:
             logger.error("Gemini model not initialized. Skipping API call.")
             return None

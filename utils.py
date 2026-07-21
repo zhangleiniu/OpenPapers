@@ -7,6 +7,7 @@ import time
 import json
 import re
 import random
+import threading
 from pathlib import Path
 from typing import List, Dict, Optional
 import logging
@@ -129,6 +130,7 @@ class RobustSession:
         self.timeout = timeout
         self.last_request = 0
         self.rate_limited_until = 0
+        self._rate_lock = threading.Lock()
     
     def get(self, url: str, **kwargs) -> Optional[requests.Response]:
         """Make GET request with retry and rate-limit handling."""
@@ -140,21 +142,23 @@ class RobustSession:
 
     def _request(self, method: str, url: str, **kwargs) -> Optional[requests.Response]:
         """Internal: execute an HTTP request with retries and rate limiting."""
+        quiet_404 = kwargs.pop("quiet_404", False)
         for attempt in range(self.retry_attempts + 1):
             try:
-                # Check if we're rate limited
-                if time.time() < self.rate_limited_until:
-                    wait_time = self.rate_limited_until - time.time()
-                    logger.warning(f"Rate limited, waiting {wait_time:.1f}s")
-                    time.sleep(wait_time)
+                # Serialize request starts so concurrent transfers still obey
+                # the configured aggregate request rate.
+                with self._rate_lock:
+                    if time.time() < self.rate_limited_until:
+                        wait_time = self.rate_limited_until - time.time()
+                        logger.warning(f"Rate limited, waiting {wait_time:.1f}s")
+                        time.sleep(wait_time)
 
-                # Normal rate limiting
-                elapsed = time.time() - self.last_request
-                if elapsed < self.delay:
-                    sleep_time = self.delay - elapsed + random.uniform(0, 0.1)
-                    time.sleep(sleep_time)
+                    elapsed = time.time() - self.last_request
+                    if elapsed < self.delay:
+                        sleep_time = self.delay - elapsed + random.uniform(0, 0.1)
+                        time.sleep(sleep_time)
 
-                self.last_request = time.time()
+                    self.last_request = time.time()
 
                 timeout = kwargs.pop('timeout', self.timeout)
                 response = self.session.request(method, url, timeout=timeout, **kwargs)
@@ -170,7 +174,8 @@ class RobustSession:
                     time.sleep(2 ** attempt)
                     continue
                 elif response.status_code == 404:
-                    logger.warning(f"Not found: {url}")
+                    if not quiet_404:
+                        logger.warning(f"Not found: {url}")
                     return None
                 elif response.status_code == 403:
                     logger.error(f"Access forbidden: {url}")
@@ -201,15 +206,24 @@ class RobustSession:
         self.rate_limited_until = time.time() + retry_after
         logger.warning(f"Rate limited for {retry_after}s")
     
-    def download_file(self, url: str, filepath: Path) -> bool:
+    def download_file(self, url: str, filepath: Path, **request_kwargs) -> bool:
         """Download file with error handling."""
         try:
             # Skip if file already exists
             if filepath.exists():
-                logger.info(f"File already exists: {filepath.name}")
-                return True
+                try:
+                    with filepath.open("rb") as handle:
+                        is_valid = (filepath.stat().st_size >= 1024 and
+                                    handle.read(5) == b"%PDF-")
+                except OSError:
+                    is_valid = False
+                if is_valid:
+                    logger.debug(f"File already exists: {filepath.name}")
+                    return True
+                logger.warning("Removing invalid existing PDF: %s", filepath)
+                filepath.unlink(missing_ok=True)
             
-            response = self.get(url, stream=True)
+            response = self.get(url, stream=True, **request_kwargs)
             if not response:
                 return False
             
@@ -231,7 +245,7 @@ class RobustSession:
                             progress = (downloaded / total_size) * 100
                             logger.debug(f"Download progress: {progress:.1f}%")
             
-            logger.info(f"Downloaded: {filepath.name} ({downloaded:,} bytes)")
+            logger.debug(f"Downloaded: {filepath.name} ({downloaded:,} bytes)")
             return True
             
         except Exception as e:
@@ -245,27 +259,72 @@ class RobustSession:
             return False
 
 
+def _update_pdf_completeness_index(
+    metadata_dir: Path, conference: str, year: int, papers: List[Dict]
+) -> None:
+    """Best-effort update of the dashboard's PDF-completeness sidecar index.
+
+    The dashboard used to answer "are this year's PDFs all downloaded?" by
+    re-reading and JSON-parsing every venue's full metadata file on every
+    page load — expensive on a large, external-volume corpus. This index is
+    updated once, right here, from the ``papers`` list this function
+    already has in memory, so the dashboard only ever needs to read one
+    small file instead of the whole corpus. Never raises: a failed update
+    only means a stale display hint, not a scraper failure.
+    """
+    index_path = metadata_dir / "pdf_completeness.v1.json"
+    complete = bool(papers) and all(
+        isinstance(paper, dict) and bool(paper.get("pdf_path"))
+        for paper in papers
+    )
+    try:
+        try:
+            payload = json.loads(index_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            payload = {}
+        completeness = payload.get("completeness") if isinstance(payload, dict) else None
+        if not isinstance(completeness, dict):
+            completeness = {}
+        venue_entry = completeness.get(conference)
+        completeness[conference] = {
+            **(venue_entry if isinstance(venue_entry, dict) else {}),
+            str(year): complete,
+        }
+        tmp_path = index_path.with_suffix(".json.tmp")
+        tmp_path.write_text(
+            json.dumps(
+                {"schema_version": 1, "completeness": completeness},
+                indent=2, sort_keys=True,
+            ),
+            encoding="utf-8",
+        )
+        tmp_path.replace(index_path)
+    except OSError as e:
+        logger.error(f"Failed to update PDF completeness index: {e}")
+
+
 def save_papers(papers: List[Dict], conference: str, year: int):
     """Save papers to JSON with error handling."""
     try:
         from config import METADATA_DIR
-        
+
         conf_dir = METADATA_DIR / conference
         conf_dir.mkdir(parents=True, exist_ok=True)
-        
+
         filepath = conf_dir / f"{conference}_{year}.json"
-        
+
         # Create backup if file exists
         if filepath.exists():
             backup_path = filepath.with_suffix('.json.bak')
             filepath.rename(backup_path)
             logger.info(f"Created backup: {backup_path}")
-        
+
         with open(filepath, 'w', encoding='utf-8') as f:
             json.dump(papers, f, indent=2, ensure_ascii=False)
-        
+
         logger.info(f"Saved {len(papers)} papers to {filepath}")
-        
+        _update_pdf_completeness_index(METADATA_DIR, conference, year, papers)
+
     except Exception as e:
         logger.error(f"Failed to save papers: {e}")
 
@@ -405,7 +464,7 @@ def _eligible(paper):
     authors = paper.get("authors")
     year = paper.get("year")
     conf = paper.get("conference")
-    if conf not in VENUE:
+    if not isinstance(conf, str) or conf.lower() not in VENUE:
         return False
     if not isinstance(title, str) or not title.strip():
         return False
@@ -427,7 +486,8 @@ def assign_bibtex(papers):
     # group by base key, then suffix collisions deterministically
     groups = defaultdict(list)
     for p in eligible:
-        bk = _base_cite_key(p["conference"], int(p["year"]), p["title"], p["authors"])
+        conf = p["conference"].lower()
+        bk = _base_cite_key(conf, int(p["year"]), p["title"], p["authors"])
         groups[bk].append(p)
 
     for bk, group in groups.items():
@@ -438,7 +498,7 @@ def assign_bibtex(papers):
             keyed = [(p, bk + _suffix(i)) for i, p in enumerate(ordered)]
         for paper, key in keyed:
             paper["bibtex"] = _build_bibtex(
-                paper["conference"], int(paper["year"]),
+                paper["conference"].lower(), int(paper["year"]),
                 paper["title"], paper["authors"], key)
 
     return papers

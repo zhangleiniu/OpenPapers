@@ -4,9 +4,9 @@
 
 All years: `https://openaccess.thecvf.com/CVPR[year]`
 
-## Coverage
+## Dataset coverage
 
-2013–2026
+See the generated [coverage and quality report](../statistics.md).
 
 ## URL structure
 

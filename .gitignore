@@ -6,3 +6,5 @@ test/
 .vscode/
 *.log
 *.txt
+!automation/requirements.txt
+!automation/deployment/requirements.txt

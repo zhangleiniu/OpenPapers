@@ -4,9 +4,10 @@
 
 All years: `https://aclanthology.org/events/acl-[year]/`
 
-## Coverage
+## Dataset coverage
 
-2017-2025
+See the generated [coverage and quality report](../statistics.md). The current
+canonical dataset includes ACL 2017–2026.
 
 ## Track filtering
 
@@ -30,9 +31,12 @@ aborted with instructions to label manually.
 | `id` | ACL Anthology paper ID (e.g. `P10-1002`) |
 | `title` | ✓ |
 | `authors` | ✓ |
-| `abstract` | ✓ |
+| `abstract` | Source page, with GROBID/Nougat fallback when absent |
 | `pdf_url` | ✓ |
 
 ## Known issues
 
-None.
+- Track classification requires Vertex AI ADC on an uncached year. If it
+  fails, the generated all-false cache must be reviewed manually before rerun.
+- ACL 2026 source-page abstract gaps were recovered from GROBID and carry
+  `abstract_source: grobid`.

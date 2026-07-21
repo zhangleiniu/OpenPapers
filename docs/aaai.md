@@ -4,9 +4,9 @@
 
 All years: `https://ojs.aaai.org/index.php/AAAI/issue/archive/`
 
-## Coverage
+## Dataset coverage
 
-2010–2026
+See the generated [coverage and quality report](../statistics.md).
 
 ## Architecture
 

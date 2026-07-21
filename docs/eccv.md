@@ -6,9 +6,9 @@ All years: `https://www.ecva.net/papers.php`
 
 Note: ECCV is held in even years only.
 
-## Coverage
+## Dataset coverage
 
-2018-2024 
+See the generated [coverage and quality report](../statistics.md).
 
 All available years are listed on a single page at
 `https://www.ecva.net/papers.php`.

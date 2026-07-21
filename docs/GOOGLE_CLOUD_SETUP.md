@@ -4,6 +4,10 @@ This project uses Google Gemini via Vertex AI to automatically classify
 conference track listings, filtering out workshops, tutorials, and secondary
 tracks so that only main-conference papers are scraped.
 
+> The current implementation uses `vertexai.generative_models`, which Google
+> has deprecated. It still works in the pinned project environment but should
+> be migrated to the Google Gen AI SDK before upgrading the Vertex AI client.
+
 ---
 
 ## 1. Google Cloud Prerequisites

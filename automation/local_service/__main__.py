@@ -1,0 +1,104 @@
+"""One-shot local service command with an explicit production mode."""
+
+from __future__ import annotations
+
+import argparse
+import json
+from datetime import datetime
+from pathlib import Path
+from typing import Callable, Sequence
+
+from automation.local_service.service import (
+    LocalMountProbe,
+    LocalServiceConfig,
+    LocalServiceRunStatus,
+    LocalWakeupEffect,
+    VolumeAvailabilityProbe,
+    run_local_service_once,
+)
+from automation.local_service.records import read_service_run_records
+from automation.local_service.production import (
+    consecutive_wake_failures,
+    send_wake_failure_alert,
+    should_alert_wake_failures,
+)
+from automation.local_service.agent_control import InstalledAgentProductionEffect
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="Run one bounded OpenPapers local-service preflight."
+    )
+    parser.add_argument("--repository-root", type=Path, required=True)
+    parser.add_argument("--python-executable", type=Path, required=True)
+    parser.add_argument("--internal-root", type=Path, required=True)
+    parser.add_argument("--external-volume-root", type=Path, required=True)
+    parser.add_argument("--role-user", required=True)
+    parser.add_argument("--schedule-minute", type=int, default=17)
+    parser.add_argument("--record-limit", type=int, default=128)
+    parser.add_argument(
+        "--production-control",
+        action="store_true",
+        help="run the marker-gated production monitor and agent control plane",
+    )
+    return parser
+
+
+def main(
+    argv: Sequence[str] | None = None,
+    *,
+    effect: LocalWakeupEffect | None = None,
+    volume_probe: VolumeAvailabilityProbe | None = None,
+    clock: Callable[[], datetime] | None = None,
+    platform_name: str | None = None,
+) -> int:
+    args = build_parser().parse_args(argv)
+    config = LocalServiceConfig(
+        repository_root=args.repository_root,
+        python_executable=args.python_executable,
+        internal_root=args.internal_root,
+        external_volume_root=args.external_volume_root,
+        role_user=args.role_user,
+        schedule_minute=args.schedule_minute,
+        record_limit=args.record_limit,
+    )
+    if args.production_control and effect is not None:
+        raise ValueError("an injected effect cannot replace a concrete service mode")
+    if args.production_control:
+        resolved_effect = InstalledAgentProductionEffect(
+            repository_root=args.repository_root
+        )
+    else:
+        resolved_effect = effect
+    report = run_local_service_once(
+        config,
+        effect=resolved_effect,
+        volume_probe=volume_probe or LocalMountProbe(),
+        clock=clock,
+        platform_name=platform_name,
+    )
+    print(json.dumps(report.as_dict(), sort_keys=True))
+    if args.production_control and report.status is LocalServiceRunStatus.FAILED:
+        # Alerting is best-effort: a broken alert path must never change the
+        # run outcome, and if the marker-guarded SMTP configuration itself is
+        # what broke, there is no usable transport anyway.
+        try:
+            records = read_service_run_records(
+                config.run_records_path, limit=64
+            )
+            consecutive = consecutive_wake_failures(records)
+            if records and should_alert_wake_failures(consecutive):
+                send_wake_failure_alert(
+                    config.internal_root,
+                    consecutive=consecutive,
+                    latest_record=records[-1],
+                )
+        except Exception:
+            pass
+    if report.status is LocalServiceRunStatus.COMPLETED:
+        return 0
+    return 3
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

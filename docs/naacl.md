@@ -4,9 +4,10 @@
 
 All years: `https://aclanthology.org/events/naacl-[year]/`
 
-## Coverage
+## Dataset coverage
 
-2013-2025
+See the generated [coverage and quality report](../statistics.md); NAACL is not
+held every year.
 
 ## Track filtering
 
@@ -35,4 +36,5 @@ aborted with instructions to label manually.
 
 ## Known issues
 
-- NAACL is not held every year (e.g. no NAACL in 2020 due to COVID-19).
+- NAACL is not held every year. Do not infer missing editions from the first
+  and last year shown in a range; the generated report lists actual years.

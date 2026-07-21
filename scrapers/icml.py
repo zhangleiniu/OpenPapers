@@ -33,11 +33,19 @@ from typing import List, Dict, Optional
 import logging
 
 from .base import BaseScraper
+from .openreview import OpenReviewClient
 
 logger = logging.getLogger(__name__)
 
 # Matches volume hrefs like "v235/" or "v119/" on the main proceedings page
 _VOLUME_HREF_RE = re.compile(r'^v(\d+)/?$')
+
+_OPENREVIEW_CONFIG = {
+    2026: {
+        "invitation": "ICML.cc/2026/Conference/-/Submission",
+        "venue_id": "ICML.cc/2026/Conference",
+    },
+}
 
 
 class ICMLScraper(BaseScraper):
@@ -52,11 +60,14 @@ class ICMLScraper(BaseScraper):
     BASE_URL = "https://proceedings.mlr.press/"
     REQUEST_DELAY = 0.15
     TIMEOUT = 45
+    PDF_DOWNLOAD_WORKERS = 4
 
 
     def __init__(self):
         super().__init__('icml')
         self._volume_cache: Dict[int, str] = {}  # year -> volume id, e.g. 2024 -> "v235"
+        self._openreview = OpenReviewClient(self.session)
+        self._openreview_papers: Dict[str, Dict] = {}
 
     # ------------------------------------------------------------------
     # Public interface
@@ -66,7 +77,7 @@ class ICMLScraper(BaseScraper):
         """Return all abstract-page URLs for a given ICML year."""
         volume = self._get_volume_for_year(year)
         if not volume:
-            return []
+            return self._get_openreview_urls(year)
 
         volume_url = f"{self.base_url}{volume}/"
         logger.info(f"Fetching ICML {year} volume page: {volume_url}")
@@ -86,6 +97,10 @@ class ICMLScraper(BaseScraper):
         All fields (title, authors, abstract, pdf_url) are extracted from the
         abstract page in a single HTTP request.
         """
+        if "openreview.net" in abs_url:
+            paper_id = self._extract_openreview_id(abs_url)
+            return self._openreview_papers.get(paper_id)
+
         response = self.session.get(abs_url)
         if not response:
             logger.warning(f"No response for: {abs_url}")
@@ -109,10 +124,36 @@ class ICMLScraper(BaseScraper):
             'authors':  authors,
             'abstract': abstract,
             'pdf_url':  pdf_url,
+            'metadata_source': 'pmlr',
+            'source_id': paper_id,
+            'source_ids': {'pmlr': paper_id},
+            'publication_status': 'archival',
         }
 
         logger.debug(f"Parsed: {title!r} ({len(authors)} authors)")
         return paper
+
+    def pdf_request_headers(self, paper: Dict) -> Dict[str, str]:
+        if paper.get("metadata_source") == "openreview":
+            return self._openreview.headers
+        return {}
+
+    def _get_openreview_urls(self, year: int) -> List[str]:
+        config = _OPENREVIEW_CONFIG.get(year)
+        if not config:
+            return []
+        logger.info("PMLR has no ICML %s volume; trying official OpenReview", year)
+        notes = self._openreview.get_notes(
+            config["invitation"], config["venue_id"])
+        papers = [self._openreview.note_to_paper(note) for note in notes]
+        self._openreview_papers = {paper["id"]: paper for paper in papers}
+        logger.info("Found %d ICML %s papers via OpenReview", len(papers), year)
+        return [paper["openreview_url"] for paper in papers]
+
+    @staticmethod
+    def _extract_openreview_id(url: str) -> str:
+        match = re.search(r"[?&]id=([^&]+)", url)
+        return match.group(1) if match else ""
 
     # ------------------------------------------------------------------
     # Private helpers

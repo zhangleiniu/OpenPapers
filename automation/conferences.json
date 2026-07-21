@@ -1,0 +1,203 @@
+{
+  "version": 1,
+  "conference_years": [
+    {
+      "venue": "icml",
+      "year": 2026,
+      "sources": [
+        {
+          "type": "pmlr_volume",
+          "url": "https://proceedings.mlr.press/",
+          "label": "ICML 2026"
+        },
+        {
+          "type": "openreview_api",
+          "invitation": "ICML.cc/2026/Conference/-/Submission",
+          "venue_id": "ICML.cc/2026/Conference",
+          "minimum_count": 6300
+        }
+      ]
+    },
+    {
+      "venue": "aistats",
+      "year": 2026,
+      "sources": [
+        {
+          "type": "pmlr_volume",
+          "url": "https://proceedings.mlr.press/",
+          "label": "AISTATS 2026"
+        },
+        {
+          "type": "openreview_api",
+          "invitation": "aistats.org/AISTATS/2026/Conference/-/Submission",
+          "venue_id": "aistats.org/AISTATS/2026/Conference",
+          "minimum_count": 580
+        }
+      ]
+    },
+    {
+      "venue": "ijcai",
+      "year": 2026,
+      "sources": [
+        {
+          "type": "official_html",
+          "url": "https://2026.ijcai.org/accepted-papers/?ijtrack=main-track",
+          "item_selector": "li.ij-paper",
+          "minimum_count": 700
+        },
+        {
+          "type": "official_html",
+          "url": "https://www.ijcai.org/proceedings/2026/",
+          "item_selector": "div.details",
+          "minimum_count": 1,
+          "optional_until_available": true
+        }
+      ]
+    },
+    {
+      "venue": "iclr",
+      "year": 2026,
+      "sources": [
+        {
+          "type": "openreview_api",
+          "invitation": "ICLR.cc/2026/Conference/-/Submission",
+          "venue_id": "ICLR.cc/2026/Conference",
+          "minimum_count": 2000
+        }
+      ]
+    },
+    {
+      "venue": "neurips",
+      "year": 2026,
+      "sources": [
+        {
+          "type": "openreview_api",
+          "invitation": "NeurIPS.cc/2026/Conference/-/Submission",
+          "venue_id": "NeurIPS.cc/2026/Conference",
+          "minimum_count": 4000
+        }
+      ]
+    },
+    {
+      "venue": "colt",
+      "year": 2026,
+      "sources": [
+        {
+          "type": "pmlr_volume",
+          "url": "https://proceedings.mlr.press/",
+          "label": "COLT 2026"
+        }
+      ]
+    },
+    {
+      "venue": "uai",
+      "year": 2026,
+      "sources": [
+        {
+          "type": "pmlr_volume",
+          "url": "https://proceedings.mlr.press/",
+          "label": "UAI 2026"
+        }
+      ]
+    },
+    {
+      "venue": "cvpr",
+      "year": 2026,
+      "sources": [
+        {
+          "type": "official_html",
+          "url": "https://openaccess.thecvf.com/CVPR2026?day=all",
+          "item_selector": "dt a[href]",
+          "minimum_count": 3000
+        }
+      ]
+    },
+    {
+      "venue": "iccv",
+      "year": 2027,
+      "sources": [
+        {
+          "type": "official_html",
+          "url": "https://openaccess.thecvf.com/ICCV2027?day=all",
+          "item_selector": "dt a[href]",
+          "minimum_count": 3000,
+          "optional_until_available": true
+        }
+      ]
+    },
+    {
+      "venue": "eccv",
+      "year": 2026,
+      "sources": [
+        {
+          "type": "official_html",
+          "url": "https://www.ecva.net/papers.php",
+          "item_selector": "button.accordion:-soup-contains(\"ECCV 2026\")",
+          "minimum_count": 1
+        }
+      ]
+    },
+    {
+      "venue": "aaai",
+      "year": 2026,
+      "sources": [
+        {
+          "type": "official_html",
+          "url": "https://ojs.aaai.org/index.php/AAAI/issue/archive",
+          "item_selector": "div.obj_issue_summary a.title:-soup-contains(\"AAAI-26\")",
+          "minimum_count": 1
+        }
+      ]
+    },
+    {
+      "venue": "jmlr",
+      "year": 2026,
+      "sources": [
+        {
+          "type": "official_html",
+          "url": "https://www.jmlr.org/papers/v27",
+          "item_selector": "dl dd a:-soup-contains(\"abs\")",
+          "minimum_count": 1
+        }
+      ]
+    },
+    {
+      "venue": "acl",
+      "year": 2026,
+      "sources": [
+        {
+          "type": "official_html",
+          "url": "https://aclanthology.org/events/acl-2026/",
+          "item_selector": "strong a.align-middle[href]",
+          "minimum_count": 500
+        }
+      ]
+    },
+    {
+      "venue": "emnlp",
+      "year": 2026,
+      "sources": [
+        {
+          "type": "official_html",
+          "url": "https://aclanthology.org/events/emnlp-2026/",
+          "item_selector": "strong a.align-middle[href]",
+          "minimum_count": 500,
+          "optional_until_available": true
+        }
+      ]
+    },
+    {
+      "venue": "naacl",
+      "year": 2027,
+      "sources": [
+        {
+          "type": "official_html",
+          "url": "https://aclanthology.org/events/naacl-2027/",
+          "item_selector": "strong a.align-middle[href]",
+          "minimum_count": 500,
+          "optional_until_available": true
+        }
+      ]
+    }
+  ]
+}

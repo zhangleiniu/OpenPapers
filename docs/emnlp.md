@@ -5,9 +5,9 @@
 
 All years: `https://aclanthology.org/events/emnlp-[year]/`
 
-## Coverage
+## Dataset coverage
 
-2017-2025
+See the generated [coverage and quality report](../statistics.md).
 
 ## Track filtering
 
@@ -36,4 +36,6 @@ aborted with instructions to label manually.
 
 ## Known issues
 
-**2022, `2022.emnlp-main.804`** ("Efficient Large Scale Language Modeling with Mixtures of Experts"): No PDF available on the website. The paper is available on arXiv but no fallback has been implemented; the record is scraped with metadata only and no local PDF.
+- **2022, `2022.emnlp-main.804`**: ACL Anthology retains the official metadata
+  but exposes no PDF URL. The paper is retained and uses arXiv `2112.10684`,
+  recorded with `pdf_source: arxiv`.

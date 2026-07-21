@@ -17,9 +17,9 @@
 Known volume mappings (others discovered dynamically from the MLR Press main page):
 - 2025: `v286`
 
-## Coverage
+## Dataset coverage
 
-Currently scraped through **2025**.
+See the generated [coverage and quality report](../statistics.md).
 
 ## Data fields
 

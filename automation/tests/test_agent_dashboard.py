@@ -1,0 +1,760 @@
+import copy
+import json
+import os
+import sqlite3
+import tempfile
+import threading
+import unittest
+from datetime import date, datetime, timedelta, timezone
+from pathlib import Path
+from urllib.error import HTTPError
+from urllib.request import Request, urlopen
+
+from automation.agent_dashboard import (
+    AgentDashboardError,
+    _edition_cell,
+    _progress_fraction,
+    _remaining_label,
+    _resolve_editions,
+    _status_cell,
+    _year_color,
+    build_dashboard_model,
+    create_dashboard_server,
+    load_venue_editions,
+    read_pdf_completeness_index,
+    render_dashboard,
+    scan_pdf_completeness,
+)
+from automation.agent_status import read_agent_state_summary
+from automation.configuration import load_venue_catalog
+from automation.control_state import ControlStateRepository
+from automation.domain import Writer
+
+
+NOW = datetime(2026, 7, 16, 16, 30, tzinfo=timezone.utc)
+TODAY = NOW.date()
+
+
+class VenueEditionTests(unittest.TestCase):
+    def test_curated_file_loads_and_rejects_malformed_entries(self):
+        editions = load_venue_editions()
+        self.assertIn("icml", editions)
+        self.assertTrue(all(
+            isinstance(item["start_date"], date)
+            for entries in editions.values() for item in entries
+        ))
+        self.assertTrue(all(
+            item["source_url"].startswith("https://")
+            and isinstance(item["verified_on"], date)
+            and item["date_scope"] in {
+                "event_start", "main_program_start", "volume_start",
+            }
+            for entries in editions.values() for item in entries
+        ))
+        with tempfile.TemporaryDirectory() as temp:
+            bad = Path(temp) / "editions.json"
+            bad.write_text(json.dumps({
+                "schema_version": 2,
+                "editions": [{"venue_id": "icml", "year": 2026}],
+            }))
+            with self.assertRaisesRegex(AgentDashboardError, "invalid"):
+                load_venue_editions(bad)
+
+            bad.write_text(json.dumps({
+                "schema_version": 2,
+                "editions": [{
+                    "venue_id": "icml", "year": 2026,
+                    "start_date": "2026-07-07",
+                    "date_scope": "main_program_start",
+                    "source_url": "https://example.com/unrelated",
+                    "verified_on": "2026-07-18",
+                }],
+            }))
+            with self.assertRaisesRegex(AgentDashboardError, "invalid"):
+                load_venue_editions(bad)
+
+    def test_resolution_prefers_curated_over_control_state_for_same_year(self):
+        curated = [{"year": 2026, "start_date": date(2026, 7, 2), "label": None}]
+        last, next_edition = _resolve_editions(
+            "acl", {"kind": "annual"}, curated,
+            {2026: "2026-07-27"},  # the stale operator estimate
+            TODAY,
+        )
+        self.assertEqual(last["start_date"], date(2026, 7, 2))
+        self.assertFalse(last["approx"])
+        # No known future edition: cadence approximation, month precision.
+        self.assertEqual(next_edition["year"], 2027)
+        self.assertTrue(next_edition["approx"])
+        self.assertEqual(next_edition["start_date"], date(2027, 7, 1))
+
+    def test_resolution_honors_periodic_cadence_for_the_approximation(self):
+        curated = [{"year": 2025, "start_date": date(2025, 10, 19), "label": None}]
+        last, next_edition = _resolve_editions(
+            "iccv",
+            {"kind": "annual", "interval_years": 2, "cycle_anchor_year": 2025},
+            curated, {}, TODAY,
+        )
+        self.assertEqual(last["year"], 2025)
+        self.assertEqual(next_edition["year"], 2027)
+        self.assertTrue(next_edition["approx"])
+
+    def test_future_control_state_estimate_becomes_next_edition(self):
+        last, next_edition = _resolve_editions(
+            "uai", {"kind": "annual"},
+            [{"year": 2025, "start_date": date(2025, 7, 21), "label": None}],
+            {2026: "2026-08-17"}, TODAY,
+        )
+        self.assertEqual(last["year"], 2025)
+        self.assertEqual(next_edition["year"], 2026)
+        self.assertFalse(next_edition["approx"])
+
+    def test_incomplete_year_pre_empts_last_edition_even_past_its_date(self):
+        # AISTATS-shaped case: metadata scraped, PDFs still pending, so the
+        # agent_schedule row for 2026 has not reached "Collected" even
+        # though its curated date has already passed. It must not be
+        # reported as a *finished* "last edition", and it must not be
+        # skipped in favor of a guessed future year either. With no earlier
+        # completed year available, it is still surfaced as "last edition"
+        # (rather than left blank) but marked in_progress so it isn't read
+        # as done.
+        curated = [{"year": 2026, "start_date": date(2026, 5, 2), "label": None}]
+        last, next_edition = _resolve_editions(
+            "aistats", {"kind": "annual"}, curated, {}, TODAY,
+            incomplete_years=frozenset({2026}),
+        )
+        self.assertEqual(last["year"], 2026)
+        self.assertTrue(last["in_progress"])
+        self.assertEqual(next_edition["year"], 2026)
+        self.assertFalse(next_edition["approx"])
+        self.assertEqual(next_edition["start_date"], date(2026, 5, 2))
+
+    def test_incomplete_year_falls_back_to_the_prior_completed_edition(self):
+        curated = [
+            {"year": 2025, "start_date": date(2025, 5, 1), "label": None},
+            {"year": 2026, "start_date": date(2026, 5, 2), "label": None},
+        ]
+        last, next_edition = _resolve_editions(
+            "aistats", {"kind": "annual"}, curated, {}, TODAY,
+            incomplete_years=frozenset({2026}),
+        )
+        self.assertEqual(last["year"], 2025)
+        self.assertEqual(next_edition["year"], 2026)
+
+    def test_incomplete_years_ignored_for_a_continuous_venue(self):
+        # A continuous venue's agent_schedule never reaches "Collected" by
+        # design (recurring success keeps it "scheduled") — that must never
+        # be mistaken for an open year pre-empting its curated last edition.
+        curated = [{"year": 2026, "start_date": date(2026, 1, 1), "label": "v27"}]
+        last, next_edition = _resolve_editions(
+            "jmlr", {"kind": "continuous"}, curated, {}, TODAY,
+            incomplete_years=frozenset({2026}),
+        )
+        self.assertEqual(last["year"], 2026)
+        self.assertIsNone(next_edition)
+
+    def test_countdown_buckets_by_urgency(self):
+        cases = [
+            (timedelta(minutes=-5), "due now", "due"),
+            (timedelta(hours=5), "in 5h", "due"),
+            (timedelta(days=3), "in 3d", "soon"),
+            (timedelta(days=12), "in 12d", "later"),
+            (timedelta(days=90), "in 3mo", "far"),
+        ]
+        for delta, text, category in cases:
+            with self.subTest(delta=delta):
+                self.assertEqual(
+                    _remaining_label(NOW + delta, NOW), (text, category)
+                )
+
+    def test_edition_cell_drops_the_redundant_venue_name(self):
+        no_label = {
+            "name": "AISTATS 2026", "date": "2026-05-02",
+            "iso_date": "2026-05-02", "approx": False, "curated_label": None,
+        }
+        rendered = _edition_cell(no_label)
+        self.assertNotIn("AISTATS", rendered)
+        self.assertIn(">2026<", rendered)
+        self.assertIn("· 05-02", rendered)
+        self.assertIn(f'color:{_year_color(2026)};', rendered)
+
+    def test_edition_cell_keeps_a_real_curated_label(self):
+        jmlr = {
+            "name": "v27", "date": "2026-01-01",
+            "iso_date": "2026-01-01", "approx": False, "curated_label": "v27",
+        }
+        self.assertIn("(v27)", _edition_cell(jmlr))
+
+    def test_edition_cell_marks_approximate_month_only_dates(self):
+        approx = {
+            "name": "ICML 2027", "date": "~2027-07",
+            "iso_date": "2027-07-01", "approx": True, "curated_label": None,
+        }
+        rendered = _edition_cell(approx)
+        self.assertIn(">~2027<", rendered)
+        self.assertIn("· 07", rendered)
+
+    def test_same_year_gets_the_same_color_in_both_edition_columns(self):
+        last = {"name": "X 2026", "date": "2026-05-02", "iso_date": "2026-05-02",
+                "approx": False, "curated_label": None}
+        following = {"name": "X 2026", "date": "2026-11-02",
+                     "iso_date": "2026-11-02", "approx": False,
+                     "curated_label": None}
+        different_year = {"name": "X 2027", "date": "2027-05-02",
+                           "iso_date": "2027-05-02", "approx": False,
+                           "curated_label": None}
+        self.assertIn(f'color:{_year_color(2026)};', _edition_cell(last))
+        self.assertIn(f'color:{_year_color(2026)};', _edition_cell(following))
+        self.assertNotEqual(_year_color(2026), _year_color(2027))
+        self.assertIn(f'color:{_year_color(2027)};', _edition_cell(different_year))
+
+    def test_progress_fraction_keeps_resolution_across_the_whole_horizon(self):
+        day = 86400.0
+        durations = (3600, 1 * day, 7 * day, 30 * day, 90 * day, 300 * day, 365 * day)
+        values = [_progress_fraction(seconds) for seconds in durations]
+        self.assertEqual(values, sorted(values))
+        self.assertTrue(all(a < b for a, b in zip(values, values[1:])))
+        # A linear 30-day scale (the prior behavior) clips both of these to
+        # 1.0; the new scale must keep far-out rows distinguishable.
+        self.assertLess(_progress_fraction(31 * day), _progress_fraction(300 * day))
+        self.assertLessEqual(_progress_fraction(365 * day), 1.0)
+        self.assertEqual(_progress_fraction(0), 0.0)
+        self.assertEqual(_progress_fraction(-3600), 0.0)
+
+    def test_status_cell_shows_year_and_splits_disposition_from_phase(self):
+        rendered = _status_cell({
+            "phase": "Scheduled", "year": 2026, "disposition": "not_ready",
+            "warning": None, "anomaly": False,
+        })
+        self.assertIn(">2026<", rendered)
+        self.assertIn(">Scheduled<", rendered)
+        self.assertIn('class="status-disposition"', rendered)
+        self.assertIn("last try: not_ready", rendered)
+        self.assertNotIn("Scheduled · not_ready<", rendered)
+
+    def test_status_cell_omits_disposition_line_when_absent(self):
+        rendered = _status_cell({
+            "phase": "Collected", "year": 2026, "disposition": None,
+            "warning": None, "anomaly": False,
+        })
+        self.assertNotIn("status-disposition", rendered)
+
+    def test_status_cell_not_enrolled_has_no_year(self):
+        rendered = _status_cell({
+            "phase": "Not enrolled", "year": None, "disposition": None,
+            "warning": None, "anomaly": False,
+        })
+        self.assertNotIn("status-year", rendered)
+        self.assertIn("Not enrolled", rendered)
+
+    def test_status_cell_renders_the_anomaly_badge(self):
+        rendered = _status_cell({
+            "phase": "Data inconsistency", "year": 2026, "disposition": None,
+            "warning": None, "anomaly": True,
+        })
+        self.assertIn("status-anomaly", rendered)
+        self.assertIn("Data inconsistency: an event", rendered)
+
+
+class AgentDashboardTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.root = Path(self.temp.name)
+        self.state = self.root / "state.sqlite3"
+        with ControlStateRepository(
+            self.state, writer=Writer.LOCAL_CONTROL_PLANE, clock=lambda: NOW
+        ):
+            pass
+        next_check = self._time(NOW + timedelta(days=2))
+        with sqlite3.connect(self.state) as connection:
+            connection.execute(
+                "INSERT INTO event_date_schedule VALUES "
+                "('icml', 2026, 'pending', ?, NULL, NULL, NULL, NULL, NULL, "
+                "0, NULL, NULL, ?)",
+                (next_check, self._time(NOW - timedelta(hours=1))),
+            )
+
+    def tearDown(self):
+        self.temp.cleanup()
+
+    @staticmethod
+    def _time(value):
+        return value.isoformat().replace("+00:00", "Z")
+
+    def _model(self, targets=None, editions=None):
+        if targets is None:
+            targets = read_agent_state_summary(self.state)
+        return build_dashboard_model(
+            load_venue_catalog(), targets, observed_at=NOW,
+            editions=editions if editions is not None else load_venue_editions(),
+        )
+
+    def test_continuous_venue_never_gets_a_fabricated_next_edition(self):
+        with ControlStateRepository(
+            self.state, writer=Writer.LOCAL_CONTROL_PLANE, clock=lambda: NOW
+        ) as repository:
+            lease = repository.acquire_lease("fixture-continuous")
+            try:
+                repository.register_continuous_event_date(
+                    "jmlr", 2026, registered_at=NOW, lease=lease,
+                )
+                repository.ensure_scheduled_agent_target(
+                    "jmlr", 2026, next_check_at=NOW + timedelta(days=10),
+                    registered_at=NOW, lease=lease,
+                )
+            finally:
+                repository.release_lease(lease)
+
+        model = self._model()
+
+        venues = {venue["venue_id"]: venue for venue in model["venues"]}
+        jmlr = venues["jmlr"]
+        # No fabricated cadence approximation for a venue with no discrete
+        # edition — only the curated entry (its real volume label) survives,
+        # and the registration-time placeholder date never leaks in.
+        self.assertIsNone(jmlr["next_edition"])
+        self.assertEqual(jmlr["last_edition"]["name"], "v27")
+        self.assertEqual(jmlr["last_edition"]["date"], "2026-01-01")
+        # The real recurring schedule still drives the next-attempt column.
+        self.assertEqual(
+            jmlr["current_target"]["next_attempt_at"],
+            self._time(NOW + timedelta(days=10)),
+        )
+
+    def test_model_gives_every_venue_cycle_columns(self):
+        model = self._model()
+
+        self.assertEqual(model["venue_count"], 15)
+        venues = {venue["venue_id"]: venue for venue in model["venues"]}
+        icml = venues["icml"]
+        self.assertEqual(icml["current_target"]["next_attempt_at"],
+                         self._time(NOW + timedelta(days=2)))
+        self.assertEqual(icml["last_edition"]["name"], "ICML 2026")
+        self.assertEqual(icml["last_edition"]["date"], "2026-07-07")
+        self.assertEqual(icml["next_edition"]["name"], "ICML 2027")
+        self.assertTrue(icml["next_edition"]["approx"])
+        self.assertEqual(icml["progress"]["label"], "in 2d")
+        self.assertEqual(icml["progress"]["category"], "soon")
+        # An unenrolled venue still shows its cycle from curated data alone.
+        naacl = venues["naacl"]
+        self.assertIsNone(naacl["current_target"])
+        self.assertEqual(naacl["last_edition"]["name"], "NAACL 2025")
+        self.assertEqual(naacl["next_edition"]["date"], "2027-06-01")
+        self.assertEqual(naacl["progress"]["label"], "next: NAACL 2027")
+        # JMLR uses its curated volume label.
+        self.assertEqual(venues["jmlr"]["last_edition"]["name"], "v27")
+
+    def test_completed_venue_counts_down_to_its_next_edition(self):
+        with sqlite3.connect(self.state) as connection:
+            connection.execute(
+                "INSERT INTO event_date_schedule VALUES "
+                "('acl', 2026, 'scheduled', ?, '2026-07-27', ?, 'operator', "
+                "'operator', 'operator', 0, NULL, NULL, ?)",
+                (self._time(NOW - timedelta(days=1)),
+                 self._time(NOW - timedelta(days=1)),
+                 self._time(NOW - timedelta(days=1))),
+            )
+            connection.execute(
+                "INSERT INTO agent_schedule VALUES "
+                "('acl', 2026, 'completed', NULL, 0, NULL, 0, NULL, NULL, "
+                "NULL, NULL, ?)",
+                (self._time(NOW - timedelta(days=1)),),
+            )
+        model = self._model()
+
+        venues = {venue["venue_id"]: venue for venue in model["venues"]}
+        acl = venues["acl"]
+        self.assertEqual(acl["current_target"]["phase"], "Collected")
+        self.assertIsNone(acl["current_target"]["next_attempt_at"])
+        # Cycle continues: countdown targets the (approximate) next edition.
+        self.assertEqual(acl["progress"]["label"], "next: ACL 2027")
+        self.assertEqual(acl["status"]["phase"], "Collected")
+        self.assertIsNone(acl["status"]["disposition"])
+        # Curated verified date beats the operator estimate for the same year.
+        self.assertEqual(acl["last_edition"]["date"], "2026-07-02")
+
+    def test_completed_status_suppresses_stale_failed_disposition(self):
+        targets = [{
+            "venue_id": "iclr",
+            "year": 2026,
+            "event_date": None,
+            "agent": {
+                "status": "completed",
+                "next_check_at": None,
+                "last_disposition": "failed",
+                "updated_at": self._time(NOW),
+            },
+            "latest_attempt": None,
+            "latest_report": None,
+        }]
+
+        model = self._model(targets=targets)
+
+        iclr = next(v for v in model["venues"] if v["venue_id"] == "iclr")
+        self.assertEqual(iclr["status"]["phase"], "Collected")
+        # The stale 'failed' disposition from before the operator
+        # completion must not contradict the terminal phase.
+        self.assertIsNone(iclr["status"]["disposition"])
+
+    def test_older_actionable_target_beats_newer_terminal_target(self):
+        targets = [
+            {
+                "venue_id": "icml",
+                "year": 2026,
+                "event_date": None,
+                "agent": {
+                    "status": "scheduled",
+                    "next_check_at": self._time(NOW + timedelta(days=2)),
+                    "last_disposition": "not_ready",
+                    "updated_at": self._time(NOW),
+                },
+                "latest_attempt": None,
+                "latest_report": None,
+            },
+            {
+                "venue_id": "icml",
+                "year": 2027,
+                "event_date": None,
+                "agent": {
+                    "status": "completed",
+                    "next_check_at": None,
+                    "last_disposition": "success",
+                    "updated_at": self._time(NOW),
+                },
+                "latest_attempt": None,
+                "latest_report": None,
+            },
+        ]
+
+        model = self._model(targets=targets)
+
+        icml = next(v for v in model["venues"] if v["venue_id"] == "icml")
+        self.assertEqual(icml["current_target"]["year"], 2026)
+        self.assertEqual(icml["status"]["year"], 2026)
+        self.assertEqual(icml["status"]["phase"], "Scheduled")
+        self.assertEqual(icml["status"]["disposition"], "not_ready")
+
+    def test_open_year_stays_next_edition_and_can_flag_waiting_for_pdf(self):
+        # aistats 2026: metadata scraped, PDFs mostly missing — the agent
+        # keeps retrying (status stays 'scheduled', not 'completed'). Its
+        # curated date (2026-05-02) has already passed relative to NOW
+        # (2026-07-16), but it must still be the row's "next edition", not
+        # a jump ahead to a fabricated ~2027 guess, and the status column
+        # must carry a waiting-for-PDF hint when metadata says so.
+        targets = [{
+            "venue_id": "aistats",
+            "year": 2026,
+            "event_date": None,
+            "agent": {
+                "status": "scheduled",
+                "next_check_at": self._time(NOW + timedelta(days=5)),
+                "last_disposition": "not_ready",
+                "updated_at": self._time(NOW),
+            },
+            "latest_attempt": None,
+            "latest_report": None,
+        }]
+
+        model = self._model(targets=targets)
+        aistats = next(v for v in model["venues"] if v["venue_id"] == "aistats")
+        # No earlier completed edition exists, so the still-open 2026 year
+        # is surfaced as "last edition" too (in_progress=True) rather than
+        # left blank.
+        self.assertEqual(aistats["last_edition"]["name"], "AISTATS 2026")
+        self.assertTrue(aistats["last_edition"]["in_progress"])
+        self.assertEqual(aistats["next_edition"]["name"], "AISTATS 2026")
+        self.assertFalse(aistats["next_edition"]["approx"])
+        self.assertIsNone(aistats["status"]["pdf_status"])
+
+        model = build_dashboard_model(
+            load_venue_catalog(), targets, observed_at=NOW,
+            editions=load_venue_editions(),
+            pdf_completeness={"aistats": {2026: False}},
+        )
+        aistats = next(v for v in model["venues"] if v["venue_id"] == "aistats")
+        self.assertEqual(aistats["status"]["pdf_status"], "waiting")
+        document = render_dashboard(model)
+        self.assertIn('class="badge-info"', document)
+        self.assertIn("PDF download is still in progress", document)
+
+        # A venue whose metadata scan says the year IS fully downloaded
+        # gets a distinct "collected" badge instead -- it must not look
+        # identical to a year with no data at all (no badge either way),
+        # nor to a year still genuinely missing PDFs.
+        model = build_dashboard_model(
+            load_venue_catalog(), targets, observed_at=NOW,
+            editions=load_venue_editions(),
+            pdf_completeness={"aistats": {2026: True}},
+        )
+        aistats = next(v for v in model["venues"] if v["venue_id"] == "aistats")
+        self.assertEqual(aistats["status"]["pdf_status"], "collected")
+        document = render_dashboard(model)
+        self.assertIn('class="badge-success"', document)
+        self.assertNotIn('class="badge-info"', document)
+
+    def test_continuous_venue_never_gets_the_pdf_badge(self):
+        # The "collected" checkmark badge means "provisional source ahead of
+        # canonical archival" -- a continuous venue like JMLR has no such
+        # split (it just downloads PDFs incrementally) and its phase never
+        # leaves "Scheduled" by design, so without an explicit guard this
+        # badge would render permanently and misleadingly.
+        with ControlStateRepository(
+            self.state, writer=Writer.LOCAL_CONTROL_PLANE, clock=lambda: NOW
+        ) as repository:
+            lease = repository.acquire_lease("fixture-continuous")
+            try:
+                repository.register_continuous_event_date(
+                    "jmlr", 2026, registered_at=NOW, lease=lease,
+                )
+                repository.ensure_scheduled_agent_target(
+                    "jmlr", 2026, next_check_at=NOW + timedelta(days=10),
+                    registered_at=NOW, lease=lease,
+                )
+            finally:
+                repository.release_lease(lease)
+
+        model = build_dashboard_model(
+            load_venue_catalog(), read_agent_state_summary(self.state),
+            observed_at=NOW, editions=load_venue_editions(),
+            pdf_completeness={"jmlr": {2026: True}},
+        )
+        jmlr = next(v for v in model["venues"] if v["venue_id"] == "jmlr")
+        self.assertEqual(jmlr["status"]["phase"], "Scheduled")
+        self.assertIsNone(jmlr["status"]["pdf_status"])
+        document = render_dashboard(model)
+        self.assertNotIn('class="badge-success"', document)
+
+    def test_venue_with_no_monitor_source_gets_the_warning_badge(self):
+        catalog = {"venues": [{
+            "venue_id": "testvenue",
+            "display_name": "Test Venue",
+            "lifecycle": {"kind": "annual"},
+            "scraper": {"monitor_registered": False},
+        }]}
+        model = build_dashboard_model(catalog, [], observed_at=NOW)
+        document = render_dashboard(model)
+        self.assertIn(
+            'title="No deterministic monitor source configured"', document
+        )
+
+    def test_scan_pdf_completeness_reads_metadata_and_skips_bad_entries(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / "aistats").mkdir()
+            (root / "aistats" / "aistats_2026.json").write_text(json.dumps([
+                {"title": "a", "pdf_path": "a.pdf"},
+                {"title": "b", "pdf_path": None},
+            ]), encoding="utf-8")
+            (root / "aistats" / "aistats_2025.json").write_text(json.dumps([
+                {"title": "a", "pdf_path": "a.pdf"},
+            ]), encoding="utf-8")
+            (root / "aistats" / "not-a-venue-year.json").write_text(
+                "[]", encoding="utf-8"
+            )
+            (root / "aistats" / "aistats_2024.json").write_text(
+                "not json", encoding="utf-8"
+            )
+
+            result = scan_pdf_completeness(root)
+
+        self.assertEqual(result["aistats"][2026], False)
+        self.assertEqual(result["aistats"][2025], True)
+        self.assertNotIn(2024, result["aistats"])
+
+        missing = scan_pdf_completeness(Path("/nonexistent-openpapers-root"))
+        self.assertEqual(missing, {})
+
+    def test_read_pdf_completeness_index_parses_the_sidecar_file(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / "pdf_completeness.v1.json").write_text(json.dumps({
+                "schema_version": 1,
+                "completeness": {
+                    "icml": {"2026": True},
+                    "aistats": {"2026": False, "not-a-year": True},
+                    "bad-venue": "not-a-dict",
+                },
+            }), encoding="utf-8")
+
+            result = read_pdf_completeness_index(root)
+
+        self.assertEqual(result, {
+            "icml": {2026: True},
+            "aistats": {2026: False},
+        })
+
+    def test_read_pdf_completeness_index_tolerates_missing_or_bad_file(self):
+        self.assertEqual(
+            read_pdf_completeness_index(Path("/nonexistent-openpapers-root")),
+            {},
+        )
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / "pdf_completeness.v1.json").write_text(
+                "not json", encoding="utf-8"
+            )
+            self.assertEqual(read_pdf_completeness_index(root), {})
+
+            (root / "pdf_completeness.v1.json").write_text(json.dumps({
+                "schema_version": 2, "completeness": {"icml": {"2026": True}},
+            }), encoding="utf-8")
+            self.assertEqual(read_pdf_completeness_index(root), {})
+
+    def test_orphaned_event_date_without_agent_schedule_renders_as_anomaly(self):
+        # complete_event_date_success inserts the agent_schedule row in the
+        # same transaction as this status flip, so this shape (event_date
+        # 'scheduled' with no matching agent record) should be unreachable
+        # for new data — this fixture stands in for legacy/pre-atomic-insert
+        # rows and proves the dashboard flags rather than mislabels them.
+        targets = [{
+            "venue_id": "uai",
+            "year": 2026,
+            "event_date": {
+                "status": "scheduled",
+                "next_check_at": self._time(NOW + timedelta(days=1)),
+                "estimated_event_date": "2026-08-01",
+                "updated_at": self._time(NOW),
+            },
+            "agent": None,
+            "latest_attempt": None,
+            "latest_report": None,
+        }]
+
+        model = self._model(targets=targets)
+        document = render_dashboard(model)
+
+        uai = next(v for v in model["venues"] if v["venue_id"] == "uai")
+        self.assertEqual(uai["current_target"]["phase"], "Data inconsistency")
+        self.assertEqual(uai["status"]["phase"], "Data inconsistency")
+        self.assertTrue(uai["status"]["anomaly"])
+        # It sorts and colors like the other attention phases (never
+        # silently ignored), but renders with its own distinct badge.
+        self.assertEqual(uai["progress"]["category"], "attention")
+        self.assertIn("status-anomaly", document)
+        self.assertIn("Data inconsistency: an event", document)
+
+    def test_edition_day_uses_chicago_calendar_not_utc_calendar(self):
+        after_utc_midnight = datetime(2026, 7, 18, 1, tzinfo=timezone.utc)
+        model = build_dashboard_model(
+            load_venue_catalog(), [], observed_at=after_utc_midnight,
+            editions={"icml": [{
+                "year": 2026,
+                "start_date": date(2026, 7, 18),
+                "label": None,
+            }]},
+        )
+
+        icml = next(v for v in model["venues"] if v["venue_id"] == "icml")
+        self.assertIsNone(icml["last_edition"])
+        self.assertEqual(icml["next_edition"]["date"], "2026-07-18")
+
+    def test_report_delivery_problem_surfaces_as_warning_only(self):
+        model = self._model()
+        venues = {venue["venue_id"]: venue for venue in model["venues"]}
+        self.assertIsNone(venues["icml"]["status"]["warning"])
+
+        targets = [dict(read_agent_state_summary(self.state)[0])]
+        targets[0]["latest_report"] = {
+            "attempt_number": 1, "status": "retryable", "attempt_count": 1,
+            "delivered_at": None, "last_failure_category": "transient",
+        }
+        model = self._model(targets=targets)
+        venues = {venue["venue_id"]: venue for venue in model["venues"]}
+        self.assertEqual(
+            venues["icml"]["status"]["warning"], "report delivery retryable"
+        )
+        document = render_dashboard(model)
+        self.assertIn("report delivery retryable", document)
+
+    def test_rows_sort_action_first_then_cycle_waits(self):
+        model = self._model()
+        order = [venue["venue_id"] for venue in model["venues"]]
+        # icml is the only venue with a real next attempt: it sorts first;
+        # everyone else orders by next expected edition.
+        self.assertEqual(order[0], "icml")
+        # JMLR (continuous) never gets a next_edition — it sorts by venue_id
+        # in its own tail category instead; exclude it from the "ordered by
+        # next expected edition" check, which only applies to venues that
+        # have one.
+        cycle = [
+            venue for venue in model["venues"][1:]
+            if venue["next_edition"] is not None
+        ]
+        dates = [venue["next_edition"]["iso_date"] for venue in cycle]
+        self.assertEqual(dates, sorted(dates))
+
+    def test_renderer_escapes_content_and_has_only_the_timezone_script(self):
+        catalog = copy.deepcopy(load_venue_catalog())
+        catalog["venues"][0]["display_name"] = "<script>alert('x')</script>"
+        model = build_dashboard_model(
+            catalog, [], observed_at=NOW, editions={},
+        )
+
+        document = render_dashboard(model)
+
+        self.assertIn("&lt;script&gt;alert", document)
+        self.assertNotIn("<script>alert", document)
+        # Exactly one active script: the inline timezone selector.
+        self.assertEqual(document.count("<script>"), 1)
+        self.assertIn('id="tz-select"', document)
+        self.assertIn("America/Chicago", document)
+        self.assertNotIn("http://", document)
+        self.assertNotIn("https://", document)
+        self.assertIn("This\npage performs no action", document)
+
+    def test_renderer_defaults_timestamps_to_chicago(self):
+        model = self._model()
+        document = render_dashboard(model)
+        # 2026-07-18T16:30Z == 11:30 in America/Chicago (CDT); the next
+        # attempt for icml (NOW+2d 16:30Z) renders as 11:30 local.
+        self.assertIn('data-utc="2026-07-18T16:30:00Z">2026-07-18 11:30', document)
+
+    def test_loopback_server_rereads_without_mutating_state(self):
+        before = self.state.read_bytes()
+        server = create_dashboard_server(
+            self.state, port=0, clock=lambda: NOW
+        )
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        base = f"http://127.0.0.1:{server.server_port}"
+        try:
+            with urlopen(base + "/", timeout=3) as response:
+                body = response.read().decode("utf-8")
+                self.assertEqual(response.status, 200)
+                self.assertEqual(
+                    response.headers["X-Content-Type-Options"], "nosniff"
+                )
+                policy = response.headers["Content-Security-Policy"]
+                self.assertIn("default-src 'none'", policy)
+                self.assertIn("script-src 'unsafe-inline'", policy)
+            self.assertIn("International Conference on Machine Learning", body)
+            # ICML's last edition: compact "{year} · {month-day}" cell, not
+            # the old "ICML 2026" repeat of the venue name.
+            self.assertIn(">2026<", body)
+            self.assertIn("· 07-07", body)
+            with urlopen(base + "/healthz", timeout=3) as response:
+                self.assertEqual(response.read(), b'{"status":"ok"}\n')
+            with self.assertRaises(HTTPError) as error:
+                urlopen(Request(base + "/", method="POST"), timeout=3)
+            self.assertEqual(error.exception.code, 405)
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=3)
+        self.assertEqual(self.state.read_bytes(), before)
+
+    def test_non_loopback_or_unsafe_state_is_rejected_before_listen(self):
+        with self.assertRaisesRegex(AgentDashboardError, "127.0.0.1"):
+            create_dashboard_server(self.state, bind="0.0.0.0", port=0)
+        relative = Path(self.state.name)
+        with self.assertRaisesRegex(AgentDashboardError, "unavailable|unsafe"):
+            create_dashboard_server(relative, port=0)
+
+    def test_relative_metadata_root_is_rejected_before_listen(self):
+        with self.assertRaisesRegex(AgentDashboardError, "metadata root"):
+            create_dashboard_server(
+                self.state, port=0, metadata_root=Path("relative/metadata")
+            )
+
+
+if __name__ == "__main__":
+    unittest.main()

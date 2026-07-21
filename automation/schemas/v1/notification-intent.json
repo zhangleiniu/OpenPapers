@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openpapers.local/schemas/v1/notification-intent.json",
+  "title": "OpenPapers notification intent v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "notification_id",
+    "kind",
+    "source_ids",
+    "created_at",
+    "subject",
+    "body",
+    "evidence_ids",
+    "run_ids"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "notification_id": {"$ref": "#/$defs/id"},
+    "kind": {"enum": ["immediate", "digest"]},
+    "source_ids": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/id"},
+      "minItems": 1,
+      "maxItems": 100,
+      "uniqueItems": true
+    },
+    "created_at": {"type": "string", "format": "date-time"},
+    "subject": {"type": "string", "minLength": 1, "maxLength": 200},
+    "body": {"type": "string", "minLength": 1, "maxLength": 100000},
+    "evidence_ids": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/id"},
+      "minItems": 1,
+      "maxItems": 1000,
+      "uniqueItems": true
+    },
+    "run_ids": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/id"},
+      "maxItems": 100,
+      "uniqueItems": true
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._:-]{2,127}$"
+    }
+  }
+}

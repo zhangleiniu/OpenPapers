@@ -2,11 +2,16 @@
 
 ## Source
 
-All years: `https://www.ijcai.org/proceedings/[year]/`
+Archival source: `https://www.ijcai.org/proceedings/[year]/`
 
-## Coverage
+For 2026, before that proceedings page exists, the scraper uses the official
+conference accepted-paper page filtered to Main Track. It provides title,
+authors, abstract, keywords, and the conference paper number, but no PDF URL;
+the resulting records are provisional.
 
-2017-2025
+## Dataset coverage
+
+See the generated [coverage and quality report](../statistics.md).
 
 ## Track filtering
 
@@ -22,6 +27,9 @@ cache file directly and rerun — the cached result will be used as-is.
 If the API call fails, a skeleton entry with all tracks set to
 `is_full_regular: false` is written to the cache file, and the run is
 aborted with instructions to label manually.
+
+The 2026 accepted-paper fallback does not use Gemini: the official page exposes
+an explicit `main-track` filter and count.
 
 ## Data fields
 
