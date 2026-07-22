@@ -7,6 +7,13 @@ It applies venue-specific inclusion rules to retain archival main-program conten
 (including configured long, short, and industry tracks) while excluding workshops,
 demos, tutorials, and other secondary material.
 
+
+> 📌 **Note:** We are making significant changes to this repository to fully
+> automate the pipeline from downloading papers and metadata through to data
+> processing. However, in the meantime, users can still download papers and metadata
+> manually using the commands outlined below.
+
+
 ---
 
 ## Supported Conferences
