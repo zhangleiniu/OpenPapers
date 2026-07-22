@@ -4,8 +4,16 @@
 
 | Years     | Source |
 |-----------|--------|
-| 2000–2024 | `https://papers.nips.cc/paper_files/paper/[year]` |
+| 1987–2024 | `https://papers.nips.cc/paper_files/paper/[year]` |
 | 2025+     | `papercopilot/paperlists` GitHub JSON (automatic fallback when papers.nips.cc returns 404) |
+
+1987 is the first NIPS/NeurIPS edition, and the earliest possible year: the
+site returns 404 for `paper_files/paper/1986`. No separate legacy scraper was
+needed — papers.nips.cc now serves 1987–1999 through the same URL scheme as
+later years (unlike an earlier flat/hash-less scheme documented on some
+mirrors, which appears to have been superseded by a site redesign). Most
+pre-2000 papers do include an `abstract` (fetched with the rest of the
+metadata in one request), though not all — some records have `abstract: ""`.
 
 ## Dataset coverage
 
@@ -24,6 +32,9 @@ See the generated [coverage and quality report](../statistics.md).
 
 ## Known issues
 
+- **1987–1999 abstracts**: sourced from scanned/OCR'd proceedings, so some
+  contain OCR artifacts (e.g. stray `(cid:173)` soft-hyphen markers) that a
+  fresh 2000+ HTML-sourced abstract would not have.
 - **2022+ URL format change**: Paper URLs gained a track suffix (e.g. `{hash}-Abstract-Conference.html` → `{hash}-Paper-Conference.pdf`). Pre-2022 URLs have no suffix (`{hash}-Abstract.html` → `{hash}-Paper.pdf`). Both formats are handled.
 - **2012, `9e7ba617ad9e69b39bd0c29335b79629`**: the official proceedings PDF
   returns 404. The paper is retained using the authors' MIT-hosted copy,

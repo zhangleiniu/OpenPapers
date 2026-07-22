@@ -6,8 +6,14 @@ All years: `https://aclanthology.org/events/acl-[year]/`
 
 ## Dataset coverage
 
-See the generated [coverage and quality report](../statistics.md). The current
-canonical dataset includes ACL 2017–2026.
+See the generated [coverage and quality report](../statistics.md) for the
+actual current year range — it is the source of truth, not this file.
+
+The `events/acl-[year]/` scheme works uniformly back to 1979 (the 17th annual
+meeting), confirmed by direct fetch. Meetings 1–16 (1963–1978) exist in the
+Anthology's broader archive but are not exposed under the same `events/`
+page structure, so they would need a separate scraping approach and are not
+currently covered.
 
 ## Track filtering
 
@@ -40,3 +46,11 @@ aborted with instructions to label manually.
   fails, the generated all-false cache must be reviewed manually before rerun.
 - ACL 2026 source-page abstract gaps were recovered from GROBID and carry
   `abstract_source: grobid`.
+- **Pre-~2015 years generally have no `abstract`** on the Anthology source
+  page at all (not a scraping bug) — records are saved with `abstract: ""`.
+  Recover these later via
+  `postprocessing/backfill_missing_metadata_fields.py --abstract` once PDFs
+  are processed by GROBID/Nougat. This means `--require-complete` at the
+  default `archival`/`metadata` completeness level will flag these years as
+  incomplete until abstracts are backfilled — use `--completeness-level
+  announced` for an initial scrape of old years instead.

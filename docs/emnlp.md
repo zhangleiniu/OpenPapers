@@ -7,7 +7,11 @@ All years: `https://aclanthology.org/events/emnlp-[year]/`
 
 ## Dataset coverage
 
-See the generated [coverage and quality report](../statistics.md).
+See the generated [coverage and quality report](../statistics.md) for the
+actual current year range — it is the source of truth, not this file.
+
+The `events/emnlp-[year]/` scheme works uniformly back to 1996, EMNLP's first
+edition, confirmed by direct fetch.
 
 ## Track filtering
 
@@ -31,7 +35,7 @@ aborted with instructions to label manually.
 | `id` | ACL Anthology paper ID (e.g. `2024.emnlp-main.1`) |
 | `title` | ✓ |
 | `authors` | ✓ |
-| `abstract` | ✓ |
+| `abstract` | Source page; absent for most pre-~2015 years |
 | `pdf_url` | ✓ |
 
 ## Known issues
@@ -39,3 +43,9 @@ aborted with instructions to label manually.
 - **2022, `2022.emnlp-main.804`**: ACL Anthology retains the official metadata
   but exposes no PDF URL. The paper is retained and uses arXiv `2112.10684`,
   recorded with `pdf_source: arxiv`.
+- **Pre-~2015 years generally have no `abstract`** on the Anthology source
+  page (not a scraping bug) — records are saved with `abstract: ""`. Recover
+  later via `postprocessing/backfill_missing_metadata_fields.py --abstract`
+  once PDFs are processed by GROBID/Nougat; use `--completeness-level
+  announced` for an initial scrape of old years to avoid `--require-complete`
+  flagging them as incomplete.

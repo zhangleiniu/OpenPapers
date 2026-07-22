@@ -12,6 +12,10 @@ provisional until PMLR publication.
 
 Known volume mappings (others discovered dynamically from the MLR Press main page):
 - 2025: `v258`
+- 1995: `r0`, 1997: `r1`, 1999: `r2`, 2001: `r3`, 2003: `r4`, 2005: `r5`
+  (MLR Press "Reissue Series" — pre-dates AISTATS' regular `v`-numbered PMLR
+  volumes; same page template, fixed volume IDs since dynamic discovery only
+  matches `v<digits>` hrefs).
 
 ## Dataset coverage
 
@@ -29,6 +33,12 @@ See the generated [coverage and quality report](../statistics.md).
 
 ## Known issues
 
-- **Pre-2009**: Coverage is incomplete. 2007 exists on MLR Press but has not been tested. Older editions (1995, 1997, 1999, 2001, 2003, 2005) are available as part of the MLR Press "Reissue Series" under `R`-prefixed volumes (`R0`–`R5`), which are not compatible with the current volume discovery logic and have not been implemented.
+- **1995–2005 (Reissue Series)**: AISTATS ran in odd years only until 2010, so
+  2006 and 2008 have no proceedings (not a scraping gap). Pre-1995 editions
+  (1985–1993) were only ever published as print books and have no open-access
+  source. Each R-series volume includes one `Frontmatter` entry (the issue
+  preface, not a paper) that the scraper currently retains as a regular
+  record — harmless but worth filtering out downstream if paper counts need
+  to be exact.
 - **2018, `derezinski18a`**: the official PMLR PDF URL returns 404. The paper is
   retained and uses arXiv `1710.05110`, recorded with `pdf_source: arxiv`.
