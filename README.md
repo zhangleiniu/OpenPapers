@@ -12,7 +12,7 @@ demos, tutorials, and other secondary material.
 ## Supported Conferences
 
 <!-- BEGIN GENERATED COVERAGE -->
-- **NeurIPS** (2000–2025)
+- **NeurIPS** (1987–2025)
 - **ICML** (2013–2025; provisional: 2026)
 - **ICLR** (2013–2026)
 - **AAAI** (2010–2026)
@@ -20,11 +20,11 @@ demos, tutorials, and other secondary material.
 - **COLT** (2011–2026)
 - **UAI** (2015–2025)
 - **JMLR** (2000–2026)
-- **AISTATS** (2009–2025; provisional: 2026)
+- **AISTATS** (1995, 1997, 1999, 2001, 2003, 2005, 2009–2025; provisional: 2026)
 - **IJCAI** (2017–2025; provisional: 2026)
-- **ACL** (2017–2026)
-- **EMNLP** (2017–2025)
-- **NAACL** (2013, 2015–2016, 2018–2019, 2021–2022, 2024–2025)
+- **ACL** (1979–2026)
+- **EMNLP** (1996–2025)
+- **NAACL** (2000–2001, 2003–2004, 2006–2007, 2009–2010, 2012–2013, 2015–2016, 2018–2019, 2021–2022, 2024–2025)
 - **ICCV** (2013, 2015, 2017, 2019, 2021, 2023, 2025)
 - **ECCV** (2018, 2020, 2022, 2024)
 <!-- END GENERATED COVERAGE -->

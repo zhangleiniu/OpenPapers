@@ -42,3 +42,6 @@ See the generated [coverage and quality report](../statistics.md).
   to be exact.
 - **2018, `derezinski18a`**: the official PMLR PDF URL returns 404. The paper is
   retained and uses arXiv `1710.05110`, recorded with `pdf_source: arxiv`.
+- **1999 (r2), `viswanathan99a`/`oates99a`/`ghosh99a`**: the official PMLR PDF
+  URLs return 404 (abstract pages are fine). Metadata is retained with
+  `pdf_downloaded: false`; no arXiv equivalent has been identified yet.

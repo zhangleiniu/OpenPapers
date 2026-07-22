@@ -53,3 +53,5 @@ aborted with instructions to label manually.
   once PDFs are processed by GROBID/Nougat; use `--completeness-level
   announced` for an initial scrape of old years to avoid `--require-complete`
   flagging them as incomplete.
+- **2001, `N01-1022`**: the ACL Anthology PDF URL returns 404. Metadata is
+  retained with `pdf_downloaded: false`; no alternative source identified yet.

@@ -54,3 +54,5 @@ aborted with instructions to label manually.
   default `archival`/`metadata` completeness level will flag these years as
   incomplete until abstracts are backfilled — use `--completeness-level
   announced` for an initial scrape of old years instead.
+- **1979, `P79-1024`**: the ACL Anthology PDF URL returns 404. Metadata is
+  retained with `pdf_downloaded: false`; no alternative source identified yet.
