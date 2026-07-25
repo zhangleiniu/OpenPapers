@@ -15,7 +15,7 @@ from typing import List, Dict, Optional
 import logging
 
 from .base import BaseScraper
-from utils import save_papers
+from utils import save_papers, parse_bibtex_fields
 
 logger = logging.getLogger(__name__)
 
@@ -109,9 +109,38 @@ class UAIScraper(BaseScraper):
             'abstract': abstract,
             'pdf_url':  pdf_url,
         }
+        extra = self._extract_bibtex_extra(soup)
+        if extra:
+            paper['bibtex_extra'] = extra
 
         logger.debug(f"Parsed: {title!r} ({len(authors)} authors)")
         return paper
+
+    def _extract_bibtex_extra(self, soup: BeautifulSoup) -> Dict[str, str]:
+        """Pull enrichment fields from PMLR's own citation block, already
+        present on the abstract page (no extra request needed). booktitle/
+        organization override the generic VENUE template with PMLR's precise
+        wording (e.g. "Proceedings of the Thirty-Ninth ...")."""
+        code = soup.find('code', id='bibtex')
+        if not code:
+            return {}
+        fields = parse_bibtex_fields(code.get_text())
+        extra = {}
+        if fields.get('booktitle'):
+            extra['booktitle'] = fields['booktitle']
+        if fields.get('editor'):
+            extra['editor'] = fields['editor']
+        if fields.get('volume'):
+            extra['volume'] = fields['volume']
+        if fields.get('series'):
+            extra['series'] = fields['series']
+        if fields.get('month'):
+            extra['month'] = fields['month']
+        if fields.get('pages'):
+            extra['pages'] = fields['pages']
+        if fields.get('publisher'):
+            extra['organization'] = fields['publisher']
+        return extra
 
     # ==================================================================
     # Legacy scraping (2015-2018, auai.org)

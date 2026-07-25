@@ -28,6 +28,7 @@ See the generated [coverage and quality report](../statistics.md).
 | `authors` | ✓ |
 | `abstract` | ✓ |
 | `pdf_url` | ✓ |
+| `bibtex_extra` | editor/volume/pages/doi/organization fetched from `{hash}-Bibtex.bib` (same filename pattern for every year/track, one extra request) — see [data-schema.md](data-schema.md#bibtex-generation) |
 | `openreview_url` | OpenReview forum URL (papercopilot years only) |
 
 ## Known issues

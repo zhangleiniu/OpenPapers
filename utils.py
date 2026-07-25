@@ -445,13 +445,59 @@ def _suffix(i):
     return s
 
 
-def _build_bibtex(conf, year, title, authors, key):
+# Bibliographic fields we'll pull from a publisher-supplied BibTeX/citation
+# record when a scraper found one, keyed by the order they should appear in.
+# "booktitle"/"organization" override the static VENUE table when the source
+# has a more precise value (e.g. an edition number or a specific volume).
+_EXTRA_FIELD_ORDER = [
+    "editor", "volume", "number", "series", "pages", "month",
+    "address", "note", "doi", "isbn",
+]
+
+_BIBFIELD_RE = re.compile(
+    r'(\w+)\s*=\s*(?:\{((?:[^{}]|\{[^{}]*\})*)\}|"([^"]*)")\s*,?')
+
+_PAGE_DASH_RE = re.compile(r"(?<=[0-9])[\-‐‑‒–—―](?=[0-9])")
+
+
+def parse_bibtex_fields(raw: str) -> Dict[str, str]:
+    """Pull field -> value pairs out of a raw BibTeX entry (brace or quoted
+    values, one optional level of nested braces). Not a full BibTeX parser —
+    good enough for the well-formed entries publishers hand out."""
+    fields = {}
+    for match in _BIBFIELD_RE.finditer(raw):
+        key = match.group(1).lower()
+        value = match.group(2) if match.group(2) is not None else match.group(3)
+        value = re.sub(r"\s+", " ", value).strip()
+        if key not in fields:
+            fields[key] = value
+    return fields
+
+
+def normalize_bibtex_pages(raw: str) -> str:
+    """Collapse any dash between two digits (en/em-dash or hyphen) to the
+    BibTeX-conventional double hyphen, e.g. "1–21" or "1-21" -> "1--21"."""
+    return _PAGE_DASH_RE.sub("--", raw)
+
+
+def _build_bibtex(conf, year, title, authors, key, extra=None):
     etype, vfield, vvalue, org = VENUE[conf]
+    extra = extra or {}
+    vvalue = extra.get("booktitle") or vvalue
+    org = extra.get("organization") or org
+
     lines = [f"@{etype}{{{key},",
              f"  title={{{_latex_escape(title.strip())}}},",
              f"  author={{{_format_authors(authors)}}},",
-             f"  {vfield}={{{vvalue}}},",
-             f"  year={{{year}}}"]
+             f"  {vfield}={{{vvalue}}},"]
+    for field in _EXTRA_FIELD_ORDER:
+        value = extra.get(field)
+        if not value:
+            continue
+        if field == "pages":
+            value = normalize_bibtex_pages(value)
+        lines.append(f"  {field}={{{value}}},")
+    lines.append(f"  year={{{year}}}")
     if org:
         lines[-1] += ","
         lines.append(f"  organization={{{org}}}")
@@ -499,6 +545,7 @@ def assign_bibtex(papers):
         for paper, key in keyed:
             paper["bibtex"] = _build_bibtex(
                 paper["conference"].lower(), int(paper["year"]),
-                paper["title"], paper["authors"], key)
+                paper["title"], paper["authors"], key,
+                paper.get("bibtex_extra"))
 
     return papers

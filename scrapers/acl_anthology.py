@@ -18,7 +18,7 @@ from typing import List, Dict, Optional
 
 from .base import BaseScraper
 from config import CACHE_DIR
-from utils import create_gemini_model, llm_json_config
+from utils import create_gemini_model, llm_json_config, parse_bibtex_fields
 
 logger = logging.getLogger(__name__)
 
@@ -118,6 +118,9 @@ class ACLAnthologyScraper(BaseScraper):
                 'abstract': self._extract_abstract(soup),
                 'pdf_url':  self._extract_pdf_url(soup),
             }
+            extra = self._extract_bibtex_extra(soup)
+            if extra:
+                paper['bibtex_extra'] = extra
 
             logger.debug(f"Parsed: {title!r} ({len(paper['authors'])} authors)")
             return paper
@@ -287,3 +290,31 @@ class ACLAnthologyScraper(BaseScraper):
         if dd_tag and dd_tag.a:
             return dd_tag.a['href']
         return ""
+
+    def _extract_bibtex_extra(self, soup: BeautifulSoup) -> Dict[str, str]:
+        """Pull enrichment fields from the Anthology's own BibTeX export
+        block (already present on the page — no extra request needed).
+
+        booktitle/organization override the generic VENUE template with the
+        Anthology's precise wording (e.g. volume-specific "(Volume 1: Long
+        Papers)"); month is skipped because the Anthology emits it as a
+        bareword macro (`month = jul`) rather than a quoted/braced value.
+        """
+        pre = soup.find('pre', id='citeBibtexContent')
+        if not pre:
+            return {}
+        fields = parse_bibtex_fields(pre.get_text())
+        extra = {}
+        if fields.get('booktitle'):
+            extra['booktitle'] = fields['booktitle']
+        if fields.get('editor'):
+            extra['editor'] = fields['editor']
+        if fields.get('address'):
+            extra['address'] = fields['address']
+        if fields.get('publisher'):
+            extra['organization'] = fields['publisher']
+        if fields.get('doi'):
+            extra['doi'] = fields['doi']
+        if fields.get('pages'):
+            extra['pages'] = fields['pages']
+        return extra

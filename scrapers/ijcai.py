@@ -42,7 +42,7 @@ from urllib.parse import urljoin
 
 from .base import BaseScraper
 from config import CACHE_DIR
-from utils import create_gemini_model, llm_json_config
+from utils import create_gemini_model, llm_json_config, parse_bibtex_fields
 
 logger = logging.getLogger(__name__)
 
@@ -167,6 +167,9 @@ class IJCAIScraper(BaseScraper):
                 'source_ids': {'ijcai_proceedings': paper_id},
                 'publication_status': 'archival',
             }
+            extra = self._fetch_bibtex_extra(soup, url)
+            if extra:
+                paper['bibtex_extra'] = extra
 
             logger.debug(f"Parsed: {title!r} ({len(authors)} authors)")
             return paper
@@ -374,3 +377,31 @@ class IJCAIScraper(BaseScraper):
     def _extract_pdf_url(self, soup: BeautifulSoup, page_url: str) -> str:
         a_tag = soup.find('a', href=True, class_="button btn-lg btn-download")
         return a_tag['href'] if a_tag else ""
+
+    def _fetch_bibtex_extra(self, soup: BeautifulSoup, page_url: str) -> Dict[str, str]:
+        """Fetch ijcai.org's own BibTeX export (linked as the "BibTeX"
+        download button) for editor/pages/doi/note fields our generic
+        template doesn't have. One extra request per paper."""
+        bib_link = next(
+            (a for a in soup.find_all('a', href=True, class_="button btn-lg btn-download")
+             if 'bibtex' in a.get_text(strip=True).lower()),
+            None)
+        if not bib_link:
+            return {}
+        bib_url = urljoin(page_url, bib_link['href'])
+        response = self.session.get(bib_url, quiet_404=True)
+        if not response:
+            return {}
+        fields = parse_bibtex_fields(response.text)
+        extra = {}
+        if fields.get('booktitle'):
+            extra['booktitle'] = fields['booktitle']
+        if fields.get('editor'):
+            extra['editor'] = fields['editor']
+        if fields.get('pages'):
+            extra['pages'] = fields['pages']
+        if fields.get('doi'):
+            extra['doi'] = fields['doi']
+        if fields.get('note'):
+            extra['note'] = fields['note']
+        return extra

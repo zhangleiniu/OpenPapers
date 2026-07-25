@@ -26,6 +26,7 @@ from bs4 import BeautifulSoup
 from typing import List, Dict, Optional
 
 from .base import BaseScraper
+from utils import parse_bibtex_fields
 
 logger = logging.getLogger(__name__)
 
@@ -105,6 +106,9 @@ class JMLRScraper(BaseScraper):
                 'abstract': abstract,
                 'pdf_url':  pdf_url,
             }
+            extra = self._fetch_bibtex_extra(soup, url)
+            if extra:
+                paper['bibtex_extra'] = extra
 
             logger.debug(f"Parsed: {title!r} ({len(authors)} authors)")
             return paper
@@ -116,6 +120,27 @@ class JMLRScraper(BaseScraper):
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------
+
+    def _fetch_bibtex_extra(self, soup: BeautifulSoup, url: str) -> Dict[str, str]:
+        """Fetch JMLR's own .bib file (linked as `[bib]` on the abstract
+        page) for the volume/number/pages fields our generic template
+        doesn't have. One extra request per paper."""
+        bib_link = soup.find('a', id='bib', href=True)
+        if not bib_link:
+            return {}
+        bib_url = urljoin(url, bib_link['href'])
+        response = self.session.get(bib_url, quiet_404=True)
+        if not response:
+            return {}
+        fields = parse_bibtex_fields(response.text)
+        extra = {}
+        if fields.get('volume'):
+            extra['volume'] = fields['volume']
+        if fields.get('number'):
+            extra['number'] = fields['number']
+        if fields.get('pages'):
+            extra['pages'] = fields['pages']
+        return extra
 
     def _extract_title(self, soup: BeautifulSoup) -> str:
         h2 = soup.find('h2')

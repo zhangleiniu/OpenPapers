@@ -39,6 +39,7 @@ aborted with instructions to label manually.
 | `authors` | ✓ |
 | `abstract` | Source page, with GROBID/Nougat fallback when absent |
 | `pdf_url` | ✓ |
+| `bibtex_extra` | editor/address/pages/doi/organization parsed from the Anthology's own BibTeX export block on the same page (no extra request) — see [data-schema.md](data-schema.md#bibtex-generation) |
 
 ## Known issues
 

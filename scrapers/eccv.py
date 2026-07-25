@@ -27,6 +27,7 @@ from bs4 import BeautifulSoup
 from typing import List, Dict, Optional
 
 from .base import BaseScraper
+from utils import parse_bibtex_fields
 
 logger = logging.getLogger(__name__)
 
@@ -109,6 +110,9 @@ class ECCVScraper(BaseScraper):
                 'abstract': abstract,
                 'pdf_url':  pdf_url,
             }
+            extra = self._fetch_bibtex_extra(soup)
+            if extra:
+                paper['bibtex_extra'] = extra
 
             logger.debug(f"Parsed: {title!r} ({len(authors)} authors)")
             return paper
@@ -120,6 +124,46 @@ class ECCVScraper(BaseScraper):
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------
+
+    def _fetch_bibtex_extra(self, soup: BeautifulSoup) -> Dict[str, str]:
+        """ecva.net (the free mirror we scrape) doesn't publish its own
+        BibTeX, but every paper links to its Springer DOI. Resolve that DOI
+        via CrossRef content negotiation to get Springer's official record
+        (pages/ISBN/publisher/an ECCV-edition-specific booktitle) — one
+        extra request per paper. Best-effort: returns {} if CrossRef is
+        unreachable or the paper has no DOI link yet.
+        """
+        doi = self._extract_doi(soup)
+        if not doi:
+            return {}
+        response = self.session.get(
+            f"https://doi.org/{doi}",
+            headers={"Accept": "application/x-bibtex"},
+            quiet_404=True)
+        if not response:
+            return {}
+        fields = parse_bibtex_fields(response.text)
+        extra = {}
+        if fields.get('booktitle'):
+            extra['booktitle'] = fields['booktitle']
+        if fields.get('pages'):
+            extra['pages'] = fields['pages']
+        if fields.get('isbn'):
+            extra['isbn'] = fields['isbn']
+        if fields.get('doi'):
+            extra['doi'] = fields['doi']
+        if fields.get('publisher'):
+            extra['organization'] = fields['publisher']
+        return extra
+
+    def _extract_doi(self, soup: BeautifulSoup) -> str:
+        for a in soup.find_all('a', href=True):
+            if a.get_text(strip=True).lower() != 'doi':
+                continue
+            match = re.search(r'10\.\d{4,9}/\S+', a['href'])
+            if match:
+                return match.group(0)
+        return ""
 
     def _extract_title(self, soup: BeautifulSoup) -> str:
         div = soup.find('div', id='papertitle')

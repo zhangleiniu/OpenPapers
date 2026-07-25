@@ -18,10 +18,46 @@ from postprocessing.generate_statistics import (
     format_years, render_readme_coverage, replace_generated_section, scan,
 )
 from postprocessing.validate_year import validate
-from utils import assign_bibtex
+from utils import assign_bibtex, parse_bibtex_fields
 
 
 class BibtexTests(unittest.TestCase):
+    def test_bibtex_extra_enriches_and_overrides_venue_fields(self):
+        paper = {
+            "id": "u1",
+            "title": "Useful Test",
+            "authors": ["Ada Lovelace"],
+            "year": 2026,
+            "conference": "icml",
+            "bibtex_extra": {
+                "booktitle": "Proceedings of the 41st International Conference on Machine Learning",
+                "pages": "31–80",
+                "organization": "PMLR",
+            },
+        }
+
+        assign_bibtex([paper])
+
+        self.assertIn("booktitle={Proceedings of the 41st International Conference on Machine Learning}",
+                       paper["bibtex"])
+        self.assertIn("pages={31--80}", paper["bibtex"])
+        self.assertIn("organization={PMLR}", paper["bibtex"])
+
+    def test_parse_bibtex_fields_handles_quoted_and_braced_values(self):
+        raw = (
+            '@inproceedings{key,\n'
+            '  title = "A {Nested} Title",\n'
+            '  pages = {1--21},\n'
+            '  month = jul,\n'
+            '}'
+        )
+
+        fields = parse_bibtex_fields(raw)
+
+        self.assertEqual(fields["title"], "A {Nested} Title")
+        self.assertEqual(fields["pages"], "1--21")
+        self.assertNotIn("month", fields)  # bareword values are skipped
+
     def test_generation_accepts_case_normalized_conference(self):
         paper = {
             "id": "u1",

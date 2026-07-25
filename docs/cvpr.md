@@ -27,6 +27,7 @@ See the generated [coverage and quality report](../statistics.md).
 | `authors` | ✓ |
 | `abstract` | ✓ |
 | `pdf_url` | Derived from paper page URL by replacing `/html/` → `/papers/` and `.html` → `.pdf` |
+| `bibtex_extra` | month/pages parsed from CVF's own citation block on the same page (no extra request) — see [data-schema.md](data-schema.md#bibtex-generation) |
 
 ## Known issues
 

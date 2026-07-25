@@ -52,6 +52,12 @@ on subsequent runs.
 | `track` | Track name (2015–2016 only, e.g. "Main Conference - Oral Presentations") |
 | `status` | Oral / Spotlight / Poster (when available from venue field) |
 
+`bibtex` is the plain generated entry (see
+[data-schema.md](data-schema.md#bibtex-generation)) — unlike ACL/PMLR/CVF/
+JMLR/IJCAI/NeurIPS/AAAI/ECCV, OpenReview doesn't paginate ICLR into a
+publisher-style record with pages/editor/DOI, so there's no richer source
+`bibtex_extra` to fetch here.
+
 ## Known issues
 
 - **2023 venue labels**: ICLR 2023 used "notable top 5%" / "notable top 25%"

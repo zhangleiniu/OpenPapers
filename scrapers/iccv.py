@@ -27,6 +27,7 @@ from bs4 import BeautifulSoup
 from typing import List, Dict, Optional
 from urllib.parse import urljoin
 from .base import BaseScraper
+from utils import parse_bibtex_fields
 
 logger = logging.getLogger(__name__)
 
@@ -108,6 +109,9 @@ class ICCVScraper(BaseScraper):
                 'abstract': abstract,
                 'pdf_url':  pdf_url,
             }
+            extra = self._extract_bibtex_extra(soup)
+            if extra:
+                paper['bibtex_extra'] = extra
 
             logger.debug(f"Parsed: {title!r} ({len(authors)} authors)")
             return paper
@@ -119,6 +123,22 @@ class ICCVScraper(BaseScraper):
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------
+
+    def _extract_bibtex_extra(self, soup: BeautifulSoup) -> Dict[str, str]:
+        """Pull enrichment fields from CVF's own citation block, already
+        present on the paper page (no extra request needed)."""
+        div = soup.find('div', class_='bibref')
+        if not div:
+            return {}
+        fields = parse_bibtex_fields(div.get_text())
+        extra = {}
+        if fields.get('booktitle'):
+            extra['booktitle'] = fields['booktitle']
+        if fields.get('month'):
+            extra['month'] = fields['month']
+        if fields.get('pages'):
+            extra['pages'] = fields['pages']
+        return extra
 
     def _extract_title(self, soup: BeautifulSoup) -> str:
         div = soup.find('div', id='papertitle')

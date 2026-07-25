@@ -8,7 +8,7 @@ from typing import List, Dict, Optional
 
 from .base import BaseScraper
 from config import CACHE_DIR
-from utils import create_gemini_model, llm_json_config
+from utils import create_gemini_model, llm_json_config, parse_bibtex_fields
 
 logger = logging.getLogger(__name__)
 
@@ -168,6 +168,9 @@ class AAAIScraper(BaseScraper):
                 'section':  section,
                 'pdf_url':  pdf_url,
             }
+            extra = self._fetch_bibtex_extra(soup, url)
+            if extra:
+                paper['bibtex_extra'] = extra
             logger.debug(f"Parsed: {title!r} ({len(authors)} authors)")
             return paper
 
@@ -586,3 +589,33 @@ class AAAIScraper(BaseScraper):
     def _extract_paper_id(self, url: str) -> str:
         m = re.search(r'/article/view/(\d+)', url)
         return m.group(1) if m else url.split('/')[-1]
+
+    def _fetch_bibtex_extra(self, soup: BeautifulSoup, page_url: str) -> Dict[str, str]:
+        """Fetch the OJS citation-style-language plugin's BibTeX export for
+        volume/number/pages/doi our generic template doesn't have.
+
+        AAAI's OJS instance models the proceedings as a journal, so its
+        export is `@article` with `journal`/`number` fields; we only reuse
+        the bibliographic fields (not the entry type or `journal`/`booktitle`)
+        so the paper still renders as our uniform `@inproceedings`. One extra
+        request per paper.
+        """
+        bib_link = soup.find(
+            "a", href=re.compile(r"citationstylelanguage/download/bibtex"))
+        if not bib_link or not bib_link.get("href"):
+            return {}
+        bib_url = urljoin(page_url, bib_link["href"])
+        response = self.session.get(bib_url, quiet_404=True)
+        if not response:
+            return {}
+        fields = parse_bibtex_fields(response.text)
+        extra = {}
+        if fields.get('volume'):
+            extra['volume'] = fields['volume']
+        if fields.get('number'):
+            extra['number'] = fields['number']
+        if fields.get('pages'):
+            extra['pages'] = fields['pages']
+        if fields.get('doi'):
+            extra['doi'] = fields['doi']
+        return extra

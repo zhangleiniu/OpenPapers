@@ -40,6 +40,7 @@ an explicit `main-track` filter and count.
 | `authors` | ✓ |
 | `abstract` | ✓ |
 | `pdf_url` | ✓ |
+| `bibtex_extra` | booktitle/editor/pages/doi/note fetched from the official "BibTeX" download link on the paper page (one extra request) — see [data-schema.md](data-schema.md#bibtex-generation) |
 
 ## Known issues
 

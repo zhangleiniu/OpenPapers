@@ -39,6 +39,7 @@ directly and rerun — cached entries are used as-is.
 | `issue` | Issue title (e.g. `Vol. 38 No. 16: AAAI-24 Technical Tracks`) |
 | `section` | Section/track name within the issue |
 | `pdf_url` | ✓ |
+| `bibtex_extra` | volume/number/pages/doi fetched from the OJS citation-style-language BibTeX export (one extra request). AAAI's OJS models proceedings as a journal and exports `@article`; we keep the fields but not the entry type, so the paper still renders as our uniform `@inproceedings` — see [data-schema.md](data-schema.md#bibtex-generation) |
 
 ## Known issues
 
