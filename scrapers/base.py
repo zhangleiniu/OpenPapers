@@ -188,6 +188,14 @@ class BaseScraper(ABC):
                         logger.warning(f"No title found for paper: {url}")
                         continue
 
+                    if not paper.get('authors'):
+                        failed_count += 1
+                        logger.warning(
+                            f"No authors found for paper (likely front "
+                            f"matter, e.g. an author index or table of "
+                            f"contents, not an actual paper): {url}")
+                        continue
+
                     paper['year'] = year
                     paper['conference'] = self.conference
                     paper['url'] = url

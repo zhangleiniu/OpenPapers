@@ -371,6 +371,33 @@ class SourceLifecycleTests(unittest.TestCase):
                           "https://proceedings.mlr.press/v999/lovelace26a.pdf")
         self.assertEqual(downloaded, ["openreview-id"])
 
+    def test_authorless_paper_is_skipped(self):
+        # Some venues expose non-paper front matter (an author index, table
+        # of contents, ...) through the same listing as real papers. These
+        # have a title but no authors, can never get a real bibtex, and
+        # aren't citable -- skip them like a failed parse rather than saving
+        # a permanent junk record.
+        class FakeFrontMatterScraper(BaseScraper):
+            NAME = "Fake"
+            BASE_URL = "https://example.test/"
+
+            def get_paper_urls(self, year):
+                return ["https://example.test/author-index"]
+
+            def parse_paper(self, url):
+                return {"id": "author-index", "title": "Author Index",
+                        "authors": [], "url": url}
+
+        scraper = FakeFrontMatterScraper("acl")
+
+        with patch("scrapers.base.load_papers", return_value=[]), \
+                patch("scrapers.base.save_papers") as save_papers, \
+                patch("scrapers.base.assign_bibtex"):
+            papers = scraper.scrape_year(2026, download_pdfs=False, resume=True)
+
+        self.assertEqual(papers, [])
+        save_papers.assert_called_once_with([], "acl", 2026)
+
     def test_save_papers_updates_pdf_completeness_index(self):
         # The dashboard reads this sidecar instead of the full metadata
         # corpus (see automation/agent_dashboard.py::read_pdf_completeness_
