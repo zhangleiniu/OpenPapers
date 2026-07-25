@@ -18,10 +18,45 @@ from postprocessing.generate_statistics import (
     format_years, render_readme_coverage, replace_generated_section, scan,
 )
 from postprocessing.validate_year import validate
-from utils import assign_bibtex, parse_bibtex_fields
+from utils import assign_bibtex, merge_bibtex_extra, parse_bibtex_fields
 
 
 class BibtexTests(unittest.TestCase):
+    def test_merge_bibtex_extra_preserves_existing_cite_key(self):
+        # Simulates a stale suffix from a since-removed collision: the base
+        # key would no longer need "a" if regenerated from scratch, but
+        # merge_bibtex_extra must not silently change published keys.
+        paper = {
+            "id": "p1",
+            "title": "A Useful Test",
+            "authors": ["Ada Lovelace"],
+            "year": 2026,
+            "conference": "acl",
+            "bibtex": "@inproceedings{lovelace2026usefula,\n"
+                      "  title={A Useful Test},\n"
+                      "  author={Lovelace, Ada},\n"
+                      "  booktitle={Proceedings of the Annual Meeting of the "
+                      "Association for Computational Linguistics},\n"
+                      "  year={2026}\n}",
+        }
+
+        updated = merge_bibtex_extra(paper, {"pages": "1-21", "doi": "10.1/x"})
+
+        self.assertTrue(updated)
+        self.assertTrue(paper["bibtex"].startswith("@inproceedings{lovelace2026usefula,"))
+        self.assertIn("pages={1--21}", paper["bibtex"])
+        self.assertIn("doi={10.1/x}", paper["bibtex"])
+        self.assertEqual(paper["bibtex_extra"], {"pages": "1-21", "doi": "10.1/x"})
+
+    def test_merge_bibtex_extra_no_op_without_existing_bibtex(self):
+        paper = {"id": "p2", "title": "No Bibtex Yet", "authors": [], "year": 2026,
+                  "conference": "acl"}
+
+        updated = merge_bibtex_extra(paper, {"pages": "1-2"})
+
+        self.assertFalse(updated)
+        self.assertNotIn("bibtex_extra", paper)
+
     def test_bibtex_extra_enriches_and_overrides_venue_fields(self):
         paper = {
             "id": "u1",

@@ -134,8 +134,10 @@ class CVPRScraper(BaseScraper):
         """Pull enrichment fields from CVF's own citation block, already
         present on the paper page (no extra request needed)."""
         div = soup.find('div', class_='bibref')
-        if not div:
-            return {}
+        return self._bibref_div_to_extra(div) if div else {}
+
+    @staticmethod
+    def _bibref_div_to_extra(div) -> Dict[str, str]:
         fields = parse_bibtex_fields(div.get_text())
         extra = {}
         if fields.get('booktitle'):
@@ -145,6 +147,43 @@ class CVPRScraper(BaseScraper):
         if fields.get('pages'):
             extra['pages'] = fields['pages']
         return extra
+
+    def fetch_bibtex_extra_by_id(self, year: int) -> Dict[str, Dict[str, str]]:
+        """Return {paper_id: extra} for every paper in `year`'s listing
+        page(s) in one request per page — the CVF listing page embeds every
+        paper's full BibTeX inline, so there's no need to hit each paper's
+        own page individually. Used by the metadata backfill script; live
+        scraping still uses _extract_bibtex_extra since it already fetches
+        each paper's page for title/authors/abstract anyway.
+
+        Each paper is a <dt> (title) followed by *two* sibling <dd>
+        elements (authors, then links/bibtex) — not one, as a naive
+        find_next_sibling('dd') would assume. Walk forward through all
+        following siblings until the next <dt> and check each <dd> along
+        the way for the <div class="bibref"> block."""
+        suffixes = _YEAR_SPECIFIC_URLS.get(year, [f"CVPR{year}?day=all"])
+        result = {}
+        for suffix in suffixes:
+            response = self.session.get(self.base_url + suffix, quiet_404=True)
+            if not response:
+                continue
+            soup = BeautifulSoup(response.content, 'html.parser')
+            for dt in soup.find_all('dt'):
+                a_tag = dt.find('a', href=True)
+                if not a_tag or not a_tag.get('href'):
+                    continue
+                paper_id = self._extract_paper_id(a_tag['href'])
+                div = None
+                for sib in dt.find_next_siblings():
+                    if sib.name == 'dt':
+                        break
+                    if sib.name == 'dd':
+                        div = sib.find('div', class_='bibref')
+                        if div:
+                            break
+                if paper_id and div:
+                    result[paper_id] = self._bibref_div_to_extra(div)
+        return result
 
     def _extract_title(self, soup: BeautifulSoup) -> str:
         div = soup.find('div', id='papertitle')

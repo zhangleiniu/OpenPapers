@@ -457,7 +457,9 @@ _EXTRA_FIELD_ORDER = [
 _BIBFIELD_RE = re.compile(
     r'(\w+)\s*=\s*(?:\{((?:[^{}]|\{[^{}]*\})*)\}|"([^"]*)")\s*,?')
 
-_PAGE_DASH_RE = re.compile(r"(?<=[0-9])[\-‐‑‒–—―](?=[0-9])")
+# Also covers roman-numeral front-matter pages (e.g. ACL Anthology reports
+# "xl-lxxv" for some front-matter items, with a plain single hyphen already).
+_PAGE_DASH_RE = re.compile(r"(?<=[0-9ivxlcdm])[\-‐‑‒–—―](?=[0-9ivxlcdm])")
 
 
 def parse_bibtex_fields(raw: str) -> Dict[str, str]:
@@ -520,6 +522,26 @@ def _eligible(paper):
         return False
     if not (isinstance(year, int) or (isinstance(year, str) and str(year).isdigit())):
         return False
+    return True
+
+
+def merge_bibtex_extra(paper, extra):
+    """Fold newly-fetched `extra` fields into paper['bibtex'], reusing the
+    cite key already present rather than recomputing keys/collisions across
+    the whole file (assign_bibtex() does that, and is deliberately *not*
+    used here — see postprocessing/backfill_bibtex_source.py). Returns True
+    if the paper was updated; False if there's no existing bibtex to key off
+    of (paper isn't eligible, e.g. missing authors) or extra is empty."""
+    if not extra:
+        return False
+    existing = paper.get("bibtex")
+    if not existing or "{" not in existing or not _eligible(paper):
+        return False
+    key = existing.split("{", 1)[1].split(",", 1)[0]
+    conf = paper["conference"].lower()
+    paper["bibtex_extra"] = extra
+    paper["bibtex"] = _build_bibtex(
+        conf, int(paper["year"]), paper["title"], paper["authors"], key, extra)
     return True
 
 
