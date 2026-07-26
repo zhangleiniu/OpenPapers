@@ -15,8 +15,8 @@ below is retained as the prerequisite set for rollback or any future
 replacement — live canaries and activation each remain separate authorities,
 and refresh through the disabled-only path first requires an explicit
 rollback. The installed revision and dated evidence live in
-[`current-handoff.md`](./current-handoff.md); delivery history lives in git
-log and the dated ExecPlans.
+`current-handoff.md` (host-local, not published); delivery history lives in
+git log and the dated ExecPlans.
 
 ## Installed automation dependency gate
 

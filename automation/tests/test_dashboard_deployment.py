@@ -41,8 +41,8 @@ class DashboardDeploymentTests(unittest.TestCase):
 
     def test_documents_keep_backend_loopback_and_proxy_unprivileged(self):
         caddyfile = render_caddyfile(
-            hostname="archer.cs.niu.edu",
-            bind_address="10.158.56.37",
+            hostname="dashboard.example.com",
+            bind_address="10.0.0.10",
             public_port=8443,
             backend_port=8765,
             username="openpapers",
@@ -64,8 +64,8 @@ class DashboardDeploymentTests(unittest.TestCase):
             role_group="_openpapers",
         )
 
-        self.assertIn("https://archer.cs.niu.edu:8443", caddyfile)
-        self.assertIn("bind 10.158.56.37", caddyfile)
+        self.assertIn("https://dashboard.example.com:8443", caddyfile)
+        self.assertIn("bind 10.0.0.10", caddyfile)
         self.assertIn("tls internal", caddyfile)
         self.assertIn("basic_auth", caddyfile)
         self.assertIn("reverse_proxy 127.0.0.1:8765", caddyfile)
@@ -81,8 +81,8 @@ class DashboardDeploymentTests(unittest.TestCase):
 
     def test_no_auth_omits_basic_auth_and_manifest_records_it(self):
         caddyfile = render_caddyfile(
-            hostname="archer.cs.niu.edu",
-            bind_address="10.158.56.37",
+            hostname="dashboard.example.com",
+            bind_address="10.0.0.10",
             public_port=8443,
             backend_port=8765,
         ).decode()
@@ -96,8 +96,8 @@ class DashboardDeploymentTests(unittest.TestCase):
             **self.paths,
             role_user="_openpapers",
             role_group="_openpapers",
-            hostname="archer.cs.niu.edu",
-            bind_address="10.158.56.37",
+            hostname="dashboard.example.com",
+            bind_address="10.0.0.10",
             public_port=8443,
             backend_port=8765,
         )
@@ -108,8 +108,8 @@ class DashboardDeploymentTests(unittest.TestCase):
 
         with self.assertRaisesRegex(DashboardDeploymentError, "requires both"):
             render_caddyfile(
-                hostname="archer.cs.niu.edu",
-                bind_address="10.158.56.37",
+                hostname="dashboard.example.com",
+                bind_address="10.0.0.10",
                 public_port=8443,
                 backend_port=8765,
                 username="openpapers",
@@ -123,8 +123,8 @@ class DashboardDeploymentTests(unittest.TestCase):
             **self.paths,
             role_user="_openpapers",
             role_group="_openpapers",
-            hostname="archer.cs.niu.edu",
-            bind_address="10.158.56.37",
+            hostname="dashboard.example.com",
+            bind_address="10.0.0.10",
             public_port=8443,
             backend_port=8765,
             username="openpapers",
@@ -149,8 +149,8 @@ class DashboardDeploymentTests(unittest.TestCase):
                 **self.paths,
                 role_user="_openpapers",
                 role_group="_openpapers",
-                hostname="archer.cs.niu.edu",
-                bind_address="10.158.56.37",
+                hostname="dashboard.example.com",
+                bind_address="10.0.0.10",
                 public_port=8443,
                 backend_port=8765,
                 username="openpapers",
@@ -159,8 +159,8 @@ class DashboardDeploymentTests(unittest.TestCase):
 
     def test_unsafe_network_identity_and_paths_are_rejected(self):
         kwargs = {
-            "hostname": "archer.cs.niu.edu",
-            "bind_address": "10.158.56.37",
+            "hostname": "dashboard.example.com",
+            "bind_address": "10.0.0.10",
             "public_port": 8443,
             "backend_port": 8765,
             "username": "openpapers",

@@ -30,8 +30,8 @@ Each phase's acceptance was met with fixture/fake tests (no live provider
 call in ordinary tests) plus, where external effects are involved, one or
 more separately authorized live canaries. Normative behavior and safety
 invariants live in [`architecture.md`](./architecture.md); operational
-procedures in [`operations.md`](./operations.md). Points that remain
-decision-relevant:
+procedures in `operations.md` (host-local, not published). Points that
+remain decision-relevant:
 
 - **Baseline monitor.** Registered sources cover all 15 catalog venues. A
   monitor change or a date estimate never authorizes an agent run; the
