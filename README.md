@@ -1,18 +1,46 @@
-# AI/ML Conference Paper Scraper
+<div id="header" align="center">
+    <img src="logo.svg" width="200px" />
+    <h1>OpenPapers</h1>
+</div>
 
-A Python tool for scraping papers from 15 selected AI/ML conferences and journals.
-It extracts high-quality **metadata** and full **PDFs** to support applications like citation analysis and research recommendation.
+![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)
+![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)
 
-It applies venue-specific inclusion rules to retain archival main-program content
-(including configured long, short, and industry tracks) while excluding workshops,
-demos, tutorials, and other secondary material.
+**A scraper and automation pipeline that builds a high-quality, continuously
+updated corpus of AI/ML conference and journal papers** — metadata, BibTeX,
+and full PDFs — for citation analysis, research recommendation, and dataset
+work.
 
+OpenPapers is this scraper/corpus. [mustcite.com](https://mustcite.com) is
+the public search and browse engine built on top of it. Add labels and
+preprocessing to the same corpus and you get **MasterSet**, our must-cite
+citation recommendation benchmark (see [Citation](#citation)).
 
-> 📌 **Note:** We are making significant changes to this repository to fully
-> automate the pipeline from downloading papers and metadata through to data
-> processing. However, in the meantime, users can still download papers and metadata
-> manually using the commands outlined below.
+The rapid growth of AI/ML research has made it increasingly hard to keep up
+with new publications. Existing aggregators (Google Scholar, Semantic
+Scholar, OpenReview, Paper Copilot) often have incomplete coverage or noisy
+metadata, so OpenPapers targets the top-tier venues directly. Coverage
+focuses on ~2013 onward (the deep learning era), with earlier years
+partially included where available.
 
+**Live:** browse the collected papers at [mustcite.com](https://mustcite.com)
+· automation status at [dashboard.mustcite.com](https://dashboard.mustcite.com)
+
+![Demo: searching and browsing on mustcite.com](demo.gif)
+
+---
+
+## Table of Contents
+
+- [Supported Conferences](#supported-conferences)
+- [Quickstart](#quickstart)
+- [Automation](#automation)
+- [Data Structure](#data-structure)
+- [Full CLI Reference](#full-cli-reference)
+- [Citation](#citation)
+- [Acknowledgements](#acknowledgements)
+- [License](#license)
+- [Limitations](#limitations)
 
 ---
 
@@ -36,36 +64,80 @@ demos, tutorials, and other secondary material.
 - **ECCV** (2018, 2020, 2022, 2024)
 <!-- END GENERATED COVERAGE -->
 
-[Generated coverage and quality report](./statistics.md) — regenerate with
-`python postprocessing/generate_statistics.py --write` after scraping. The
-command also updates the marker-delimited list above; do not edit generated
-coverage by hand.
+[Full coverage and quality report](./statistics.md) — regenerate with
+`python postprocessing/generate_statistics.py --write` after scraping (also
+refreshes the marker-delimited list above; don't hand-edit it).
 
-> ⚠️ **Note:** Due to access restrictions, the tool currently **does not support** scraping papers from **KDD**, **TPAMI**, and **ICDM**, as their full metadata or PDFs are not publicly available without a subscription or institutional access.
+> [!WARNING]
+> **KDD**, **TPAMI**, and **ICDM** are not supported — their full metadata or
+> PDFs require a subscription or institutional access.
 
-## Features
+Retains archival main-program content (including configured long, short, and
+industry tracks); excludes workshops, demos, tutorials, and other secondary
+material.
 
-- Scrapes paper metadata (title, authors, abstract)
-- Generates a BibTeX citation (`bibtex` field) for each paper automatically
-- Downloads PDFs automatically
-- Resume capability for interrupted scraping
-- Year-specific scrapers for different conference formats
-- Timely provisional sources before formal proceedings are published
-- Robust error handling and rate limiting
-- Configurable delays and retry mechanisms
+## Quickstart
 
-## Installation
-
-1. Clone the repository
-2. Create a virtual environment and install dependencies:
 ```bash
-python -m venv .venv
-source .venv/bin/activate
+git clone https://github.com/zhangleiniu/OpenPapers.git && cd OpenPapers
+python -m venv .venv && source .venv/bin/activate
 python -m pip install -r requirements.txt
 ```
 
-3. Create a `.env` file to configure optional paths and credentials required by
-the scrapers you use:
+Create a `.env` for optional paths/credentials (only needed for the scrapers
+you actually use — see [Full CLI Reference](#full-cli-reference) for the
+complete variable list):
+
+```bash
+SCRAPER_DATA_ROOT=./data          # default: ./data
+OPENREVIEW_USERNAME=you@example.com   # required for OpenReview-gated venues
+OPENREVIEW_PASSWORD=your-password
+```
+
+Scrape a venue/year:
+
+```bash
+python main.py neurips 2022
+python main.py iclr 2020 2021 2022        # multiple years
+python main.py icml 2023 --no-pdfs        # metadata only
+```
+
+List everything available:
+
+```bash
+python main.py --list-conferences
+```
+
+## Automation
+
+The versioned registry in `automation/conferences.json` describes venue
+years and candidate sources. A local-first control plane estimates each
+venue/year's event date, sleeps until then, and hands it to an isolated
+Codex agent worktree; the maintainer reviews and commits manually. See the
+[automation system overview](./docs/automation-system/README.md) for the
+architecture, and check [dashboard.mustcite.com](https://dashboard.mustcite.com)
+for live per-venue status.
+
+## Data Structure
+
+```
+data/
+├── metadata/
+│   └── conference/
+│       └── conference_year.json
+└── papers/
+    └── conference/
+        └── year/
+            └── paper_files.pdf
+```
+
+## Full CLI Reference
+
+<details>
+<summary>Expand for the complete command/flag/environment-variable reference</summary>
+
+### Environment variables
+
 ```bash
 # Data storage root (default: ./data)
 SCRAPER_DATA_ROOT=./data
@@ -84,29 +156,7 @@ OPENREVIEW_PASSWORD=your-password
 ```
 See [Google Cloud Setup](./docs/GOOGLE_CLOUD_SETUP.md) for Vertex AI configuration.
 
-## Usage
-
-### Command Line Interface
-
-List available conferences:
-```bash
-python main.py --list-conferences
-```
-
-Scrape a single year:
-```bash
-python main.py neurips 2022
-```
-
-Scrape multiple years:
-```bash
-python main.py iclr 2020 2021 2022
-```
-
-Skip PDF downloads (metadata only):
-```bash
-python main.py icml 2023 --no-pdfs
-```
+### Commands
 
 Fill missing abstracts/authors from already-produced GROBID output, falling
 back to Nougat output:
@@ -143,79 +193,47 @@ python main.py aaai 2024 --no-resume
 
 ### Source monitoring
 
-The versioned registry in `automation/conferences.json` describes conference
-years and candidate sources. A cheap deterministic monitor checks OpenReview,
-official HTML lists, and PMLR without invoking an LLM:
+A cheap deterministic monitor checks OpenReview, official HTML lists, and
+PMLR without invoking an LLM:
 ```bash
 python automation/monitor.py --venue icml --year 2026
 ```
-
 Runtime hashes, counts, and status are stored separately under
 `$SCRAPER_DATA_ROOT/monitor/state.sqlite3`. The installed local service uses
 this deterministic monitor for daily change/error coverage; it does not use
 the monitor as proof that papers are ready or as authority to run a scraper.
-See the [current automation deployment](./docs/automation.md).
 
 The core scrapers never depend on Prefect, containers, cloud deployment, an
 LLM provider, email, or a coding-agent CLI.
 
-The local-first control plane estimates each venue/year's event date once,
-sleeps until that date, and then gives the venue/year to Codex in an isolated
-worktree. The agent decides readiness, investigates
-sources, and may repair and run the scraper; the maintainer reviews and commits
-manually. The local LaunchDaemon now has schema-11 state, private configuration
-v2, a clean no-remote agent source, bounded production composition, durable
-artifacts, worktree retention, and replay-safe Resend report wiring. Its
-external-effects gate is enabled in production, subject to persisted due,
-budget, cooldown, concurrency, and replay gates. Live canaries, deployment,
-activation, rollback, and provider calls still require their own explicit
-operator authority. The baseline deterministic monitor remains active. See the
-[automation system overview](./docs/automation-system/README.md) and dated
-[deployment handoff](./docs/automation-system/current-handoff.md).
-
-
-## Data Structure
-
-Papers are saved in the following structure:
-```
-data/
-├── metadata/
-│   └── conference/
-│       └── conference_year.json
-└── papers/
-    └── conference/
-        └── year/
-            └── paper_files.pdf
-```
-
-## Configuration
+### Configuration
 
 Shared settings are defined in `config.py`; venue URLs and venue-specific
-delays live in each scraper class:
-- Request delays and timeouts
-- Retry attempts
-- Rate limiting parameters
-- Base URLs for each conference
+delays live in each scraper class: request delays/timeouts, retry attempts,
+rate limiting parameters, base URLs per conference.
 
-## Logging
+### Logging
 
-The scraper generates detailed logs saved to `scraper.log` and displays progress in the console. Use `--verbose` for debug-level logging.
+Detailed logs are saved to `scraper.log` with console progress. Use
+`--verbose` for debug-level logging.
 
-## Notes
+### Notes
 
-- Some conferences have year-specific scrapers for different website formats
-- The scraper respects rate limits and includes delays between requests
-- PDF downloads are optional and can be skipped for faster metadata collection
-- All scraped data is saved incrementally to prevent data loss
-- BibTeX is generated during scraping. The script
-  `postprocessing/rebuild_bibtex.py` is retained only for rebuilding
-  historical metadata and uses the same generator as the live scraper.
+- Some conferences have year-specific scrapers for different website formats.
+- PDF downloads are optional and can be skipped for faster metadata collection.
+- All scraped data is saved incrementally to prevent data loss.
+- BibTeX is generated during scraping. `postprocessing/rebuild_bibtex.py` is
+  retained only for rebuilding historical metadata and uses the same
+  generator as the live scraper.
 - `postprocessing/backfill_missing_metadata_fields.py` remains available for
-  independent bulk repair; `--enrich-missing` exposes the same fallback in the
-  main CLI.
-- See the [documentation index](./docs/index.md), [data schema](./docs/data-schema.md),
-  [pipeline](./docs/pipeline.md), [current automation deployment](./docs/automation.md),
-  and [validation guide](./docs/validation.md).
+  independent bulk repair; `--enrich-missing` exposes the same fallback in
+  the main CLI.
+- See the [documentation index](./docs/index.md),
+  [data schema](./docs/data-schema.md), [pipeline](./docs/pipeline.md),
+  [current automation deployment](./docs/automation.md), and
+  [validation guide](./docs/validation.md).
+
+</details>
 
 ## Citation
 
@@ -234,27 +252,28 @@ preprint and will be updated after publication.
 }
 ```
 
+## Acknowledgements
+
+We gratefully acknowledge the support of Google Cloud Research Credits for
+providing the compute resources used in this project.
+
 ## License
 
 The source code in this repository is licensed under the [MIT License](./LICENSE).
 
 The scraper output is not covered by the software license. This project does
-not claim ownership of paper metadata, abstracts, or PDFs retrieved from public
-conference and publisher websites. Those materials remain subject to the
-rights and terms of their respective authors, publishers, and source websites.
-
-## Motivation
-
-In recent years, the rapid growth of AI and machine learning research has resulted in an overwhelming number of papers published annually, making it increasingly difficult for researchers to stay up to date with developments in their specific subfields. While platforms like Google Scholar, Semantic Scholar, OpenReview, and Paper Copilot attempt to aggregate publication data, our observations suggest that these sources often suffer from incomplete coverage and noisy metadata. To address this gap, we developed a suite of dedicated scrapers targeting the top-tier AI/ML conferences and journals, aiming to build a high-quality, comprehensive dataset of research papers. Our system extracts reliable metadata and downloads full PDFs, which can later be processed using tools like GROBID for structured content analysis. This curated dataset is intended to power downstream applications such as research limitation analysis, citation and reference recommendation, and intelligent paper reading recommendation. Our current focus spans conferences from 2013-ish onward—when deep learning began reshaping the field—though earlier years may also be partially included.
-
+not claim ownership of paper metadata, abstracts, or PDFs retrieved from
+public conference and publisher websites. Those materials remain subject to
+the rights and terms of their respective authors, publishers, and source
+websites.
 
 ## Limitations
 
-- **Some abstracts are absent from the source pages.** Older proceedings pages
-  (notably NAACL 2013/2015/2016 on the ACL Anthology, plus a handful of early
-  JMLR and AAAI entries) never recorded abstracts, so a fresh scrape leaves
-  those `abstract` fields empty — this is not a scraping bug. These gaps can be
-  backfilled from the downloaded PDFs with
+- **Some abstracts are absent from the source pages.** Older proceedings
+  pages (notably NAACL 2013/2015/2016 on the ACL Anthology, plus a handful of
+  early JMLR and AAAI entries) never recorded abstracts, so a fresh scrape
+  leaves those `abstract` fields empty — this is not a scraping bug. These
+  gaps can be backfilled from the downloaded PDFs with
   `python postprocessing/backfill_missing_metadata_fields.py --abstract`,
   which extracts the abstract from GROBID TEI output (primary) or Nougat
   markdown (fallback) and records the origin in an `abstract_source` field.
