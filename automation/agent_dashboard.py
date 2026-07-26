@@ -902,7 +902,6 @@ def render_dashboard(model: Mapping[str, object]) -> str:
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="refresh" content="300">
 <title>OpenPapers automation status</title>
 <style>
 :root {{ color-scheme: light dark; font-family: ui-sans-serif, system-ui, sans-serif; }}
@@ -998,10 +997,11 @@ edition dates are timezone-free calendar dates.</footer>
         ? "⛶ Exit fullscreen" : "⛶ Fullscreen";
     }});
   }}
+  var DEFAULT_ZONE = "America/Chicago";
   var select = document.getElementById("tz-select");
   var stored = null;
   try {{ stored = window.localStorage.getItem("openpapers-tz"); }} catch (e) {{}}
-  var zone = stored || "America/Chicago";
+  var zone = stored || DEFAULT_ZONE;
   function apply(zoneName) {{
     var nodes = document.querySelectorAll("[data-utc]");
     for (var i = 0; i < nodes.length; i += 1) {{
@@ -1019,12 +1019,39 @@ edition dates are timezone-free calendar dates.</footer>
   for (var j = 0; j < select.options.length; j += 1) {{
     if (select.options[j].value === zone) {{ select.selectedIndex = j; }}
   }}
-  if (zone !== "America/Chicago") {{ apply(zone); }}
+  if (zone !== DEFAULT_ZONE) {{ apply(zone); }}
   select.addEventListener("change", function () {{
     try {{ window.localStorage.setItem("openpapers-tz", select.value); }}
     catch (e) {{}}
     apply(select.value);
   }});
+
+  // A full-page reload (the previous <meta http-equiv="refresh"> approach)
+  // forces every browser out of the Fullscreen API, since fullscreen is
+  // tied to the live document instance. Refetch and splice in just the
+  // table body and the observed-at line instead, so a kiosk tab left in
+  // fullscreen stays there across refreshes.
+  var tbody = document.querySelector("tbody");
+  var meta = document.querySelector(".meta");
+  function refresh() {{
+    fetch(location.pathname + location.search, {{
+      cache: "no-store", credentials: "same-origin",
+    }}).then(function (response) {{
+      if (!response.ok) {{ throw new Error("bad status"); }}
+      return response.text();
+    }}).then(function (text) {{
+      var doc = new DOMParser().parseFromString(text, "text/html");
+      var nextTbody = doc.querySelector("tbody");
+      var nextMeta = doc.querySelector(".meta");
+      if (!nextTbody || !nextMeta) {{ return; }}
+      tbody.replaceWith(nextTbody);
+      meta.replaceWith(nextMeta);
+      tbody = nextTbody;
+      meta = nextMeta;
+      if (zone !== DEFAULT_ZONE) {{ apply(zone); }}
+    }}).catch(function () {{ /* try again next interval */ }});
+  }}
+  window.setInterval(refresh, 300000);
 }})();
 </script>
 </main></body></html>"""
@@ -1070,8 +1097,8 @@ class _DashboardHandler(BaseHTTPRequestHandler):
         self.send_header(
             "Content-Security-Policy",
             "default-src 'none'; style-src 'unsafe-inline'; "
-            "script-src 'unsafe-inline'; base-uri 'none'; "
-            "form-action 'none'; frame-ancestors 'none'",
+            "script-src 'unsafe-inline'; connect-src 'self'; "
+            "base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
         )
         self.end_headers()
         if self.command != "HEAD":
