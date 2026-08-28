@@ -449,7 +449,7 @@ class AgentProductionTests(unittest.TestCase):
 
     def test_fake_wake_initializes_then_runs_and_retries_report_once(self):
         provider = Provider()
-        invoker = Invoker()
+        invoker = SuccessInvoker()
         transports = TransportFactory([
             TransportFailure(FailureCategory.TIMEOUT),
             TransportReceipt("receipt:retry"),

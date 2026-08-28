@@ -32,6 +32,17 @@ class Invoker:
     def invoke(self, invocation):
         (invocation.cwd / "agent-change.txt").write_text("changed\n", encoding="utf-8")
         return CodexProcessResult(0, json.dumps({
+            "disposition": "success",
+            "explanation": "Scraped and validated the accepted papers.",
+            "suggested_retry_at": None,
+            "failure_category": None,
+        }), "")
+
+
+class NotReadyInvoker:
+    def invoke(self, invocation):
+        (invocation.cwd / "agent-change.txt").write_text("changed\n", encoding="utf-8")
+        return CodexProcessResult(0, json.dumps({
             "disposition": "not_ready",
             "explanation": "Proceedings are not published yet.",
             "suggested_retry_at": None,
@@ -97,7 +108,7 @@ class AgentRunNotificationTests(unittest.TestCase):
         intent, key = transport.calls[0]
         self.assertEqual(key, intent.notification_id)
         for expected in (
-            "icml 2026", "not_ready", "Proceedings are not published yet.",
+            "icml 2026", "success", "Scraped and validated the accepted papers.",
             "agent-change.txt", "Worktree:", "Retry state:",
         ):
             self.assertIn(expected, intent.body)
@@ -108,6 +119,26 @@ class AgentRunNotificationTests(unittest.TestCase):
         )
         self.assertFalse(suppressed.attempted)
         self.assertEqual(replay.calls, [])
+
+    def test_not_ready_disposition_is_delivered_without_sending(self):
+        not_ready_state = self.root / "not-ready.sqlite3"
+        initialize_event_dates(
+            not_ready_state, (EventDateTarget("aistats", 2026),), Provider(),
+            clock=lambda: NOW,
+        )
+        claim = claim_due_agent_run(not_ready_state, clock=lambda: NOW).claim
+        run_claimed_codex_agent(
+            not_ready_state, self.repo, self.root / "not-ready-runs", claim,
+            clock=lambda: NOW, invoker=NotReadyInvoker(),
+        )
+        transport = Transport(TransportReceipt("receipt:unused"))
+        outcome = deliver_agent_run_email(
+            not_ready_state, claim.run_id, transport, clock=lambda: NOW
+        )
+        self.assertEqual(outcome.status, "delivered")
+        self.assertFalse(outcome.attempted)
+        self.assertEqual(transport.calls, [])
+        self.assertEqual(outcome.receipt_id, "suppressed:not_ready")
 
     def test_transient_failure_retries_and_permanent_failure_is_visible(self):
         transient = Transport(TransportFailure(FailureCategory.TIMEOUT))
