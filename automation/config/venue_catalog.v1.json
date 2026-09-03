@@ -22,7 +22,7 @@
       "display_name": "International Conference on Machine Learning",
       "aliases": ["icml"],
       "official_domains": ["icml.cc"],
-      "archival_domains": ["proceedings.mlr.press", "openreview.net"],
+      "archival_domains": ["proceedings.mlr.press", "openreview.net", "raw.githubusercontent.com"],
       "lifecycle": {
         "kind": "annual"
       },
@@ -104,7 +104,7 @@
       "display_name": "Conference on Learning Theory",
       "aliases": ["colt"],
       "official_domains": ["learningtheory.org"],
-      "archival_domains": ["proceedings.mlr.press"],
+      "archival_domains": ["proceedings.mlr.press", "raw.githubusercontent.com"],
       "lifecycle": {
         "kind": "annual"
       },
@@ -120,7 +120,7 @@
       "display_name": "Conference on Uncertainty in Artificial Intelligence",
       "aliases": ["uai"],
       "official_domains": ["auai.org"],
-      "archival_domains": ["proceedings.mlr.press"],
+      "archival_domains": ["proceedings.mlr.press", "raw.githubusercontent.com"],
       "lifecycle": {
         "kind": "annual"
       },
@@ -136,7 +136,7 @@
       "display_name": "International Conference on Artificial Intelligence and Statistics",
       "aliases": ["aistats"],
       "official_domains": ["aistats.org"],
-      "archival_domains": ["proceedings.mlr.press", "openreview.net"],
+      "archival_domains": ["proceedings.mlr.press", "openreview.net", "raw.githubusercontent.com"],
       "lifecycle": {
         "kind": "annual"
       },
