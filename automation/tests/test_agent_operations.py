@@ -8,8 +8,10 @@ from pathlib import Path
 
 from automation.agent_operations import (
     AgentOperationError,
+    _utc_text,
     mark_schedule_completed,
     recover_interrupted_event_date,
+    reopen_needs_human,
     update_monitor_configuration,
 )
 from automation.control_state import ControlStateRepository
@@ -197,6 +199,84 @@ class ScheduleOperationTests(unittest.TestCase):
             mark_schedule_completed(
                 self.state, "icml", 2026, apply=True,
                 chain_next_year_interval=0,
+            )
+
+    def _seed_needs_human(self, venue_id="icml", year=2026):
+        with self._repository() as repository:
+            lease = repository.acquire_lease("event-date-initializer")
+            claim = self._claim(repository, lease, venue_id=venue_id, year=year)
+            repository.complete_event_date_success(
+                claim, estimated_event_date="2026-07-01", estimated_at=NOW,
+                next_check_at=NOW, lease=lease,
+            )
+            repository.release_lease(lease)
+        with self._repository() as repository:
+            lease = repository.acquire_lease("agent-runner")
+            outcome = repository.claim_due_agent_run(
+                claimed_at=NOW, monthly_run_limit=10,
+                systemic_failure_threshold=3,
+                systemic_failure_window=timedelta(hours=24),
+                systemic_circuit_delay=timedelta(hours=24),
+                lease=lease,
+            )
+            repository.complete_agent_run_attempt(
+                outcome.claim, disposition="needs_human",
+                explanation="fixture: blocked on something only a human can fix",
+                completed_at=NOW, next_check_at=None, suggested_retry_at=None,
+                failure_category=None, pause_after_failure=False, lease=lease,
+            )
+            repository.release_lease(lease)
+
+    def test_reopen_needs_human_dry_run_changes_nothing(self):
+        self._seed_needs_human()
+        summary = reopen_needs_human(
+            self.state, "icml", 2026, apply=False, clock=lambda: NOW
+        )
+        self.assertFalse(summary["applied"])
+        self.assertEqual(summary["attempt_count"], 1)
+        with self._repository() as repository:
+            self.assertEqual(
+                repository.get_agent_schedule("icml", 2026).status, "needs_human"
+            )
+
+    def test_reopen_needs_human_flips_to_scheduled_and_keeps_history(self):
+        self._seed_needs_human()
+        summary = reopen_needs_human(
+            self.state, "icml", 2026, delay_minutes=30,
+            apply=True, clock=lambda: NOW,
+        )
+        self.assertEqual(summary["status"], "scheduled")
+        with self._repository() as repository:
+            record = repository.get_agent_schedule("icml", 2026)
+            self.assertEqual(record.status, "scheduled")
+            self.assertEqual(record.next_check_at, _utc_text(NOW + timedelta(minutes=30)))
+            self.assertIsNone(record.last_gate_reason)
+            # Run history survives a reopen — it is not a fresh start.
+            self.assertEqual(record.attempt_count, 1)
+            self.assertEqual(record.last_disposition, "needs_human")
+
+    def test_reopen_needs_human_refuses_other_statuses(self):
+        # icml/2026 here is still 'scheduled' (never claimed), not needs_human.
+        with self._repository() as repository:
+            lease = repository.acquire_lease("event-date-initializer")
+            claim = self._claim(repository, lease)
+            repository.complete_event_date_success(
+                claim, estimated_event_date="2026-07-01", estimated_at=NOW,
+                next_check_at=NOW + timedelta(days=1), lease=lease,
+            )
+            repository.release_lease(lease)
+        with self.assertRaisesRegex(AgentOperationError, "not needs_human"):
+            reopen_needs_human(self.state, "icml", 2026, apply=True)
+
+    def test_reopen_needs_human_refuses_unknown_target(self):
+        with self.assertRaisesRegex(AgentOperationError, "not a registered"):
+            reopen_needs_human(self.state, "uai", 2026, apply=True)
+
+    def test_reopen_needs_human_rejects_negative_delay(self):
+        self._seed_needs_human()
+        with self.assertRaisesRegex(AgentOperationError, "non-negative integer"):
+            reopen_needs_human(
+                self.state, "icml", 2026, delay_minutes=-1, apply=True
             )
 
 

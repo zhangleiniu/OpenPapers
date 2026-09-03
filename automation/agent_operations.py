@@ -288,6 +288,66 @@ def mark_schedule_completed(
         return summary
 
 
+def reopen_needs_human(
+    state_path: Path,
+    venue_id: str,
+    year: int,
+    *,
+    delay_minutes: int = 0,
+    apply: bool = False,
+    clock: Callable[[], datetime] = _now,
+) -> dict[str, Any]:
+    """Reopen a needs_human agent schedule for one more automated attempt.
+
+    ``needs_human`` is a deliberate fail-closed terminal state (e.g. a proxy
+    domain block the agent cannot fix itself) with no automatic retry path
+    by design, mirroring how ``resume_agent_schedule`` is the only exit from
+    ``paused``. This is the audited exit for the sibling state: an operator
+    confirms the underlying cause is fixed and reopens the target for its
+    next attempt. Run history (``attempt_count``, ``last_disposition``) is
+    left untouched so past attempts stay visible; only the stale gate
+    reason and schedule are cleared.
+    """
+    if not isinstance(delay_minutes, int) or isinstance(delay_minutes, bool) \
+            or delay_minutes < 0:
+        raise AgentOperationError("delay_minutes must be a non-negative integer")
+    now = clock()
+    next_check = now + timedelta(minutes=delay_minutes)
+    with ControlStateRepository(
+        Path(state_path), writer=Writer.LOCAL_CONTROL_PLANE, clock=lambda: now
+    ) as repository:
+        current = repository.get_agent_schedule(venue_id, year)
+        if current is None:
+            raise AgentOperationError(
+                f"{venue_id}/{year} is not a registered target"
+            )
+        if current.status != "needs_human":
+            raise AgentOperationError(
+                f"{venue_id}/{year} is not needs_human (status={current.status})"
+            )
+        summary: dict[str, Any] = {
+            "command": "reopen-needs-human",
+            "venue_id": venue_id,
+            "year": year,
+            "prior_last_gate_reason": current.last_gate_reason,
+            "attempt_count": current.attempt_count,
+            "next_check_at": _utc_text(next_check),
+            "applied": apply,
+        }
+        if not apply:
+            return summary
+        lease = repository.acquire_lease(_LEASE_OWNER)
+        try:
+            record = repository.reopen_needs_human_schedule(
+                venue_id, year,
+                next_check_at=next_check, reopened_at=now, lease=lease,
+            )
+        finally:
+            repository.release_lease(lease)
+        summary["status"] = record.status
+        return summary
+
+
 def update_monitor_configuration(
     internal_root: Path,
     repository_root: Path,
@@ -361,6 +421,17 @@ def main(argv: list[str] | None = None) -> int:
     )
     completed.add_argument("--apply", action="store_true")
 
+    reopen = commands.add_parser("reopen-needs-human")
+    reopen.add_argument("--state", required=True, type=Path)
+    reopen.add_argument("--venue", required=True)
+    reopen.add_argument("--year", required=True, type=int)
+    reopen.add_argument(
+        "--delay-minutes", type=int, default=0,
+        help="minutes from now before the reopened target is due; 0 (the "
+        "default) makes it due immediately, so the next hourly wake claims it",
+    )
+    reopen.add_argument("--apply", action="store_true")
+
     default_repository = Path(__file__).resolve().parents[1]
     update_config = commands.add_parser("update-monitor-config")
     update_config.add_argument("--internal-root", required=True, type=Path)
@@ -382,6 +453,11 @@ def main(argv: list[str] | None = None) -> int:
                 args.state, args.venue, args.year,
                 event_date=args.event_date, apply=args.apply,
                 chain_next_year_interval=args.chain_next_year_interval,
+            )
+        elif args.command == "reopen-needs-human":
+            summary = reopen_needs_human(
+                args.state, args.venue, args.year,
+                delay_minutes=args.delay_minutes, apply=args.apply,
             )
         else:
             os.chdir(args.repository_root)

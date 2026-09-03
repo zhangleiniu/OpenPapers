@@ -2725,6 +2725,49 @@ class ControlStateRepository:
             ).fetchone()
         return self._agent_schedule_from_row(updated)
 
+    def reopen_needs_human_schedule(
+        self,
+        venue_id: str,
+        year: int,
+        *,
+        next_check_at: datetime | str,
+        reopened_at: datetime | str,
+        lease: LeaseHandle,
+    ) -> AgentScheduleRecord:
+        """Explicitly reopen a needs_human target after operator review.
+
+        Mirrors ``resume_agent_schedule`` for the other fail-closed terminal
+        state: run history (``attempt_count``, ``last_disposition``) is left
+        untouched so past attempts stay visible, only the stale gate reason
+        and schedule are cleared.
+        """
+        _validate_event_date_target(venue_id, year)
+        reopened = _timestamp(reopened_at, field="agent reopened_at")
+        next_check = _timestamp(next_check_at, field="agent reopen next_check_at")
+        if _parse_timestamp(next_check, field="agent reopen next_check_at") < \
+                _parse_timestamp(reopened, field="agent reopened_at"):
+            raise AgentScheduleError("agent reopen time cannot be in the past")
+        with self._write_transaction() as connection:
+            self._require_lease(connection, lease, self._now())
+            row = connection.execute(
+                "SELECT * FROM agent_schedule WHERE venue_id = ? AND year = ?",
+                (venue_id, year),
+            ).fetchone()
+            if row is None or self._agent_schedule_from_row(row).status != "needs_human":
+                raise AgentScheduleError("agent schedule is not needs_human")
+            connection.execute(
+                "UPDATE agent_schedule SET status = 'scheduled', "
+                "next_check_at = ?, consecutive_failures = 0, "
+                "last_gate_reason = NULL, updated_at = ? "
+                "WHERE venue_id = ? AND year = ? AND status = 'needs_human'",
+                (next_check, reopened, venue_id, year),
+            )
+            updated = connection.execute(
+                "SELECT * FROM agent_schedule WHERE venue_id = ? AND year = ?",
+                (venue_id, year),
+            ).fetchone()
+        return self._agent_schedule_from_row(updated)
+
     def advance_agent_schedule_from_hint(
         self,
         venue_id: str,
