@@ -81,7 +81,7 @@ def _utc(value: datetime, *, field: str) -> datetime:
     return value.astimezone(timezone.utc)
 
 
-def _check_time(event_date: date, observed_at: datetime) -> datetime:
+def check_time(event_date: date, observed_at: datetime) -> datetime:
     local = datetime.combine(
         event_date,
         time(hour=DEFAULT_EVENT_CHECK_HOUR),
@@ -100,7 +100,7 @@ def _fallback_interval(catalog: Mapping[str, object], venue_id: str) -> int:
     return venue["lifecycle"].get("interval_years") or 1
 
 
-def _calendar_fallback_date(
+def calendar_fallback_date(
     repository: ControlStateRepository, venue_id: str, year: int, interval: int,
 ) -> date | None:
     """Reuse the prior confirmed date, shifted forward by the venue's cadence.
@@ -135,14 +135,14 @@ def _ensure_fallback_schedule(
     ``agent_schedule`` row is added, keyed off a calendar-projected date.
     """
     interval = _fallback_interval(catalog, record.venue_id)
-    fallback = _calendar_fallback_date(
+    fallback = calendar_fallback_date(
         repository, record.venue_id, record.year, interval
     )
     if fallback is None:
         return False
     repository.ensure_scheduled_agent_target(
         record.venue_id, record.year,
-        next_check_at=_check_time(fallback, now),
+        next_check_at=check_time(fallback, now),
         registered_at=now,
         lease=lease,
     )
@@ -324,7 +324,7 @@ def initialize_event_dates(
                     claim,
                     estimated_event_date=estimate.event_date.isoformat(),
                     estimated_at=now,
-                    next_check_at=_check_time(estimate.event_date, now),
+                    next_check_at=check_time(estimate.event_date, now),
                     lease=lease,
                 )
                 scheduled_count += 1

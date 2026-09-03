@@ -613,6 +613,108 @@ class AgentProductionTests(unittest.TestCase):
             }
         self.assertEqual(schedules, {("iccv", 2027)})
 
+    def test_chain_successor_out_of_window_defers_to_calendar_estimate(self):
+        cohort_targets = self.root / "cohort_targets.json"
+        cohort_targets.write_text(json.dumps({
+            "schema_version": 3,
+            "cohort": {
+                "venue_ids": ["icml"],
+                "initial_year": 2026,
+                "rollover_month": 10,
+                "years_ahead_after_rollover": 1,
+            },
+            "extra_targets": [],
+        }, indent=2) + "\n", encoding="utf-8")
+        payload = dict(
+            self.payload,
+            targets_sha256=hashlib.sha256(cohort_targets.read_bytes()).hexdigest(),
+        )
+        configuration = load_agent_production_configuration(
+            payload, targets_path=cohort_targets, target_date=date(2026, 7, 15),
+        )
+        effect = AgentProductionEffect(
+            repository_root=self.repo,
+            configuration=configuration,
+            event_date_provider=Provider(),
+            codex_invoker=SuccessInvoker(),
+            transport_factory=TransportFactory([TransportReceipt("receipt:1")]),
+        )
+        kwargs = {
+            "state_path": self.state,
+            "execution_root": self.execution,
+            "scheduled_for": NOW,
+            "observed_at": NOW,
+        }
+
+        effect.run(**kwargs)  # wake 1: initializes icml 2026's date estimate
+        effect.run(**kwargs)  # wake 2: claims + runs Codex -> success, chains 2027
+
+        with ControlStateRepository(
+            self.state, writer=Writer.LOCAL_CONTROL_PLANE, clock=lambda: NOW
+        ) as repository:
+            successor = repository.get_event_date_schedule("icml", 2027)
+
+        # 2027 sits outside the 2026-only cohort window until October, so
+        # initialize_event_dates cannot reach it for months — it must not be
+        # left claiming "due now" for that entire dormant stretch (it would
+        # win the dashboard's priority tie-break and hijack icml's row with
+        # a check that cannot actually run yet). It should be backdated to
+        # next year's calendar-projected estimate instead: icml 2026's
+        # fixture date (2026-07-15) shifted forward by one year.
+        self.assertEqual(successor.status, "pending")
+        self.assertEqual(
+            successor.last_failure_category,
+            "chained_successor_calendar_estimate",
+        )
+        self.assertEqual(successor.next_check_at, "2027-07-15T13:00:00Z")
+
+    def test_chain_successor_in_window_leaves_it_due_now(self):
+        # Once the successor year is already inside load_agent_targets()'s
+        # active cohort window (e.g. a venue whose edition finishes after
+        # rollover_month has already widened it that year), the freshly
+        # chained row is genuinely reachable right away and must stay "due
+        # now" — only an out-of-window chain (see the test above) should be
+        # backdated.
+        cohort_targets = self.root / "cohort_targets.json"
+        cohort_targets.write_text(json.dumps({
+            "schema_version": 3,
+            "cohort": {
+                "venue_ids": ["icml"],
+                "initial_year": 2026,
+                "rollover_month": 10,
+                "years_ahead_after_rollover": 1,
+            },
+            "extra_targets": [],
+        }, indent=2) + "\n", encoding="utf-8")
+        payload = dict(
+            self.payload,
+            targets_sha256=hashlib.sha256(cohort_targets.read_bytes()).hexdigest(),
+        )
+        configuration = load_agent_production_configuration(
+            payload, targets_path=cohort_targets, target_date=date(2026, 11, 1),
+        )
+        self.assertIn(EventDateTarget("icml", 2027), configuration.targets)
+        effect = AgentProductionEffect(
+            repository_root=self.repo,
+            configuration=configuration,
+            event_date_provider=Provider(),
+            codex_invoker=Invoker(),
+            transport_factory=TransportFactory([]),
+        )
+        with ControlStateRepository(
+            self.state, writer=Writer.LOCAL_CONTROL_PLANE, clock=lambda: NOW
+        ):
+            pass  # initialize the schema only
+
+        effect._chain_successor(self.state, "icml", 2026, NOW)
+
+        with ControlStateRepository(
+            self.state, writer=Writer.LOCAL_CONTROL_PLANE, clock=lambda: NOW
+        ) as repository:
+            successor = repository.get_event_date_schedule("icml", 2027)
+        self.assertEqual(successor.next_check_at, "2026-07-15T14:00:00Z")
+        self.assertIsNone(successor.last_failure_category)
+
     def test_load_continuous_venue_ids_validates_against_the_catalog(self):
         self.assertEqual(load_continuous_venue_ids(), frozenset({"jmlr"}))
 
