@@ -15,6 +15,7 @@
 
 ### MLR Press volumes (2019–present)
 Known volume mappings (others discovered dynamically from the MLR Press main page):
+- 2026: `v337`
 - 2025: `v286`
 
 ## Dataset coverage

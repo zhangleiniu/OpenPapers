@@ -49,6 +49,7 @@ class UAIScraper(BaseScraper):
     def __init__(self):
         super().__init__('uai')
         self._volume_cache: Dict[int, str] = {
+            2026: 'v337',
             2025: 'v286',
         }
 
