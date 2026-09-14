@@ -57,6 +57,23 @@ def validate(papers, data_root: Path, level="archival", require_pdfs=None,
     return {key: value for key, value in sorted(issues.items()) if value}
 
 
+def load_and_validate(venue_id: str, year: int, data_root: Path, *,
+                       level: str = "archival") -> tuple[list, dict]:
+    """Load one venue/year metadata snapshot under data_root and validate it.
+
+    Shared by every caller that must independently re-verify a scrape's
+    output before trusting it (rehearsal, report recovery, promote-run).
+    Raises OSError/UnicodeDecodeError/json.JSONDecodeError/ValueError on
+    unreadable or malformed input; translating that into a caller-specific
+    error type is left to each caller.
+    """
+    metadata_path = data_root / "metadata" / venue_id / f"{venue_id}_{year}.json"
+    papers = json.loads(metadata_path.read_text(encoding="utf-8"))
+    if not isinstance(papers, list) or not papers:
+        raise ValueError("metadata is empty or not a list")
+    return papers, validate(papers, data_root, level=level)
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("conference")

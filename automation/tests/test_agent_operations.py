@@ -1,5 +1,6 @@
 import hashlib
 import json
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -10,12 +11,20 @@ from automation.agent_operations import (
     AgentOperationError,
     _utc_text,
     mark_schedule_completed,
+    promote_run,
     recover_interrupted_event_date,
     reopen_needs_human,
     update_monitor_configuration,
 )
+from automation.codex_agent import CodexProcessResult, run_claimed_codex_agent
 from automation.control_state import ControlStateRepository
 from automation.domain import Writer
+from automation.due_policy import claim_due_agent_run
+from automation.event_dates import (
+    EventDateEstimate,
+    EventDateTarget,
+    initialize_event_dates,
+)
 from automation.local_service.agent_control import (
     initialize_agent_production_root,
     validate_agent_production_root,
@@ -409,6 +418,265 @@ class MonitorConfigurationOperationTests(unittest.TestCase):
             self.internal, self.repository, apply=True
         )
         self.assertFalse(replay["changed"])
+
+
+def _git(root, *args):
+    return subprocess.run(
+        ("git", *args), cwd=root, text=True, capture_output=True, check=True
+    ).stdout.strip()
+
+
+class _FixedDateProvider:
+    name = model = prompt_version = "fixture"
+
+    def estimate(self, request):
+        # A day safely behind PROMOTE_NOW, so the check-time computed from
+        # this date (8am America/Chicago) is already due regardless of the
+        # UTC-offset arithmetic for that timezone/season.
+        return EventDateEstimate((PROMOTE_NOW - timedelta(days=1)).date(), "fixture")
+
+
+class _ScriptedInvoker:
+    def __init__(self, write, *, disposition="success",
+                 explanation="Scraped and validated the accepted papers."):
+        self._write = write
+        self._disposition = disposition
+        self._explanation = explanation
+
+    def invoke(self, invocation):
+        self._write(invocation.cwd)
+        return CodexProcessResult(0, json.dumps({
+            "disposition": self._disposition,
+            "explanation": self._explanation,
+            "suggested_retry_at": None,
+            "failure_category": None,
+        }), "")
+
+
+def _valid_paper(venue_id, year):
+    return {
+        "id": "paper1", "title": "Paper", "authors": ["Author"],
+        "year": year, "conference": venue_id.upper(), "url": "https://example.test",
+        "bibtex": "@article{x}", "abstract": "Abstract",
+        "pdf_url": "https://example.test/paper1.pdf",
+        "pdf_path": f"data/papers/{venue_id}/{year}/paper1.pdf",
+    }
+
+
+def _write_scrape_output(cwd, venue_id, year, *, include_pdf=True,
+                          pdf_bytes=b"%PDF-" + b"x" * 1024):
+    metadata_dir = cwd / "data" / "metadata" / venue_id
+    papers_dir = cwd / "data" / "papers" / venue_id / str(year)
+    metadata_dir.mkdir(parents=True)
+    papers_dir.mkdir(parents=True)
+    if include_pdf:
+        (papers_dir / "paper1.pdf").write_bytes(pdf_bytes)
+    payload = [_valid_paper(venue_id, year)]
+    (metadata_dir / f"{venue_id}_{year}.json").write_text(
+        json.dumps(payload), encoding="utf-8"
+    )
+
+
+PROMOTE_NOW = datetime(2026, 9, 13, 12, 0, tzinfo=timezone.utc)
+
+
+class PromoteRunTests(unittest.TestCase):
+    VENUE = "icml"
+    YEAR = 2026
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.root = Path(self.temp.name)
+        self.repo = self.root / "repo"
+        self.repo.mkdir()
+        _git(self.repo, "init", "-q")
+        _git(self.repo, "config", "user.name", "Fixture")
+        _git(self.repo, "config", "user.email", "fixture@example.invalid")
+        (self.repo / ".gitignore").write_text("data/\n", encoding="utf-8")
+        (self.repo / "README.md").write_text("original\n", encoding="utf-8")
+        _git(self.repo, "add", ".gitignore", "README.md")
+        _git(self.repo, "commit", "-q", "-m", "fixture")
+        self.state = self.root / "state.sqlite3"
+        self.data_root = self.root / "data"
+        self.runs_root = self.root / "runs"
+        initialize_event_dates(
+            self.state, (EventDateTarget(self.VENUE, self.YEAR),),
+            _FixedDateProvider(), clock=lambda: PROMOTE_NOW,
+        )
+
+    def tearDown(self):
+        self.temp.cleanup()
+
+    def _run(self, write, **kwargs):
+        claim = claim_due_agent_run(self.state, clock=lambda: PROMOTE_NOW).claim
+        outcome = run_claimed_codex_agent(
+            self.state, self.repo, self.runs_root, claim,
+            clock=lambda: PROMOTE_NOW, invoker=_ScriptedInvoker(write, **kwargs),
+        )
+        return claim.run_id, outcome
+
+    def _promote(self, **kwargs):
+        return promote_run(
+            self.state, repository_root=self.repo, data_root=self.data_root,
+            clock=lambda: PROMOTE_NOW, **kwargs,
+        )
+
+    def test_dry_run_reports_full_plan_and_changes_nothing(self):
+        def write(cwd):
+            _write_scrape_output(cwd, self.VENUE, self.YEAR)
+            (cwd / "README.md").write_text("updated\n", encoding="utf-8")
+
+        run_id, _ = self._run(write)
+        summary = self._promote(run_id=run_id)
+
+        self.assertFalse(summary["applied"])
+        self.assertEqual(summary["data"]["metadata"]["action"], "copy")
+        self.assertEqual(summary["data"]["pdfs"]["copy"], 1)
+        readme_entry = next(
+            f for f in summary["code"]["files"] if f["path"] == "README.md"
+        )
+        self.assertEqual(readme_entry["action"], "copy")
+        self.assertFalse((self.data_root / "metadata").exists())
+        self.assertEqual(_git(self.repo, "status", "--porcelain"), "")
+
+    def test_apply_copies_data_and_code_and_is_idempotent(self):
+        def write(cwd):
+            _write_scrape_output(cwd, self.VENUE, self.YEAR)
+            (cwd / "README.md").write_text("updated\n", encoding="utf-8")
+
+        run_id, _ = self._run(write)
+        applied = self._promote(run_id=run_id, apply=True)
+        self.assertTrue(applied["applied"])
+        self.assertEqual(applied["post_apply_validation"]["issues"], {})
+
+        metadata_path = (
+            self.data_root / "metadata" / self.VENUE / f"{self.VENUE}_{self.YEAR}.json"
+        )
+        self.assertTrue(metadata_path.exists())
+        self.assertTrue(
+            (self.data_root / "papers" / self.VENUE / str(self.YEAR) / "paper1.pdf")
+            .exists()
+        )
+        self.assertTrue(
+            (self.data_root / "metadata" / "pdf_completeness.v1.json").exists()
+        )
+        self.assertEqual((self.repo / "README.md").read_text(), "updated\n")
+        self.assertIn("README.md", _git(self.repo, "status", "--porcelain"))
+
+        replay = self._promote(run_id=run_id, apply=True)
+        self.assertEqual(replay["data"]["metadata"]["action"], "skip")
+        self.assertEqual(replay["data"]["pdfs"]["copy"], 0)
+        self.assertEqual(replay["code"]["to_copy"], 0)
+
+    def test_refuses_non_success_disposition(self):
+        run_id, _ = self._run(
+            lambda cwd: None, disposition="needs_human", explanation="blocked",
+        )
+        with self.assertRaisesRegex(AgentOperationError, "success"):
+            self._promote(run_id=run_id)
+
+    def test_refuses_when_worktree_is_gone(self):
+        run_id, outcome = self._run(
+            lambda cwd: _write_scrape_output(cwd, self.VENUE, self.YEAR)
+        )
+        shutil.rmtree(outcome.worktree_path)
+        with self.assertRaisesRegex(AgentOperationError, "no longer exists on disk"):
+            self._promote(run_id=run_id)
+
+    def test_refuses_failed_independent_validation(self):
+        run_id, _ = self._run(
+            lambda cwd: _write_scrape_output(
+                cwd, self.VENUE, self.YEAR, include_pdf=False
+            )
+        )
+        with self.assertRaisesRegex(AgentOperationError, "validation"):
+            self._promote(run_id=run_id)
+
+    def test_data_conflict_requires_force(self):
+        run_id, _ = self._run(
+            lambda cwd: _write_scrape_output(cwd, self.VENUE, self.YEAR)
+        )
+        metadata_dir = self.data_root / "metadata" / self.VENUE
+        metadata_dir.mkdir(parents=True)
+        (metadata_dir / f"{self.VENUE}_{self.YEAR}.json").write_text(
+            json.dumps([{"id": "different"}]), encoding="utf-8"
+        )
+
+        refused = self._promote(run_id=run_id, apply=True)
+        self.assertEqual(refused["data"]["metadata"]["action"], "conflict")
+        self.assertTrue(refused["data"]["blocked_by_metadata_conflict"])
+        self.assertEqual(
+            json.loads((metadata_dir / f"{self.VENUE}_{self.YEAR}.json").read_text()),
+            [{"id": "different"}],
+        )
+
+        forced = self._promote(run_id=run_id, apply=True, force=True)
+        self.assertEqual(forced["data"]["metadata"]["action"], "conflict")
+        landed = json.loads(
+            (metadata_dir / f"{self.VENUE}_{self.YEAR}.json").read_text()
+        )
+        self.assertEqual(landed[0]["id"], "paper1")
+
+    def test_identical_data_is_a_safe_noop_without_force(self):
+        def write(cwd):
+            _write_scrape_output(cwd, self.VENUE, self.YEAR)
+
+        run_id, outcome = self._run(write)
+        worktree = outcome.worktree_path
+        metadata_dir = self.data_root / "metadata" / self.VENUE
+        pdf_dir = self.data_root / "papers" / self.VENUE / str(self.YEAR)
+        metadata_dir.mkdir(parents=True)
+        pdf_dir.mkdir(parents=True)
+        shutil.copy(
+            worktree / "data" / "metadata" / self.VENUE / f"{self.VENUE}_{self.YEAR}.json",
+            metadata_dir / f"{self.VENUE}_{self.YEAR}.json",
+        )
+        shutil.copy(
+            worktree / "data" / "papers" / self.VENUE / str(self.YEAR) / "paper1.pdf",
+            pdf_dir / "paper1.pdf",
+        )
+
+        summary = self._promote(run_id=run_id)
+        self.assertEqual(summary["data"]["metadata"]["action"], "skip")
+        self.assertEqual(summary["data"]["pdfs"]["skip"], 1)
+        self.assertEqual(summary["data"]["pdfs"]["copy"], 0)
+
+    def test_code_conflict_refuses_that_file_but_still_lands_data(self):
+        def write(cwd):
+            _write_scrape_output(cwd, self.VENUE, self.YEAR)
+            (cwd / "README.md").write_text("agent version\n", encoding="utf-8")
+
+        run_id, _ = self._run(write)
+        (self.repo / "README.md").write_text("operator changed\n", encoding="utf-8")
+
+        applied = self._promote(run_id=run_id, apply=True)
+        readme_entry = next(
+            f for f in applied["code"]["files"] if f["path"] == "README.md"
+        )
+        self.assertEqual(readme_entry["action"], "refuse")
+        self.assertEqual((self.repo / "README.md").read_text(), "operator changed\n")
+        self.assertTrue(
+            (self.data_root / "metadata" / self.VENUE / f"{self.VENUE}_{self.YEAR}.json")
+            .exists()
+        )
+
+    def test_resolves_latest_terminal_run_by_venue_and_year(self):
+        self._run(lambda cwd: None, disposition="needs_human", explanation="blocked")
+        reopen_needs_human(
+            self.state, self.VENUE, self.YEAR, apply=True, clock=lambda: PROMOTE_NOW,
+        )
+        run_id_2, _ = self._run(
+            lambda cwd: _write_scrape_output(cwd, self.VENUE, self.YEAR)
+        )
+
+        summary = self._promote(venue_id=self.VENUE, year=self.YEAR)
+        self.assertEqual(summary["run_id"], run_id_2)
+
+    def test_requires_exactly_one_natural_key(self):
+        with self.assertRaisesRegex(AgentOperationError, "run-id"):
+            self._promote()
+        with self.assertRaisesRegex(AgentOperationError, "run-id"):
+            self._promote(run_id="agent-run:x", venue_id=self.VENUE, year=self.YEAR)
 
 
 if __name__ == "__main__":

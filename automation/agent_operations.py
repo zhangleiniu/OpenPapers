@@ -21,7 +21,9 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import subprocess
 import sys
+from collections import Counter
 from dataclasses import asdict
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -42,6 +44,7 @@ from automation.local_service.production import (
     _private_file,
     validate_production_root,
 )
+from postprocessing.validate_year import load_and_validate
 
 
 _LEASE_OWNER = "event-date-initializer"
@@ -399,6 +402,257 @@ def update_monitor_configuration(
     return summary
 
 
+def _classify_file(worktree_path: Path, production_path: Path) -> str:
+    """Compare one worktree file against its would-be production copy."""
+    if not production_path.is_file():
+        return "copy"
+    if production_path.read_bytes() == worktree_path.read_bytes():
+        return "skip"
+    return "conflict"
+
+
+def _parse_changed_file(line: str) -> tuple[str, str] | None:
+    """Parse one ``git status --porcelain=v1`` line into (status, path).
+
+    Returns ``None`` for anything this command refuses to reason about
+    (renames, deletions, unmerged paths) rather than guessing.
+    """
+    if len(line) < 4:
+        return None
+    status, rel_path = line[:2], line[3:]
+    if " -> " in rel_path or any(letter in status for letter in "DRCU"):
+        return None
+    return status, rel_path
+
+
+def _git_show(root: Path, commit: str, path: str) -> bytes | None:
+    """Return a path's exact bytes at one commit, or None if absent there."""
+    completed = subprocess.run(
+        ("git", "show", f"{commit}:{path}"),
+        cwd=root, capture_output=True, check=False,
+    )
+    return completed.stdout if completed.returncode == 0 else None
+
+
+def _atomic_copy(source: Path, destination: Path) -> None:
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    tmp = destination.with_suffix(destination.suffix + ".tmp")
+    tmp.write_bytes(source.read_bytes())
+    tmp.replace(destination)
+
+
+def promote_run(
+    state_path: Path,
+    *,
+    run_id: str | None = None,
+    venue_id: str | None = None,
+    year: int | None = None,
+    repository_root: Path,
+    data_root: Path | None = None,
+    apply: bool = False,
+    force: bool = False,
+    clock: Callable[[], datetime] = _now,
+) -> dict[str, Any]:
+    """Land one successful agent run's data and code out of its worktree.
+
+    The agent never commits, pushes, merges, or deploys by design (see
+    docs/automation-system/architecture.md); a ``success`` disposition only
+    means the sandboxed scrape and its own independent validation passed
+    inside an isolated, otherwise-unreachable worktree — not that anything
+    reached production. This is the audited, idempotent way a maintainer
+    performs that landing step by hand.
+
+    It never writes to the control-state database: the schedule is already
+    correct at completed/success, and idempotency comes entirely from
+    comparing on-disk bytes (worktree vs. production for data; worktree vs.
+    primary checkout vs. the run's base commit for code) rather than a new
+    "promoted" flag, so a repeat run is always a safe no-op. Data conflicts
+    (production already has a different file) are refused unless ``force``;
+    code conflicts (the primary checkout independently diverged from the
+    run's base commit for that file) are never force-applicable and are
+    left for the operator to resolve by hand.
+    """
+    if run_id is not None and (venue_id is not None or year is not None):
+        raise AgentOperationError(
+            "promote-run requires --run-id or both --venue and --year, not both"
+        )
+    if run_id is None and (venue_id is None or year is None):
+        raise AgentOperationError(
+            "promote-run requires --run-id or both --venue and --year"
+        )
+    repository_root = Path(repository_root).resolve()
+    if data_root is None:
+        from config import DATA_ROOT  # deferred: imports core config
+        data_root = DATA_ROOT
+    data_root = Path(data_root).resolve()
+
+    now = clock()
+    with ControlStateRepository(
+        Path(state_path), writer=Writer.LOCAL_CONTROL_PLANE, clock=lambda: now
+    ) as repository:
+        if run_id is not None:
+            attempt = repository.get_agent_run_attempt(run_id)
+            if attempt is None:
+                raise AgentOperationError(f"{run_id} is not a known run")
+        else:
+            terminal = [
+                candidate for candidate in repository.agent_run_history(venue_id, year)
+                if candidate.disposition != "active"
+            ]
+            if not terminal:
+                raise AgentOperationError(f"{venue_id}/{year} has no terminal run")
+            attempt = terminal[-1]
+
+        if attempt.disposition != "success":
+            raise AgentOperationError(
+                f"{attempt.run_id} disposition is {attempt.disposition!r}, not success"
+            )
+        artifact = repository.get_agent_execution_artifact(attempt.run_id)
+        if artifact is None:
+            raise AgentOperationError(f"{attempt.run_id} has no execution artifact")
+        if artifact.retention_status != "retained":
+            raise AgentOperationError(
+                f"{attempt.run_id} worktree is not retained "
+                f"(retention_status={artifact.retention_status})"
+            )
+        worktree = Path(artifact.worktree_path)
+        if not worktree.is_dir():
+            raise AgentOperationError(
+                f"{attempt.run_id} worktree no longer exists on disk: {worktree}"
+            )
+
+        venue_id, year = attempt.venue_id, attempt.year
+        try:
+            papers, issues = load_and_validate(
+                venue_id, year, worktree / "data", level="archival"
+            )
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
+            raise AgentOperationError(
+                f"{attempt.run_id} worktree metadata failed independent validation: {exc}"
+            ) from exc
+        if issues:
+            raise AgentOperationError(
+                f"{attempt.run_id} independent validation found issues: {sorted(issues)}"
+            )
+
+        metadata_rel = Path("metadata") / venue_id / f"{venue_id}_{year}.json"
+        worktree_metadata = worktree / "data" / metadata_rel
+        production_metadata = data_root / metadata_rel
+        metadata_action = _classify_file(worktree_metadata, production_metadata)
+        metadata_blocked = metadata_action == "conflict" and not force
+
+        pdf_dir_rel = Path("papers") / venue_id / str(year)
+        worktree_pdf_dir = worktree / "data" / pdf_dir_rel
+        pdf_actions: dict[str, str] = {}
+        # A metadata conflict without --force means production keeps its
+        # existing paper list; landing PDFs for a different paper list
+        # would only orphan files, so PDFs wait on the same decision.
+        if not metadata_blocked and worktree_pdf_dir.is_dir():
+            for pdf in sorted(worktree_pdf_dir.glob("*.pdf")):
+                production_pdf = data_root / pdf_dir_rel / pdf.name
+                pdf_actions[pdf.name] = _classify_file(pdf, production_pdf)
+        pdf_counts = Counter(pdf_actions.values())
+        conflicting_pdfs = sorted(
+            name for name, action in pdf_actions.items() if action == "conflict"
+        )
+
+        data_summary: dict[str, Any] = {
+            "metadata": {"action": metadata_action},
+            "pdfs": {
+                "copy": pdf_counts.get("copy", 0),
+                "skip": pdf_counts.get("skip", 0),
+                "conflict": pdf_counts.get("conflict", 0),
+                "conflicting_files": conflicting_pdfs[:50],
+            },
+            "blocked_by_metadata_conflict": metadata_blocked,
+        }
+
+        code_entries: list[dict[str, str]] = []
+        for line in artifact.changed_files:
+            parsed = _parse_changed_file(line)
+            if parsed is None:
+                code_entries.append({
+                    "path": line, "action": "refuse",
+                    "reason": "unsupported change type (rename/delete); resolve by hand",
+                })
+                continue
+            _status, rel_path = parsed
+            worktree_file = worktree / rel_path
+            if not worktree_file.is_file():
+                code_entries.append({
+                    "path": rel_path, "action": "refuse",
+                    "reason": "listed as changed but missing from worktree",
+                })
+                continue
+            worktree_bytes = worktree_file.read_bytes()
+            main_file = repository_root / rel_path
+            main_bytes = main_file.read_bytes() if main_file.is_file() else None
+            if main_bytes == worktree_bytes:
+                code_entries.append({"path": rel_path, "action": "skip"})
+                continue
+            base_bytes = _git_show(repository_root, artifact.base_commit, rel_path)
+            if main_bytes == base_bytes:
+                code_entries.append({"path": rel_path, "action": "copy"})
+            else:
+                code_entries.append({
+                    "path": rel_path, "action": "refuse",
+                    "reason": "primary checkout diverged from base_commit "
+                    "independently for this file; resolve by hand",
+                })
+
+        code_summary = {
+            "files": code_entries,
+            "to_copy": sum(1 for e in code_entries if e["action"] == "copy"),
+            "refused": sum(1 for e in code_entries if e["action"] == "refuse"),
+        }
+
+        summary: dict[str, Any] = {
+            "command": "promote-run",
+            "run_id": attempt.run_id,
+            "venue_id": venue_id,
+            "year": year,
+            "worktree_path": str(worktree),
+            "branch_name": artifact.branch_name,
+            "base_commit": artifact.base_commit,
+            "independent_validation": {"papers": len(papers), "issues": issues},
+            "data": data_summary,
+            "code": code_summary,
+            "force": force,
+            "applied": apply,
+        }
+        if not apply:
+            return summary
+
+        lease = repository.acquire_lease("promote-run")
+        try:
+            copied_metadata = metadata_action == "copy" or (
+                metadata_action == "conflict" and force
+            )
+            if copied_metadata:
+                _atomic_copy(worktree_metadata, production_metadata)
+            for name, action in pdf_actions.items():
+                if action == "copy" or (action == "conflict" and force):
+                    _atomic_copy(worktree_pdf_dir / name, data_root / pdf_dir_rel / name)
+            for entry in code_entries:
+                if entry["action"] == "copy":
+                    _atomic_copy(worktree / entry["path"], repository_root / entry["path"])
+        finally:
+            repository.release_lease(lease)
+
+        if copied_metadata:
+            from utils import _update_pdf_completeness_index  # deferred: imports core config
+
+            production_papers, post_issues = load_and_validate(
+                venue_id, year, data_root, level="archival"
+            )
+            _update_pdf_completeness_index(
+                data_root / "metadata", venue_id, year, production_papers
+            )
+            summary["post_apply_validation"] = {"issues": post_issues}
+
+        return summary
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
@@ -440,6 +694,25 @@ def main(argv: list[str] | None = None) -> int:
     )
     update_config.add_argument("--apply", action="store_true")
 
+    promote = commands.add_parser("promote-run")
+    promote.add_argument("--state", required=True, type=Path)
+    promote.add_argument("--run-id")
+    promote.add_argument("--venue")
+    promote.add_argument("--year", type=int)
+    promote.add_argument(
+        "--repository-root", default=default_repository, type=Path
+    )
+    promote.add_argument(
+        "--data-root", type=Path, default=None,
+        help="defaults to config.DATA_ROOT (SCRAPER_DATA_ROOT)",
+    )
+    promote.add_argument("--apply", action="store_true")
+    promote.add_argument(
+        "--force", action="store_true",
+        help="overwrite production data that conflicts with the worktree's "
+        "(never applies to code files, which are always left for manual merge)",
+    )
+
     args = parser.parse_args(argv)
     try:
         if args.command == "recover-event-date":
@@ -458,6 +731,12 @@ def main(argv: list[str] | None = None) -> int:
             summary = reopen_needs_human(
                 args.state, args.venue, args.year,
                 delay_minutes=args.delay_minutes, apply=args.apply,
+            )
+        elif args.command == "promote-run":
+            summary = promote_run(
+                args.state, run_id=args.run_id, venue_id=args.venue, year=args.year,
+                repository_root=args.repository_root, data_root=args.data_root,
+                apply=args.apply, force=args.force,
             )
         else:
             os.chdir(args.repository_root)
