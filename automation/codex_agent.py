@@ -125,6 +125,24 @@ def _git(root: Path, *args: str) -> str:
     return completed.stdout.strip()
 
 
+def _git_status_lines(root: Path) -> tuple[str, ...]:
+    """Return raw `git status --porcelain=v1` lines, one file change each.
+
+    Unlike `_git`, this must not `.strip()` the combined output: porcelain
+    status codes use a leading space for "worktree only" changes (e.g.
+    " M path"), and stripping the whole string eats that space off the
+    first line whenever it's the character at position zero, silently
+    corrupting that entry's status/path split for any later parser.
+    """
+    completed = subprocess.run(
+        ("git", "status", "--porcelain=v1", "--untracked-files=all"),
+        cwd=root, text=True, capture_output=True, check=False,
+    )
+    if completed.returncode != 0:
+        raise RuntimeError("git command failed: status --porcelain=v1")
+    return tuple(filter(None, completed.stdout.split("\n")))
+
+
 def _prompt(claim: AgentRunClaim, policy: DuePolicy, *, is_continuous: bool) -> str:
     started = datetime.fromisoformat(claim.started_at.replace("Z", "+00:00"))
     earliest = (started + policy.minimum_retry_delay).astimezone(timezone.utc)
@@ -279,9 +297,7 @@ def run_claimed_codex_agent(
         repository_root, "status", "--porcelain=v1", "--untracked-files=all"
     ) != primary_status:
         raise RuntimeError("primary checkout changed during agent execution")
-    all_changed = tuple(filter(None, _git(
-        worktree, "status", "--porcelain=v1", "--untracked-files=all"
-    ).splitlines()))
+    all_changed = _git_status_lines(worktree)
     changed = all_changed[:config.max_changed_files]
     if len(all_changed) > config.max_changed_files:
         result = AgentRunResult(
