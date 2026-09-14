@@ -85,7 +85,7 @@ def build_agent_run_email(
             f"- [TRUNCATED {len(artifact.changed_files) - len(changed)} entries]"
         )
     retry = report.next_check_at or f"stopped ({report.schedule_status})"
-    body = redact_text("\n".join((
+    lines = [
         "OpenPapers agent run report",
         f"Run: {run_id}",
         f"Venue/year: {attempt.venue_id} {attempt.year}",
@@ -94,9 +94,15 @@ def build_agent_run_email(
         f"Worktree: {artifact.worktree_path}",
         f"Branch: {artifact.branch_name}",
         f"Retry state: {retry}",
-        "Changed files:",
-        *changed_lines,
-    )))
+    ]
+    if attempt.disposition == "success":
+        lines.append(
+            "Promotion: this run's data and code have not been copied into "
+            f"production yet. Run promote-run --run-id {run_id} (dry run "
+            "first); see docs/automation-system/operations.md."
+        )
+    lines += ["Changed files:", *changed_lines]
+    body = redact_text("\n".join(lines))
     if len(body) > 100_000:
         raise AgentRunReportError("agent run email exceeds its message bound")
     evidence_id = "agent-artifact:" + hashlib.sha256(

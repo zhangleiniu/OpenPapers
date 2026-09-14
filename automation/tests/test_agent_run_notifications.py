@@ -5,7 +5,10 @@ import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from automation.agent_run_notifications import deliver_agent_run_email
+from automation.agent_run_notifications import (
+    build_agent_run_email,
+    deliver_agent_run_email,
+)
 from automation.codex_agent import CodexProcessResult, run_claimed_codex_agent
 from automation.control_state import AgentRunReportError, ControlStateRepository
 from automation.domain import Writer
@@ -45,6 +48,16 @@ class NotReadyInvoker:
         return CodexProcessResult(0, json.dumps({
             "disposition": "not_ready",
             "explanation": "Proceedings are not published yet.",
+            "suggested_retry_at": None,
+            "failure_category": None,
+        }), "")
+
+
+class NeedsHumanInvoker:
+    def invoke(self, invocation):
+        return CodexProcessResult(0, json.dumps({
+            "disposition": "needs_human",
+            "explanation": "Proxy blocks the archival PDF host.",
             "suggested_retry_at": None,
             "failure_category": None,
         }), "")
@@ -110,6 +123,7 @@ class AgentRunNotificationTests(unittest.TestCase):
         for expected in (
             "icml 2026", "success", "Scraped and validated the accepted papers.",
             "agent-change.txt", "Worktree:", "Retry state:",
+            "Promotion:", "promote-run --run-id", self.claim.run_id,
         ):
             self.assertIn(expected, intent.body)
 
@@ -119,6 +133,23 @@ class AgentRunNotificationTests(unittest.TestCase):
         )
         self.assertFalse(suppressed.attempted)
         self.assertEqual(replay.calls, [])
+
+    def test_promotion_note_is_absent_for_non_success_dispositions(self):
+        needs_human_state = self.root / "needs-human.sqlite3"
+        initialize_event_dates(
+            needs_human_state, (EventDateTarget("aistats", 2026),), Provider(),
+            clock=lambda: NOW,
+        )
+        claim = claim_due_agent_run(needs_human_state, clock=lambda: NOW).claim
+        run_claimed_codex_agent(
+            needs_human_state, self.repo, self.root / "needs-human-runs", claim,
+            clock=lambda: NOW, invoker=NeedsHumanInvoker(),
+        )
+        with ControlStateRepository(
+            needs_human_state, writer=Writer.LOCAL_CONTROL_PLANE, clock=lambda: NOW
+        ) as repository:
+            intent = build_agent_run_email(repository, claim.run_id)
+        self.assertNotIn("Promotion:", intent.body)
 
     def test_not_ready_disposition_is_delivered_without_sending(self):
         not_ready_state = self.root / "not-ready.sqlite3"
