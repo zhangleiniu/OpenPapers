@@ -53,7 +53,7 @@ partially included where available.
 - **AAAI** (2010–2026)
 - **CVPR** (2013–2026)
 - **COLT** (2011–2026)
-- **UAI** (2015–2025)
+- **UAI** (2015–2026)
 - **JMLR** (2000–2026)
 - **AISTATS** (1995, 1997, 1999, 2001, 2003, 2005, 2009–2025; provisional: 2026)
 - **IJCAI** (2017–2025; provisional: 2026)
