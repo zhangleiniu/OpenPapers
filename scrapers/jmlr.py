@@ -35,7 +35,10 @@ class JMLRScraper(BaseScraper):
     """JMLR scraper."""
 
     NAME = "JMLR"
-    BASE_URL = "https://www.jmlr.org"
+    # Use the canonical apex host.  The legacy www host is still present in
+    # some old links, but is not consistently reachable through restricted
+    # HTTP proxies; the apex host serves the same archival pages and files.
+    BASE_URL = "https://jmlr.org"
     REQUEST_DELAY = 0.15
     TIMEOUT = 45
 
