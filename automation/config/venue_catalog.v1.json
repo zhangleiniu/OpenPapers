@@ -233,7 +233,7 @@
       "venue_id": "ijcai",
       "display_name": "International Joint Conference on Artificial Intelligence",
       "aliases": ["ijcai"],
-      "official_domains": ["ijcai.org"],
+      "official_domains": ["ijcai.org", "www.ijcai.org", "2026.ijcai.org"],
       "archival_domains": [],
       "lifecycle": {
         "kind": "annual"

@@ -45,3 +45,16 @@ an explicit `main-track` filter and count.
 ## Known issues
 
 - **Pre-2017**: Proceedings exist on `ijcai.org` but years are not contiguous and the page structure differs from 2017+. Not currently implemented.
+- **No PDF storage authorization**: `ijcai.org` is both the official and the
+  only archival host for IJCAI papers (unlike ICML/NeurIPS/ICLR, which have a
+  separate PMLR/OpenReview/papers.nips.cc mirror). The recorded production
+  crawl-policy review
+  ([p2-7-production-crawl-policy-review-2026-07-14.md](automation-system/archive/p2-7-production-crawl-policy-review-2026-07-14.md))
+  authorizes `metadata_fetch` only for `ijcai.org`, not PDF storage, and no
+  other reviewed domain covers IJCAI. This is expected and does not need a
+  human decision on every run: an unsupervised agent run should scrape with
+  `python main.py ijcai <year> --no-pdfs` (`pdf_url` is still captured — it's
+  parsed off the already-fetched proceedings page, not a separate PDF
+  request/download) and treat that as `success`, not `needs_human`. Only
+  escalate to `needs_human` if the policy itself needs to change (e.g. a
+  human wants to authorize PDF storage) or on a genuine access problem.
