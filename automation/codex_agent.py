@@ -27,7 +27,7 @@ RESULT_SCHEMA = Path(__file__).with_name("schemas") / "v1" / "agent-run-result.j
 class CodexRunConfig:
     codex_binary: str = "codex"
     timeout_seconds: int = 3600
-    max_output_bytes: int = 64_000
+    max_output_bytes: int = 8_000_000
     max_changed_files: int = 500
 
     def __post_init__(self) -> None:
