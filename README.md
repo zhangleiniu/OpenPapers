@@ -48,7 +48,7 @@ partially included where available.
 
 <!-- BEGIN GENERATED COVERAGE -->
 - **NeurIPS** (1987–2025)
-- **ICML** (2013–2025; provisional: 2026)
+- **ICML** (2013–2026)
 - **ICLR** (2013–2026)
 - **AAAI** (2010–2026)
 - **CVPR** (2013–2026)
@@ -61,7 +61,7 @@ partially included where available.
 - **EMNLP** (1996–2025)
 - **NAACL** (2000–2001, 2003–2004, 2006–2007, 2009–2010, 2012–2013, 2015–2016, 2018–2019, 2021–2022, 2024–2025)
 - **ICCV** (2013, 2015, 2017, 2019, 2021, 2023, 2025)
-- **ECCV** (2018, 2020, 2022, 2024)
+- **ECCV** (2018, 2020, 2022, 2024; provisional: 2026)
 <!-- END GENERATED COVERAGE -->
 
 [Full coverage and quality report](./statistics.md) — regenerate with
