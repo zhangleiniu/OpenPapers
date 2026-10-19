@@ -167,7 +167,7 @@
       "venue_id": "eccv",
       "display_name": "European Conference on Computer Vision",
       "aliases": ["eccv"],
-      "official_domains": ["eccv.ecva.net"],
+      "official_domains": ["eccv.ecva.net", "media.eventhosts.cc"],
       "archival_domains": ["ecva.net"],
       "lifecycle": {
         "kind": "annual",

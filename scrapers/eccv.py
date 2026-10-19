@@ -18,6 +18,19 @@ HTML structure of eccv.ecva.net (verified):
     <div id="authors"><i>Author1, Author2*</i></div>
     <div id="abstract">Abstract text...</div>
     <a href="../papers/...pdf">pdf</a>
+
+  Before ECVA publishes a year, the official virtual site lists accepted
+  posters (robots.txt disallows only its /static JSON, not these pages):
+
+  Listing page: https://eccv.ecva.net/virtual/{year}/papers.html
+    <noscript><ul><li><a href="/virtual/2026/poster/4784">Title</a></li>...
+
+  Poster page: https://eccv.ecva.net/virtual/{year}/poster/{event_id}
+    <h1 class="event-title">Paper Title</h1>
+    <div class="event-organizers">Author1 ⋅ Author2</div>
+    <div id="abstractText"><p>Abstract text...</p></div>
+    <a href="https://media.eventhosts.cc/.../pdfs/{submission}.pdf">
+      <i class="fas fa-file-pdf"></i> Paper PDF</a>
 """
 
 import re
@@ -30,6 +43,12 @@ from .base import BaseScraper
 from utils import parse_bibtex_fields
 
 logger = logging.getLogger(__name__)
+
+# Years whose official virtual site is a provisional source until ECVA
+# publishes the archival paper pages.
+_VIRTUAL_SITE_YEARS = {2026}
+_VIRTUAL_POSTER_RE = re.compile(r'^/virtual/(\d{4})/poster/\d+$')
+_SUBMISSION_PDF_RE = re.compile(r'/(\d+)\.pdf$')
 
 
 class ECCVScraper(BaseScraper):
@@ -78,6 +97,8 @@ class ECCVScraper(BaseScraper):
                         paper_urls.append(urljoin(self.base_url, a_tag['href']))
 
             logger.info(f"Found {len(paper_urls)} papers for ECCV {year}")
+            if not paper_urls and year in _VIRTUAL_SITE_YEARS:
+                return self._get_virtual_site_urls(year)
             return paper_urls
 
         except Exception as e:
@@ -86,6 +107,8 @@ class ECCVScraper(BaseScraper):
 
     def parse_paper(self, url: str) -> Optional[Dict]:
         """Parse a single ECCV paper from its ecva.net page."""
+        if '/virtual/' in url:
+            return self._parse_virtual_poster(url)
         try:
             response = self.session.get(url)
             if not response:
@@ -109,6 +132,10 @@ class ECCVScraper(BaseScraper):
                 'authors':  authors,
                 'abstract': abstract,
                 'pdf_url':  pdf_url,
+                'metadata_source': 'ecva',
+                'source_id': paper_id,
+                'source_ids': {'ecva': paper_id},
+                'publication_status': 'archival',
             }
             extra = self._fetch_bibtex_extra(soup)
             if extra:
@@ -124,6 +151,74 @@ class ECCVScraper(BaseScraper):
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------
+
+    def _get_virtual_site_urls(self, year: int) -> List[str]:
+        """List accepted-poster pages from the official virtual site."""
+        url = f"https://eccv.ecva.net/virtual/{year}/papers.html"
+        logger.info("ECVA has no ECCV %s papers; trying %s", year, url)
+        response = self.session.get(url)
+        if not response:
+            return []
+        paper_urls = self._extract_virtual_poster_links(response.content, year)
+        logger.info("Found %d ECCV %s posters on the virtual site",
+                    len(paper_urls), year)
+        return paper_urls
+
+    @staticmethod
+    def _extract_virtual_poster_links(html: bytes, year: int) -> List[str]:
+        soup = BeautifulSoup(html, 'html.parser')
+        seen = set()
+        paper_urls = []
+        for a_tag in soup.find_all('a', href=True):
+            href = a_tag['href'].strip()
+            match = _VIRTUAL_POSTER_RE.match(href)
+            if match and int(match.group(1)) == year and href not in seen:
+                seen.add(href)
+                paper_urls.append(urljoin("https://eccv.ecva.net/", href))
+        return paper_urls
+
+    def _parse_virtual_poster(self, url: str) -> Optional[Dict]:
+        response = self.session.get(url)
+        if not response:
+            return None
+        return self._parse_virtual_poster_html(response.content, url)
+
+    @staticmethod
+    def _parse_virtual_poster_html(html: bytes, url: str) -> Optional[Dict]:
+        """Parse a virtual-site poster page into a provisional record.
+
+        The PDF is named by submission number, which ECVA also uses for its
+        archival IDs, so the provisional ID matches the later archival one.
+        """
+        soup = BeautifulSoup(html, 'html.parser')
+        title_tag = soup.find(class_='event-title')
+        title = title_tag.get_text(' ', strip=True) if title_tag else ""
+        pdf_url = next(
+            (a['href'].strip() for a in soup.find_all('a', href=True)
+             if 'Paper PDF' in a.get_text()), "")
+        year_match = re.search(r'/virtual/(\d{4})/', url)
+        submission = _SUBMISSION_PDF_RE.search(pdf_url)
+        if not title or not submission or not year_match:
+            logger.warning(f"Incomplete ECCV virtual-site poster: {url}")
+            return None
+
+        organizers = soup.find('div', class_='event-organizers')
+        raw_authors = organizers.get_text(' ', strip=True) if organizers else ""
+        authors = [a.strip() for a in raw_authors.split('⋅') if a.strip()]
+        abstract_div = soup.find('div', id='abstractText')
+        abstract = abstract_div.get_text(' ', strip=True) if abstract_div else ""
+        paper_id = f"{submission.group(1)}_ECCV_{year_match.group(1)}_paper"
+        return {
+            'id': paper_id,
+            'title': title,
+            'authors': authors,
+            'abstract': abstract,
+            'pdf_url': pdf_url,
+            'metadata_source': 'ecva_virtual',
+            'source_id': paper_id,
+            'source_ids': {'ecva_virtual': paper_id},
+            'publication_status': 'provisional',
+        }
 
     def _fetch_bibtex_extra(self, soup: BeautifulSoup) -> Dict[str, str]:
         """ecva.net (the free mirror we scrape) doesn't publish its own

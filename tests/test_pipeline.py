@@ -10,6 +10,7 @@ from unittest.mock import Mock, patch
 import main
 from automation.monitor import Monitor, StateStore, load_registry, save_snapshot
 from scrapers.base import BaseScraper
+from scrapers.eccv import ECCVScraper
 from scrapers.icml import ICMLScraper
 from scrapers.ijcai import IJCAIScraper
 from scrapers.openreview import OpenReviewClient
@@ -355,7 +356,8 @@ class SourceLifecycleTests(unittest.TestCase):
         scraper = FakeArchivalScraper("icml")
         downloaded = []
         scraper.download_pdf = (
-            lambda paper, year: downloaded.append(paper["id"]) or True)
+            lambda paper, year, overwrite=False:
+                downloaded.append((paper["id"], overwrite)) or True)
 
         with patch("scrapers.base.load_papers", return_value=[existing]), \
                 patch("scrapers.base.save_papers"), \
@@ -369,7 +371,7 @@ class SourceLifecycleTests(unittest.TestCase):
         self.assertEqual(papers[0]["publication_status"], "archival")
         self.assertEqual(papers[0]["pdf_url"],
                           "https://proceedings.mlr.press/v999/lovelace26a.pdf")
-        self.assertEqual(downloaded, ["openreview-id"])
+        self.assertEqual(downloaded, [("openreview-id", True)])
 
     def test_authorless_paper_is_skipped(self):
         # Some venues expose non-paper front matter (an author index, table
@@ -462,6 +464,68 @@ class SourceLifecycleTests(unittest.TestCase):
         self.assertEqual(papers[0]["authors"], ["Ada Lovelace"])
         self.assertEqual(papers[0]["publication_status"], "provisional")
 
+    def test_ijcai_honors_robots_crawl_delay(self):
+        self.assertGreaterEqual(IJCAIScraper().session.delay, 10)
+
+    def test_eccv_2026_falls_back_to_virtual_site_posters(self):
+        scraper = ECCVScraper()
+        ecva = Mock(content=b'<button class="accordion">ECCV 2024 Papers</button>'
+                            b'<div class="accordion-content"></div>')
+        listing = Mock(content=b'''<noscript><ul>
+          <li><a href="/virtual/2026/poster/4784">A Useful Paper</a></li>
+          <li><a href="/virtual/2026/poster/4784">A Useful Paper</a></li>
+          <li><a href="/virtual/2024/poster/1">Old Paper</a></li>
+          <li><a href="/virtual/2026/events/oral">Orals</a></li>
+        </ul></noscript>''')
+
+        with patch.object(scraper.session, "get",
+                          side_effect=[ecva, listing]) as get:
+            urls = scraper.get_paper_urls(2026)
+
+        self.assertEqual(get.call_args_list[1].args[0],
+                         "https://eccv.ecva.net/virtual/2026/papers.html")
+        self.assertEqual(urls, ["https://eccv.ecva.net/virtual/2026/poster/4784"])
+
+    def test_eccv_virtual_poster_parser_uses_ecva_submission_id(self):
+        html = '''<h1 class="event-title">A Useful Paper</h1>
+          <div class="event-organizers">Ada Lovelace ⋅ Alan Turing</div>
+          <div id="abstractText"><div><p>Useful abstract.</p></div></div>
+          <a class="action-btn" target="_blank"
+             href="https://media.eventhosts.cc/Conferences/ECCV2026/pdfs/7443.pdf">
+            <i class="fas fa-file-pdf"></i> Paper PDF</a>'''.encode()
+
+        paper = ECCVScraper._parse_virtual_poster_html(
+            html, "https://eccv.ecva.net/virtual/2026/poster/4784")
+
+        self.assertEqual(paper["id"], "7443_ECCV_2026_paper")
+        self.assertEqual(paper["authors"], ["Ada Lovelace", "Alan Turing"])
+        self.assertEqual(paper["abstract"], "Useful abstract.")
+        self.assertEqual(paper["publication_status"], "provisional")
+        self.assertEqual(
+            paper["pdf_url"],
+            "https://media.eventhosts.cc/Conferences/ECCV2026/pdfs/7443.pdf")
+
+    def test_eccv_virtual_poster_without_pdf_is_rejected(self):
+        html = b'<h1 class="event-title">A Useful Paper</h1>'
+        self.assertIsNone(ECCVScraper._parse_virtual_poster_html(
+            html, "https://eccv.ecva.net/virtual/2026/poster/4784"))
+
+    def test_eccv_ecva_record_is_archival(self):
+        scraper = ECCVScraper()
+        page = Mock(content=b'''<div id="papertitle">A Useful Paper</div>
+          <div id="authors"><i>Ada Lovelace*</i></div>
+          <div id="abstract">Useful abstract.</div>
+          <a href="../papers/07443.pdf">pdf</a>''')
+        url = ("https://www.ecva.net/papers/eccv_2026/papers_ECCV/html/"
+               "7443_ECCV_2026_paper.php")
+
+        with patch.object(scraper.session, "get", return_value=page):
+            paper = scraper.parse_paper(url)
+
+        self.assertEqual(paper["id"], "7443_ECCV_2026_paper")
+        self.assertEqual(paper["metadata_source"], "ecva")
+        self.assertEqual(paper["publication_status"], "archival")
+
     def test_parallel_pdf_retry_checkpoints_distinct_papers(self):
         class RetryScraper:
             PDF_DOWNLOAD_WORKERS = 2
@@ -486,6 +550,41 @@ class SourceLifecycleTests(unittest.TestCase):
 
         self.assertEqual(completed, 10)
         self.assertTrue(all(paper.get("pdf_path") for paper in papers))
+
+    def test_download_file_overwrite_replaces_valid_existing_pdf(self):
+        from utils import RobustSession
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "p.pdf"
+            old = b"%PDF-1.7 provisional" + b"x" * 2048
+            new = b"%PDF-1.7 camera-ready" + b"y" * 2048
+            path.write_bytes(old)
+            session = RobustSession(delay=0)
+            response = Mock(headers={},
+                            iter_content=Mock(return_value=[new]))
+            with patch.object(session, "get", return_value=response) as get:
+                self.assertTrue(session.download_file("https://x/p.pdf", path))
+                get.assert_not_called()
+                self.assertEqual(path.read_bytes(), old)
+
+                self.assertTrue(session.download_file(
+                    "https://x/p.pdf", path, overwrite=True))
+            self.assertEqual(path.read_bytes(), new)
+            self.assertFalse(path.with_name("p.pdf.part").exists())
+
+    def test_failed_overwrite_keeps_existing_pdf(self):
+        from utils import RobustSession
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "p.pdf"
+            old = b"%PDF-1.7 provisional" + b"x" * 2048
+            path.write_bytes(old)
+            session = RobustSession(delay=0)
+            response = Mock(headers={}, iter_content=Mock(
+                side_effect=ConnectionError("reset")))
+            with patch.object(session, "get", return_value=response):
+                self.assertFalse(session.download_file(
+                    "https://x/p.pdf", path, overwrite=True))
+            self.assertEqual(path.read_bytes(), old)
+            self.assertFalse(path.with_name("p.pdf.part").exists())
 
     def test_local_pdf_check_rejects_html_with_pdf_extension(self):
         with tempfile.TemporaryDirectory() as temp_dir:

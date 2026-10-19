@@ -53,8 +53,9 @@ class BaseScraper(ABC):
         """Parse a single paper from its URL."""
         pass
 
-    def download_pdf(self, paper: Dict, year: int) -> bool:
-        """Download PDF for a paper."""
+    def download_pdf(self, paper: Dict, year: int,
+                     overwrite: bool = False) -> bool:
+        """Download PDF for a paper, replacing an existing file if asked."""
         if not paper.get('pdf_url'):
             logger.warning(f"No PDF URL for paper {paper.get('id', 'unknown')}")
             paper['pdf_downloaded'] = False
@@ -64,7 +65,7 @@ class BaseScraper(ABC):
             filename = get_paper_filename(paper)
             pdf_path = PAPERS_DIR / self.conference / str(year) / filename
             success = self.session.download_file(
-                paper['pdf_url'], pdf_path,
+                paper['pdf_url'], pdf_path, overwrite=overwrite,
                 headers=self.pdf_request_headers(paper))
             if success:
                 # Path relative to the data root (mustcite convention: papers/...)
@@ -215,7 +216,8 @@ class BaseScraper(ABC):
                             matched.get('publication_status') == 'archival')
                         if (download_pdfs and matched.get('pdf_url') and
                                 (not matched.get('pdf_path') or becoming_archival)):
-                            self.download_pdf(matched, year)
+                            self.download_pdf(
+                                matched, year, overwrite=becoming_archival)
                         continue
 
                     if download_pdfs:

@@ -78,7 +78,8 @@ class IJCAIScraper(BaseScraper):
 
     NAME = "IJCAI"
     BASE_URL = "https://www.ijcai.org/"
-    REQUEST_DELAY = 0.15
+    # www.ijcai.org/robots.txt sets Crawl-delay: 10.
+    REQUEST_DELAY = 10
     TIMEOUT = 45
 
     def __init__(self):

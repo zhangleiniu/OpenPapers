@@ -206,11 +206,18 @@ class RobustSession:
         self.rate_limited_until = time.time() + retry_after
         logger.warning(f"Rate limited for {retry_after}s")
     
-    def download_file(self, url: str, filepath: Path, **request_kwargs) -> bool:
-        """Download file with error handling."""
+    def download_file(self, url: str, filepath: Path, overwrite: bool = False,
+                      **request_kwargs) -> bool:
+        """Download file with error handling.
+
+        A valid existing PDF is kept unless ``overwrite`` is set. The new
+        file is written beside the target and only replaces it once the
+        download completes, so a failed overwrite keeps the old file.
+        """
+        partial = filepath.with_name(filepath.name + ".part")
         try:
             # Skip if file already exists
-            if filepath.exists():
+            if filepath.exists() and not overwrite:
                 try:
                     with filepath.open("rb") as handle:
                         is_valid = (filepath.stat().st_size >= 1024 and
@@ -234,7 +241,7 @@ class RobustSession:
             total_size = int(response.headers.get('content-length', 0))
             downloaded = 0
             
-            with open(filepath, 'wb') as f:
+            with open(partial, 'wb') as f:
                 for chunk in response.iter_content(chunk_size=8192):
                     if chunk:
                         f.write(chunk)
@@ -245,15 +252,16 @@ class RobustSession:
                             progress = (downloaded / total_size) * 100
                             logger.debug(f"Download progress: {progress:.1f}%")
             
+            partial.replace(filepath)
             logger.debug(f"Downloaded: {filepath.name} ({downloaded:,} bytes)")
             return True
             
         except Exception as e:
             logger.error(f"Download failed for {url}: {e}")
             # Clean up partial file
-            if filepath.exists():
+            if partial.exists():
                 try:
-                    filepath.unlink()
+                    partial.unlink()
                 except:
                     pass
             return False
