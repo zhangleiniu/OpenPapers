@@ -175,7 +175,9 @@ forward or require intervention; they must not create a tight retry loop.
   equal or sit inside the managed runs root.
 - **External content is untrusted.** The agent and monitor must respect
   authentication, robots/access controls, rate limits, and source terms.
-  Permission to fetch a PDF does not grant redistribution rights.
+  Every venue in this project is authorized for PDF download and local
+  storage (maintainer decision, 2026-10-20); that does not grant
+  redistribution rights.
 - **Automatic external effects are bounded.** Date discovery and agent runs
   have separate budgets and cooldowns. Agent execution has a global
   concurrency limit and a systemic-failure circuit.

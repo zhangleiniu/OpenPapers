@@ -1,5 +1,12 @@
 # P2.7 production crawl-policy review — 2026-07-14
 
+> **Superseded 2026-10-20 (maintainer decision).** Every venue in this
+> project is authorized for PDF download and local storage. The
+> "metadata only" / "no PDF storage" decisions in the table below no longer
+> apply to any domain; robots directives, published crawl delays, and access
+> controls still do. Redistribution of PDFs remains a separate decision and
+> is not granted. The table is kept unchanged as the historical record.
+
 This record documents the bounded public research used to author
 `automation/config/production_crawl_policy.v1.json`. It is production policy
 evidence, not a record of a live automatic-verification run. The review made
