@@ -214,9 +214,11 @@ The dashboard does not inspect canonical metadata or claim dataset quality —
 
 It refuses any bind other than `127.0.0.1`, rereads state immutably on each
 page request, and has no mutation endpoint. Production manages that backend as
-a LaunchDaemon. A separate `_openpapers` Caddy LaunchDaemon exposes only the
-fixed NIU private interface with NIU-issued DigiCert HTTPS and Basic Auth. From
-the NIU network or VPN, open `https://archer.cs.niu.edu:8443/`.
+a LaunchDaemon. A separate `_openpapers` Caddy LaunchDaemon exposes it over
+HTTPS; publicly reachable at
+[dashboard.mustcite.com](https://dashboard.mustcite.com) via Cloudflare
+Tunnel. Host-specific binding/credential details live in `current-handoff.md`
+(host-local, not published).
 
 The page shows one row per catalog venue even when not enrolled. When multiple
 years exist, actionable or attention-required work takes precedence over a

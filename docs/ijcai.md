@@ -7,7 +7,12 @@ Archival source: `https://www.ijcai.org/proceedings/[year]/`
 For 2026, before that proceedings page exists, the scraper uses the official
 conference accepted-paper page filtered to Main Track. It provides title,
 authors, abstract, keywords, and the conference paper number, but no PDF URL;
-the resulting records are provisional.
+the resulting records are provisional. Their IDs are
+`{year}-accepted-{n}` because accepted-list numbers differ from proceedings
+numbers; the earlier `{year}-{n}` form collided with archival IDs once the
+archival merge kept them. IJCAI 2026's canonical records were renumbered to
+the proceedings `{year}-{n}` form on 2026-10-19 (the accepted-list number is
+kept in `source_ids.ijcai_accepted_list`).
 
 ## Dataset coverage
 
@@ -40,7 +45,15 @@ an explicit `main-track` filter and count.
 | `authors` | ✓ |
 | `abstract` | ✓ |
 | `pdf_url` | ✓ |
+| `bibtex_extra` | booktitle/editor/pages/doi/note fetched from the official "BibTeX" download link on the paper page (one extra request) — see [data-schema.md](data-schema.md#bibtex-generation) |
 
 ## Known issues
 
 - **Pre-2017**: Proceedings exist on `ijcai.org` but years are not contiguous and the page structure differs from 2017+. Not currently implemented.
+- **PDFs are downloaded like every other venue**: `ijcai.org` is both the
+  official and the only archival host for IJCAI papers. PDF download and local
+  storage are authorized (maintainer decision, 2026-10-20, superseding the
+  2026-07-14 crawl-policy review's metadata-only entry), so scrape with plain
+  `python main.py ijcai <year> --require-complete`, not `--no-pdfs`. The
+  scraper honors the site's robots `Crawl-delay: 10`, so a full year takes a
+  few hours.

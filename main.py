@@ -6,6 +6,15 @@ import logging
 import sys
 from typing import List
 
+try:
+    import bs4  # noqa: F401
+    import requests  # noqa: F401
+except ModuleNotFoundError as exc:
+    sys.exit(
+        f"main.py requires the project virtualenv (missing module: {exc.name}). "
+        "Run: .venv/bin/python main.py ...  or: source .venv/bin/activate && python main.py ..."
+    )
+
 from scrapers.neurips import NeurIPSScraper
 from scrapers.icml import ICMLScraper
 from scrapers.iclr import ICLRScraper

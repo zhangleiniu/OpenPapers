@@ -15,6 +15,7 @@
 
 ### MLR Press volumes (2019–present)
 Known volume mappings (others discovered dynamically from the MLR Press main page):
+- 2026: `v337`
 - 2025: `v286`
 
 ## Dataset coverage
@@ -31,6 +32,7 @@ See the generated [coverage and quality report](../statistics.md).
 | `abstract` | ✓ | ✓ |
 | `pdf_url` | ✓ | ✓ |
 | `year` | ✓ | ✓ |
+| `bibtex_extra` | — | editor/volume/series/month/pages/organization parsed from PMLR's own citation block on the same page (no extra request) — see [data-schema.md](data-schema.md#bibtex-generation) |
 
 ## Known issues
 

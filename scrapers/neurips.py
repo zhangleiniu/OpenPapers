@@ -37,6 +37,7 @@ import logging
 
 from .base import BaseScraper
 from config import CACHE_DIR
+from utils import parse_bibtex_fields
 
 logger = logging.getLogger(__name__)
 
@@ -153,6 +154,9 @@ class NeurIPSScraper(BaseScraper):
             'abstract': abstract,
             'pdf_url':  pdf_url,
         }
+        extra = self._fetch_bibtex_extra(paper_id, url)
+        if extra:
+            paper['bibtex_extra'] = extra
 
         logger.debug(f"Parsed: {title!r} ({len(authors)} authors)")
         return paper
@@ -160,6 +164,33 @@ class NeurIPSScraper(BaseScraper):
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------
+
+    def _fetch_bibtex_extra(self, paper_id: str, abstract_url: str) -> Dict[str, str]:
+        """Fetch papers.nips.cc's own Bibtex.bib file for the doi/editor/
+        pages/publisher fields our generic template doesn't have. Same
+        filename pattern regardless of year or track suffix. One extra
+        request per paper."""
+        year_match = re.search(r'/paper_files/paper/(\d+)/', abstract_url)
+        if not year_match:
+            return {}
+        bib_url = (f"{self.base_url}paper_files/paper/{year_match.group(1)}"
+                   f"/file/{paper_id}-Bibtex.bib")
+        response = self.session.get(bib_url, quiet_404=True)
+        if not response:
+            return {}
+        fields = parse_bibtex_fields(response.text)
+        extra = {}
+        if fields.get('editor'):
+            extra['editor'] = fields['editor']
+        if fields.get('volume'):
+            extra['volume'] = fields['volume']
+        if fields.get('pages'):
+            extra['pages'] = fields['pages']
+        if fields.get('doi'):
+            extra['doi'] = fields['doi']
+        if fields.get('publisher'):
+            extra['organization'] = fields['publisher']
+        return extra
 
     def _extract_paper_links(self, html: bytes, year: int) -> List[str]:
         """Extract abstract-page URLs from the NeurIPS listing page."""

@@ -85,7 +85,7 @@ def build_agent_run_email(
             f"- [TRUNCATED {len(artifact.changed_files) - len(changed)} entries]"
         )
     retry = report.next_check_at or f"stopped ({report.schedule_status})"
-    body = redact_text("\n".join((
+    lines = [
         "OpenPapers agent run report",
         f"Run: {run_id}",
         f"Venue/year: {attempt.venue_id} {attempt.year}",
@@ -94,9 +94,15 @@ def build_agent_run_email(
         f"Worktree: {artifact.worktree_path}",
         f"Branch: {artifact.branch_name}",
         f"Retry state: {retry}",
-        "Changed files:",
-        *changed_lines,
-    )))
+    ]
+    if attempt.disposition == "success":
+        lines.append(
+            "Promotion: this run's data and code have not been copied into "
+            f"production yet. Run promote-run --run-id {run_id} (dry run "
+            "first); see docs/automation-system/operations.md."
+        )
+    lines += ["Changed files:", *changed_lines]
+    body = redact_text("\n".join(lines))
     if len(body) > 100_000:
         raise AgentRunReportError("agent run email exceeds its message bound")
     evidence_id = "agent-artifact:" + hashlib.sha256(
@@ -128,7 +134,13 @@ def deliver_agent_run_email(
     notification_namespace: str | None = None,
     retry_permanent_protocol_error: bool = False,
 ) -> AgentRunEmailOutcome:
-    """Attempt one pending/retryable report; terminal replays do no I/O."""
+    """Attempt one pending/retryable report; terminal replays do no I/O.
+
+    A ``not_ready`` disposition ("checked, nothing published yet") never
+    reaches a human inbox: it is the overwhelming majority of runs and
+    carries nothing to review, so it is marked delivered with a sentinel
+    receipt instead of sent.
+    """
     now = _utc(clock())
     with ControlStateRepository(
         Path(state_path), writer=Writer.LOCAL_CONTROL_PLANE, clock=clock
@@ -141,6 +153,9 @@ def deliver_agent_run_email(
                 repository, run_id,
                 notification_namespace=notification_namespace,
             )
+            attempt = repository.get_agent_run_attempt(run_id)
+            if attempt is None:
+                raise AgentRunReportError("agent run review state is incomplete")
             delivery = repository.prepare_agent_run_report_delivery(
                 run_id, started_at=now, lease=lease,
                 retry_permanent_protocol_error=retry_permanent_protocol_error,
@@ -152,6 +167,17 @@ def deliver_agent_run_email(
                 return AgentRunEmailOutcome(
                     run_id, report.status, False, None,
                     report.last_failure_category, report.receipt_id,
+                )
+            if attempt.disposition == "not_ready":
+                report = repository.complete_agent_run_report_delivery(
+                    delivery.report_id, delivery.attempt_number,
+                    status="delivered", completed_at=_utc(clock()),
+                    receipt_id=f"suppressed:{attempt.disposition}",
+                    lease=lease,
+                )
+                return AgentRunEmailOutcome(
+                    run_id, report.status, False, delivery.attempt_number,
+                    None, report.receipt_id,
                 )
             try:
                 receipt = transport.send(

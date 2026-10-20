@@ -902,7 +902,6 @@ def render_dashboard(model: Mapping[str, object]) -> str:
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="refresh" content="300">
 <title>OpenPapers automation status</title>
 <style>
 :root {{ color-scheme: light dark; font-family: ui-sans-serif, system-ui, sans-serif; }}
@@ -910,9 +909,13 @@ body {{ margin: 0; background: #0b1020; color: #e8edf7; }}
 main {{ max-width: 1200px; margin: auto; padding: 32px 24px; }}
 .topbar {{ display: flex; justify-content: space-between; align-items: baseline; }}
 h1 {{ margin: 0 0 8px; font-size: 28px; }}
+.topbar-controls {{ display: flex; align-items: baseline; gap: 14px; }}
 .tz-picker {{ color: #aab6ca; font-size: 13px; }}
 .tz-picker select {{ background: #151f36; color: #e8edf7; border: 1px solid #334363;
   border-radius: 6px; padding: 3px 6px; font-size: 13px; }}
+#fullscreen-toggle {{ background: #151f36; color: #e8edf7; border: 1px solid #334363;
+  border-radius: 6px; padding: 4px 10px; font-size: 13px; cursor: pointer; }}
+#fullscreen-toggle:hover {{ background: #1c2a4a; }}
 .meta {{ color: #aab6ca; margin-bottom: 24px; }}
 .notice {{ border: 1px solid #334363; background: #111a30; border-radius: 10px;
   padding: 12px 14px; margin-bottom: 18px; }}
@@ -944,6 +947,8 @@ footer {{ color: #8491a8; margin-top: 18px; font-size: 13px; }}
 <body><main>
 <div class="topbar">
 <h1>OpenPapers automation status</h1>
+<div class="topbar-controls">
+<button id="fullscreen-toggle" type="button" title="Toggle fullscreen">&#x26F6; Fullscreen</button>
 <div class="tz-picker">Timezone
 <select id="tz-select">
 <option value="America/Chicago">Chicago</option>
@@ -955,6 +960,7 @@ footer {{ color: #8491a8; margin-top: 18px; font-size: 13px; }}
 <option value="Asia/Shanghai">Shanghai</option>
 <option value="Asia/Tokyo">Tokyo</option>
 </select></div>
+</div>
 </div>
 <div class="meta">{html.escape(counts)} · observed
 <span data-utc="{observed_attr}">{observed}</span></div>
@@ -973,10 +979,29 @@ edition dates are timezone-free calendar dates.</footer>
 <script>
 (function () {{
   "use strict";
+  var fsButton = document.getElementById("fullscreen-toggle");
+  if (fsButton) {{
+    if (!document.documentElement.requestFullscreen
+        && !document.fullscreenEnabled && document.fullscreenEnabled !== undefined) {{
+      fsButton.style.display = "none";
+    }}
+    fsButton.addEventListener("click", function () {{
+      if (document.fullscreenElement) {{
+        document.exitFullscreen();
+      }} else if (document.documentElement.requestFullscreen) {{
+        document.documentElement.requestFullscreen().catch(function () {{}});
+      }}
+    }});
+    document.addEventListener("fullscreenchange", function () {{
+      fsButton.textContent = document.fullscreenElement
+        ? "⛶ Exit fullscreen" : "⛶ Fullscreen";
+    }});
+  }}
+  var DEFAULT_ZONE = "America/Chicago";
   var select = document.getElementById("tz-select");
   var stored = null;
   try {{ stored = window.localStorage.getItem("openpapers-tz"); }} catch (e) {{}}
-  var zone = stored || "America/Chicago";
+  var zone = stored || DEFAULT_ZONE;
   function apply(zoneName) {{
     var nodes = document.querySelectorAll("[data-utc]");
     for (var i = 0; i < nodes.length; i += 1) {{
@@ -994,12 +1019,39 @@ edition dates are timezone-free calendar dates.</footer>
   for (var j = 0; j < select.options.length; j += 1) {{
     if (select.options[j].value === zone) {{ select.selectedIndex = j; }}
   }}
-  if (zone !== "America/Chicago") {{ apply(zone); }}
+  if (zone !== DEFAULT_ZONE) {{ apply(zone); }}
   select.addEventListener("change", function () {{
     try {{ window.localStorage.setItem("openpapers-tz", select.value); }}
     catch (e) {{}}
     apply(select.value);
   }});
+
+  // A full-page reload (the previous <meta http-equiv="refresh"> approach)
+  // forces every browser out of the Fullscreen API, since fullscreen is
+  // tied to the live document instance. Refetch and splice in just the
+  // table body and the observed-at line instead, so a kiosk tab left in
+  // fullscreen stays there across refreshes.
+  var tbody = document.querySelector("tbody");
+  var meta = document.querySelector(".meta");
+  function refresh() {{
+    fetch(location.pathname + location.search, {{
+      cache: "no-store", credentials: "same-origin",
+    }}).then(function (response) {{
+      if (!response.ok) {{ throw new Error("bad status"); }}
+      return response.text();
+    }}).then(function (text) {{
+      var doc = new DOMParser().parseFromString(text, "text/html");
+      var nextTbody = doc.querySelector("tbody");
+      var nextMeta = doc.querySelector(".meta");
+      if (!nextTbody || !nextMeta) {{ return; }}
+      tbody.replaceWith(nextTbody);
+      meta.replaceWith(nextMeta);
+      tbody = nextTbody;
+      meta = nextMeta;
+      if (zone !== DEFAULT_ZONE) {{ apply(zone); }}
+    }}).catch(function () {{ /* try again next interval */ }});
+  }}
+  window.setInterval(refresh, 300000);
 }})();
 </script>
 </main></body></html>"""
@@ -1045,8 +1097,8 @@ class _DashboardHandler(BaseHTTPRequestHandler):
         self.send_header(
             "Content-Security-Policy",
             "default-src 'none'; style-src 'unsafe-inline'; "
-            "script-src 'unsafe-inline'; base-uri 'none'; "
-            "form-action 'none'; frame-ancestors 'none'",
+            "script-src 'unsafe-inline'; connect-src 'self'; "
+            "base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
         )
         self.end_headers()
         if self.command != "HEAD":

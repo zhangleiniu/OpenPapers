@@ -4,10 +4,10 @@ This directory is the zero-context entry point for OpenPapers' optional
 automation control plane. Read this page before changing `automation/`, then
 [`architecture.md`](./architecture.md) for the safety boundaries and
 [`roadmap.md`](./roadmap.md) for phase status. A returning agent reads
-[`development.md`](./development.md) next and then
-[`current-handoff.md`](./current-handoff.md) for the deployed snapshot and
-next gates. Operational procedures live in
-[`operations.md`](./operations.md).
+[`development.md`](./development.md) next and then `current-handoff.md` for
+the deployed snapshot and next gates. Operational procedures live in
+`operations.md`. Both are host-specific operational records — intentionally
+not published; ask the maintainer for a copy or current status.
 
 The core scrapers remain independently installable and runnable. GCP, an LLM
 provider, email, and a coding-agent CLI are never core dependencies. Prefect
@@ -113,7 +113,7 @@ tests, not this list.
   fail-closed states — recover an interrupted date attempt, mark an
   already-scraped venue/year completed, update the monitor registry
   configuration with its full integrity-marker chain, repair a broken
-  chain. See [`operations.md`](./operations.md).
+  chain. See `operations.md` (host-local, not published).
 - `automation/agent_status.py`: secret-free read-only production summary
   and the private two-canary proof format.
 - `automation/agent_dashboard.py`: the loopback read-only venue dashboard —
@@ -140,9 +140,9 @@ in this repository or in the `llmcon` GCP project.
 - [`architecture.md`](./architecture.md): target components and invariants.
 - [`roadmap.md`](./roadmap.md): phase status and acceptance criteria.
 - [`development.md`](./development.md): development and validation workflow.
-- [`operations.md`](./operations.md): production runbook.
-- [`current-handoff.md`](./current-handoff.md): dated deployment snapshot
-  and next gates.
+- `operations.md`: production runbook (host-local, not published).
+- `current-handoff.md`: dated deployment snapshot and next gates
+  (host-local, not published).
 - [`installation-readiness.md`](./installation-readiness.md): audit and
   installation gates.
 - [`local-first-decision.md`](./local-first-decision.md): why production is
@@ -157,6 +157,6 @@ in this repository or in the `llmcon` GCP project.
 - Target design: this directory's non-archive documents.
 - Deployed topology: [`../automation.md`](../automation.md), checked against
   actual Mac/GCP state.
-- Last verified snapshot: [`current-handoff.md`](./current-handoff.md).
+- Last verified snapshot: `current-handoff.md` (host-local, not published).
 - Canonical dataset coverage: `statistics.md`.
 - History: git log, dated ExecPlans under `.agent/plans/`, and `archive/`.

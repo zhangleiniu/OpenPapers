@@ -34,6 +34,7 @@ excluding satellite events whose titles contain extra text after the year
 | `authors` | ✓ |
 | `abstract` | ✓ |
 | `pdf_url` | ✓ |
+| `bibtex_extra` | editor/volume/series/month/pages/organization parsed from PMLR's own citation block on the same page (no extra request) — see [data-schema.md](data-schema.md#bibtex-generation) |
 
 ## Known issues
 

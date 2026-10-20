@@ -206,11 +206,18 @@ class RobustSession:
         self.rate_limited_until = time.time() + retry_after
         logger.warning(f"Rate limited for {retry_after}s")
     
-    def download_file(self, url: str, filepath: Path, **request_kwargs) -> bool:
-        """Download file with error handling."""
+    def download_file(self, url: str, filepath: Path, overwrite: bool = False,
+                      **request_kwargs) -> bool:
+        """Download file with error handling.
+
+        A valid existing PDF is kept unless ``overwrite`` is set. The new
+        file is written beside the target and only replaces it once the
+        download completes, so a failed overwrite keeps the old file.
+        """
+        partial = filepath.with_name(filepath.name + ".part")
         try:
             # Skip if file already exists
-            if filepath.exists():
+            if filepath.exists() and not overwrite:
                 try:
                     with filepath.open("rb") as handle:
                         is_valid = (filepath.stat().st_size >= 1024 and
@@ -234,7 +241,7 @@ class RobustSession:
             total_size = int(response.headers.get('content-length', 0))
             downloaded = 0
             
-            with open(filepath, 'wb') as f:
+            with open(partial, 'wb') as f:
                 for chunk in response.iter_content(chunk_size=8192):
                     if chunk:
                         f.write(chunk)
@@ -245,15 +252,16 @@ class RobustSession:
                             progress = (downloaded / total_size) * 100
                             logger.debug(f"Download progress: {progress:.1f}%")
             
+            partial.replace(filepath)
             logger.debug(f"Downloaded: {filepath.name} ({downloaded:,} bytes)")
             return True
             
         except Exception as e:
             logger.error(f"Download failed for {url}: {e}")
             # Clean up partial file
-            if filepath.exists():
+            if partial.exists():
                 try:
-                    filepath.unlink()
+                    partial.unlink()
                 except:
                     pass
             return False
@@ -445,13 +453,61 @@ def _suffix(i):
     return s
 
 
-def _build_bibtex(conf, year, title, authors, key):
+# Bibliographic fields we'll pull from a publisher-supplied BibTeX/citation
+# record when a scraper found one, keyed by the order they should appear in.
+# "booktitle"/"organization" override the static VENUE table when the source
+# has a more precise value (e.g. an edition number or a specific volume).
+_EXTRA_FIELD_ORDER = [
+    "editor", "volume", "number", "series", "pages", "month",
+    "address", "note", "doi", "isbn",
+]
+
+_BIBFIELD_RE = re.compile(
+    r'(\w+)\s*=\s*(?:\{((?:[^{}]|\{[^{}]*\})*)\}|"([^"]*)")\s*,?')
+
+# Also covers roman-numeral front-matter pages (e.g. ACL Anthology reports
+# "xl-lxxv" for some front-matter items, with a plain single hyphen already).
+_PAGE_DASH_RE = re.compile(r"(?<=[0-9ivxlcdm])[\-‐‑‒–—―](?=[0-9ivxlcdm])")
+
+
+def parse_bibtex_fields(raw: str) -> Dict[str, str]:
+    """Pull field -> value pairs out of a raw BibTeX entry (brace or quoted
+    values, one optional level of nested braces). Not a full BibTeX parser —
+    good enough for the well-formed entries publishers hand out."""
+    fields = {}
+    for match in _BIBFIELD_RE.finditer(raw):
+        key = match.group(1).lower()
+        value = match.group(2) if match.group(2) is not None else match.group(3)
+        value = re.sub(r"\s+", " ", value).strip()
+        if key not in fields:
+            fields[key] = value
+    return fields
+
+
+def normalize_bibtex_pages(raw: str) -> str:
+    """Collapse any dash between two digits (en/em-dash or hyphen) to the
+    BibTeX-conventional double hyphen, e.g. "1–21" or "1-21" -> "1--21"."""
+    return _PAGE_DASH_RE.sub("--", raw)
+
+
+def _build_bibtex(conf, year, title, authors, key, extra=None):
     etype, vfield, vvalue, org = VENUE[conf]
+    extra = extra or {}
+    vvalue = extra.get("booktitle") or vvalue
+    org = extra.get("organization") or org
+
     lines = [f"@{etype}{{{key},",
              f"  title={{{_latex_escape(title.strip())}}},",
              f"  author={{{_format_authors(authors)}}},",
-             f"  {vfield}={{{vvalue}}},",
-             f"  year={{{year}}}"]
+             f"  {vfield}={{{vvalue}}},"]
+    for field in _EXTRA_FIELD_ORDER:
+        value = extra.get(field)
+        if not value:
+            continue
+        if field == "pages":
+            value = normalize_bibtex_pages(value)
+        lines.append(f"  {field}={{{value}}},")
+    lines.append(f"  year={{{year}}}")
     if org:
         lines[-1] += ","
         lines.append(f"  organization={{{org}}}")
@@ -477,6 +533,26 @@ def _eligible(paper):
     return True
 
 
+def merge_bibtex_extra(paper, extra):
+    """Fold newly-fetched `extra` fields into paper['bibtex'], reusing the
+    cite key already present rather than recomputing keys/collisions across
+    the whole file (assign_bibtex() does that, and is deliberately *not*
+    used here — see postprocessing/backfill_bibtex_source.py). Returns True
+    if the paper was updated; False if there's no existing bibtex to key off
+    of (paper isn't eligible, e.g. missing authors) or extra is empty."""
+    if not extra:
+        return False
+    existing = paper.get("bibtex")
+    if not existing or "{" not in existing or not _eligible(paper):
+        return False
+    key = existing.split("{", 1)[1].split(",", 1)[0]
+    conf = paper["conference"].lower()
+    paper["bibtex_extra"] = extra
+    paper["bibtex"] = _build_bibtex(
+        conf, int(paper["year"]), paper["title"], paper["authors"], key, extra)
+    return True
+
+
 def assign_bibtex(papers):
     """Set a `bibtex` field on every eligible paper in the list, with cite keys
     made unique within this list. Papers missing title/authors/year are left
@@ -499,6 +575,7 @@ def assign_bibtex(papers):
         for paper, key in keyed:
             paper["bibtex"] = _build_bibtex(
                 paper["conference"].lower(), int(paper["year"]),
-                paper["title"], paper["authors"], key)
+                paper["title"], paper["authors"], key,
+                paper.get("bibtex_extra"))
 
     return papers

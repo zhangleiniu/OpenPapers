@@ -31,7 +31,7 @@ from automation.resend_notifications import (
     ResendNotificationTransport,
     recipient_fingerprints,
 )
-from postprocessing.validate_year import validate
+from postprocessing.validate_year import load_and_validate
 
 
 TARGET_VENUE = "colt"
@@ -82,19 +82,14 @@ def _clone_source(source: Path, destination: Path) -> None:
 
 
 def _independent_validation(worktree: Path) -> tuple[int, dict[str, int]]:
-    metadata = worktree / "data" / "metadata" / TARGET_VENUE \
-        / f"{TARGET_VENUE}_{TARGET_YEAR}.json"
     try:
-        papers = json.loads(metadata.read_text(encoding="utf-8"))
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        papers, issues = load_and_validate(
+            TARGET_VENUE, TARGET_YEAR, worktree / "data", level="archival"
+        )
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
         raise AgentSuccessRehearsalError(
             "successful agent result lacks readable rehearsal metadata"
         ) from exc
-    if not isinstance(papers, list) or not papers:
-        raise AgentSuccessRehearsalError(
-            "successful agent result lacks nonempty rehearsal metadata"
-        )
-    issues = validate(papers, worktree / "data", level="archival")
     if issues:
         raise AgentSuccessRehearsalError(
             f"independent archival validation failed: {sorted(issues)}"

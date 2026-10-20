@@ -2,12 +2,11 @@
 
 This page describes the deployed automation boundary. The target design and
 its component reference are in [`automation-system/`](./automation-system/README.md);
-day-to-day procedures are in
-[`automation-system/operations.md`](./automation-system/operations.md).
-Repository documentation is not proof of live health: inspect the actual
-LaunchDaemons, bounded records, and cloud schedule before an operational
-change. The dated deployment snapshot lives in
-[`automation-system/current-handoff.md`](./automation-system/current-handoff.md).
+day-to-day procedures are in `automation-system/operations.md` (host-local,
+not published). Repository documentation is not proof of live health:
+inspect the actual LaunchDaemons, bounded records, and cloud schedule before
+an operational change. The dated deployment snapshot lives in
+`automation-system/current-handoff.md` (host-local, not published).
 
 ## What runs in production
 
@@ -89,17 +88,16 @@ scrape predates enrollment can be closed with
 - `automation.agent_status`: a secret-free read-only summary CLI for
   enabled production.
 - The read-only dashboard: loopback backend (`automation.agent_dashboard`)
-  behind an authenticated NIU-private HTTPS Caddy proxy at
-  `https://archer.cs.niu.edu:8443/` (username `openpapers`; password
-  operator-held). It shows one perpetual-cycle row per catalog venue: the
+  behind an HTTPS Caddy proxy, reachable at
+  [dashboard.mustcite.com](https://dashboard.mustcite.com) via Cloudflare
+  Tunnel. It shows one perpetual-cycle row per catalog venue: the
   last held edition and next expected edition (curated dates merged with the
   control state's own estimates; `~` marks a cadence approximation), the
   scheduler's next attempt, and a color-coded countdown that rolls to the
   next edition once a collection completes. Timestamps default to
   America/Chicago with a client-side timezone selector (the page's single
   inline script; no external resource is ever loaded). It exposes no
-  control methods, paths, addresses, or credentials. Its DigiCert leaf
-  expires 2026-12-03 and is renewed manually.
+  control methods, paths, addresses, or credentials.
 
   The venue monitor badge means only “present in the tracked registry”; it is
   not live monitor-health evidence. Schema-2 date provenance and the
@@ -213,7 +211,7 @@ tampered with":
   pattern, not a hypothetical one.
 
 The staff-group read loosening on `/var/db/openpapers-production` (see
-[`current-handoff.md`](./automation-system/current-handoff.md)) was the
+`automation-system/current-handoff.md`, host-local, not published) was the
 first pass at this; the "zero group/other permission bits" pattern it left
 behind in `agent_canary.py`, `agent_status.py`,
 `control_state_migration.py`, `source_change_hints.py`,

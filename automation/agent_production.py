@@ -32,6 +32,8 @@ from automation.due_policy import DuePolicy, claim_due_agent_run
 from automation.event_dates import (
     EventDateProvider,
     EventDateTarget,
+    calendar_fallback_date,
+    check_time,
     initialize_event_dates,
 )
 from automation.local_service.service import LocalEffectOutcome, LocalEffectStatus
@@ -565,6 +567,27 @@ class AgentProductionEffect:
         there is no reliable interval to chain a successor year from for
         them; the calendar rollover remains a redundant safety net for any
         cohort venue this ever misses.
+
+        A cohort venue's edition can finish (and thus chain) at any point in
+        the year, most often well before ``rollover_month`` next widens
+        ``load_agent_targets()``'s window to include the successor year.
+        Until that rollover, the chained row sits outside every
+        ``initialize_event_dates`` call's ``unique_targets`` — genuinely
+        untouchable, not merely low-priority — for however long remains
+        until rollover. Left at the registration default (``next_check_at =
+        observed_at``), it would misreport as "due now" for that entire
+        dormant stretch and win the dashboard's
+        ``_current_target_priority`` tie-break (see
+        ``agent_dashboard._current_target_priority``), hijacking the venue's
+        Next-attempt column with a check that cannot actually run yet.
+        Backdating it to the calendar-projected estimate
+        ``_ensure_fallback_schedule`` would compute anyway — this year's
+        just-confirmed ``estimated_event_date`` shifted forward by the
+        venue's cadence — keeps the dashboard honest without touching the
+        one case where "due now" is already correct: a venue whose edition
+        finishes *after* rollover_month has already widened the window, so
+        its successor is immediately reachable and should stay due now, not
+        be pushed out to next year's estimate.
         """
         if venue_id not in self._configuration.cohort_venue_ids:
             return
@@ -574,15 +597,39 @@ class AgentProductionEffect:
             None,
         )
         interval = (venue["lifecycle"].get("interval_years") or 1) if venue else 1
+        successor_year = year + interval
+        in_window = EventDateTarget(venue_id, successor_year) \
+            in self._configuration.targets
         with ControlStateRepository(
             state_path, writer=Writer.LOCAL_CONTROL_PLANE,
             clock=lambda: observed_at,
         ) as repository:
             lease = repository.acquire_lease(_SUCCESSOR_CHAIN_OWNER_ID)
             try:
-                repository.register_event_date_target(
-                    venue_id, year + interval,
+                registration = repository.register_event_date_target(
+                    venue_id, successor_year,
                     registered_at=observed_at, lease=lease,
+                )
+                if in_window or not registration.applied:
+                    return
+                fallback = calendar_fallback_date(
+                    repository, venue_id, successor_year, interval,
+                )
+                if fallback is None:
+                    return
+                retry_at = check_time(fallback, observed_at)
+                if retry_at <= observed_at:
+                    # The projected estimate isn't actually in the future
+                    # (e.g. corrupted history) — leave the registration
+                    # default rather than violate defer's future-only
+                    # invariant.
+                    return
+                repository.defer_event_date_schedule(
+                    venue_id, successor_year,
+                    retry_at=retry_at,
+                    deferred_at=observed_at,
+                    failure_category="chained_successor_calendar_estimate",
+                    lease=lease,
                 )
             finally:
                 repository.release_lease(lease)

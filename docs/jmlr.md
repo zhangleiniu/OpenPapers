@@ -19,6 +19,7 @@ See the generated [coverage and quality report](../statistics.md).
 | `authors` | ✓ |
 | `abstract` | ✓ |
 | `pdf_url` | ✓ |
+| `bibtex_extra` | volume/number/pages fetched from the paper's own `.bib` file, linked as `[bib]` on the abstract page (one extra request) — see [data-schema.md](data-schema.md#bibtex-generation) |
 
 ## Known issues
 
