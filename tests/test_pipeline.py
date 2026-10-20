@@ -460,7 +460,10 @@ class SourceLifecycleTests(unittest.TestCase):
             "https://2026.ijcai.org/accepted-papers/?ijtrack=main-track")
 
         self.assertEqual(len(papers), 1)
-        self.assertEqual(papers[0]["id"], "2026-29")
+        self.assertEqual(papers[0]["id"], "2026-accepted-29")
+        self.assertEqual(
+            IJCAIScraper._extract_accepted_id(papers[0]["url"]),
+            "2026-accepted-29")
         self.assertEqual(papers[0]["authors"], ["Ada Lovelace"])
         self.assertEqual(papers[0]["publication_status"], "provisional")
 

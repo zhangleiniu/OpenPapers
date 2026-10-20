@@ -206,7 +206,10 @@ class IJCAIScraper(BaseScraper):
             if not pid_node or not title_node:
                 continue
             source_id = pid_node.get_text(strip=True).lstrip("#")
-            paper_id = f"{year}-{source_id}"
+            # Accepted-list numbers differ from proceedings numbers, so keep
+            # them out of the archival "{year}-{n}" ID space: the archival
+            # merge keeps a provisional ID and would otherwise collide.
+            paper_id = f"{year}-accepted-{source_id}"
             authors = [
                 node.get_text(" ", strip=True)
                 for node in item.select(".ij-author")
@@ -242,7 +245,8 @@ class IJCAIScraper(BaseScraper):
         if not match:
             return ""
         year_match = re.search(r"https://(\d{4})\.ijcai\.org", url)
-        return f"{year_match.group(1)}-{match.group(1)}" if year_match else ""
+        return (f"{year_match.group(1)}-accepted-{match.group(1)}"
+                if year_match else "")
 
     # ------------------------------------------------------------------
     # Track helpers

@@ -7,7 +7,12 @@ Archival source: `https://www.ijcai.org/proceedings/[year]/`
 For 2026, before that proceedings page exists, the scraper uses the official
 conference accepted-paper page filtered to Main Track. It provides title,
 authors, abstract, keywords, and the conference paper number, but no PDF URL;
-the resulting records are provisional.
+the resulting records are provisional. Their IDs are
+`{year}-accepted-{n}` because accepted-list numbers differ from proceedings
+numbers; the earlier `{year}-{n}` form collided with archival IDs once the
+archival merge kept them. IJCAI 2026's canonical records were renumbered to
+the proceedings `{year}-{n}` form on 2026-10-19 (the accepted-list number is
+kept in `source_ids.ijcai_accepted_list`).
 
 ## Dataset coverage
 
