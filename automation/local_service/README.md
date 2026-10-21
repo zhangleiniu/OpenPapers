@@ -52,8 +52,9 @@ state before mutable work. At or after 08:00 America/Chicago it durably claims
 one daily monitor run, checks the registered sources, and sends change/error
 notifications through TLS SMTP. The agent composition separately applies its
 event-date and run due policies against control state. Exact replay does not repeat the
-daily monitor or its emails; an interrupted active claim remains ambiguous and
-blocks work.
+daily monitor or its emails. A source error is emailed and the daily claim
+still completes, so one unreachable source does not block later wakes; only an
+interrupted active claim remains ambiguous and blocks work.
 
 The production command now validates the retained baseline v1 boundary plus an
 agent-control v2 marker/config, the exact current control schema, a pinned clean no-remote

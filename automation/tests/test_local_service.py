@@ -813,19 +813,58 @@ class ProductionControlTests(LocalServiceFixture):
         self.assertEqual(result.status, LocalEffectStatus.NO_DUE_WORK)
         self.assertEqual(monitor_calls, [])
 
-    def test_failure_retains_ambiguity_and_blocks_effect_replay(self):
+    def test_source_error_notifies_once_and_completes_daily_claim(self):
+        calls = []
+        notifier = FakeNotifier()
+
+        def monitor(registry_path, state_path):
+            calls.append((registry_path, state_path))
+            return self._events(changed=False, error=True)
+
+        effect = ProductionMonitorEffect(
+            repository_root=ROOT,
+            monitor=monitor,
+            notifier=notifier,
+        )
+        first = effect.run(
+            state_path=self.config.state_path,
+            execution_root=self.external,
+            scheduled_for=NOW.replace(minute=17),
+            observed_at=NOW,
+        )
+        later = NOW.replace(hour=NOW.hour + 1)
+        replay = effect.run(
+            state_path=self.config.state_path,
+            execution_root=self.external,
+            scheduled_for=later.replace(minute=17),
+            observed_at=later,
+        )
+
+        self.assertEqual(first.status, LocalEffectStatus.NO_DUE_WORK)
+        self.assertEqual(replay.status, LocalEffectStatus.NO_DUE_WORK)
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(len(notifier.calls), 1)
+        self.assertEqual(notifier.calls[0][0]["status"], "error")
+        journal = self.internal / "monitor" / "production-wakeups.sqlite3"
+        with sqlite3.connect(journal) as connection:
+            rows = connection.execute(
+                "SELECT status FROM production_wakeup"
+            ).fetchall()
+        self.assertEqual(rows, [("completed",)])
+
+    def test_interrupted_monitor_retains_ambiguity_and_blocks_effect_replay(self):
         calls = []
 
         def monitor(registry_path, state_path):
             calls.append((registry_path, state_path))
-            return self._events(error=True)
+            raise RuntimeError("monitor interrupted")
 
         effect = ProductionMonitorEffect(
             repository_root=ROOT,
             monitor=monitor,
             notifier=FakeNotifier(),
         )
-        with self.assertRaisesRegex(ValueError, "source errors"):
+        with self.assertRaisesRegex(RuntimeError, "interrupted"):
             effect.run(
                 state_path=self.config.state_path,
                 execution_root=self.external,

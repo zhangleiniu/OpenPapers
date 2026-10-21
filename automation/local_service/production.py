@@ -577,8 +577,10 @@ class ProductionMonitorEffect:
                         configuration=configuration,
                         password=secrets.smtp_password,
                     )
-            if any(event.get("status") == "error" for event in events):
-                raise ProductionControlError("production monitor reported source errors")
+            # A source error is a known, already-notified outcome, not an
+            # ambiguous one: complete the claim so one unreachable source
+            # (e.g. a venue site under maintenance) cannot wedge every later
+            # wake. Only an interrupted run leaves the claim active.
             record_source_change_hints(
                 journal_path, events, observed_at=observed_at
             )
