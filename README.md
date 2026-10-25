@@ -261,9 +261,15 @@ providing the compute resources used in this project.
 
 The source code in this repository is licensed under the [MIT License](./LICENSE).
 
-The scraper output is not covered by the software license. This project does
-not claim ownership of paper metadata, abstracts, or PDFs retrieved from
-public conference and publisher websites. Those materials remain subject to
+Data created by this project is released under the
+[Creative Commons Attribution 4.0 International License (CC BY 4.0)](https://creativecommons.org/licenses/by/4.0/):
+the venue registry, main-track classifications, verification records against
+the official proceedings, per-paper provenance (source, retrieval date, parser
+path) and the coverage and quality report.
+
+Material retrieved from conference and publisher websites is not covered by
+either licence. This project does not claim ownership of paper metadata,
+abstracts, or PDFs retrieved from public conference and publisher websites. Those materials remain subject to
 the rights and terms of their respective authors, publishers, and source
 websites.
 
