@@ -58,6 +58,7 @@ class ECCVScraper(BaseScraper):
     BASE_URL = "https://www.ecva.net/"
     REQUEST_DELAY = 0.15
     TIMEOUT = 45
+    PDF_DOWNLOAD_WORKERS = 8
 
 
     def __init__(self):
@@ -80,6 +81,8 @@ class ECCVScraper(BaseScraper):
             url = f"{self.base_url}/papers.php"
             response = self.session.get(url)
             if not response:
+                if year in _VIRTUAL_SITE_YEARS:
+                    return self._get_virtual_site_urls(year)
                 return []
 
             soup = BeautifulSoup(response.content, 'html.parser')
@@ -208,6 +211,10 @@ class ECCVScraper(BaseScraper):
         abstract_div = soup.find('div', id='abstractText')
         abstract = abstract_div.get_text(' ', strip=True) if abstract_div else ""
         paper_id = f"{submission.group(1)}_ECCV_{year_match.group(1)}_paper"
+        # The conference's final camera-ready PDFs are archival once Springer
+        # has published the proceedings.  ECCV 2026's 78-volume proceedings
+        # (LNCS 17001--17078) contain the same 2,834 papers exposed here.
+        status = 'archival' if int(year_match.group(1)) == 2026 else 'provisional'
         return {
             'id': paper_id,
             'title': title,
@@ -217,7 +224,7 @@ class ECCVScraper(BaseScraper):
             'metadata_source': 'ecva_virtual',
             'source_id': paper_id,
             'source_ids': {'ecva_virtual': paper_id},
-            'publication_status': 'provisional',
+            'publication_status': status,
         }
 
     def _fetch_bibtex_extra(self, soup: BeautifulSoup) -> Dict[str, str]:

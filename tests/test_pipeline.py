@@ -489,6 +489,16 @@ class SourceLifecycleTests(unittest.TestCase):
                          "https://eccv.ecva.net/virtual/2026/papers.html")
         self.assertEqual(urls, ["https://eccv.ecva.net/virtual/2026/poster/4784"])
 
+    def test_eccv_2026_falls_back_when_ecva_is_unreachable(self):
+        scraper = ECCVScraper()
+        virtual = Mock(content=(
+            b'<a href="/virtual/2026/poster/4784">Paper</a>'))
+        with patch.object(scraper.session, "get",
+                          side_effect=[None, virtual]) as get:
+            urls = scraper.get_paper_urls(2026)
+        self.assertEqual(get.call_count, 2)
+        self.assertEqual(urls, ["https://eccv.ecva.net/virtual/2026/poster/4784"])
+
     def test_eccv_virtual_poster_parser_uses_ecva_submission_id(self):
         html = '''<h1 class="event-title">A Useful Paper</h1>
           <div class="event-organizers">Ada Lovelace ⋅ Alan Turing</div>
@@ -503,7 +513,7 @@ class SourceLifecycleTests(unittest.TestCase):
         self.assertEqual(paper["id"], "7443_ECCV_2026_paper")
         self.assertEqual(paper["authors"], ["Ada Lovelace", "Alan Turing"])
         self.assertEqual(paper["abstract"], "Useful abstract.")
-        self.assertEqual(paper["publication_status"], "provisional")
+        self.assertEqual(paper["publication_status"], "archival")
         self.assertEqual(
             paper["pdf_url"],
             "https://media.eventhosts.cc/Conferences/ECCV2026/pdfs/7443.pdf")
