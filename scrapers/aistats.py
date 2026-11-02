@@ -44,6 +44,8 @@ class AISTATSScraper(BaseScraper):
     def __init__(self):
         super().__init__('aistats')
         self._volume_cache: Dict[int, str] = {
+            # PMLR published this volume before adding it to the main index.
+            2026: 'v300',
             2025: 'v258',
             # MLR Press "Reissue Series" - fixed volumes for years before
             # AISTATS had its own regular PMLR numbering.

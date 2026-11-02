@@ -4,13 +4,13 @@
 
 Archival source: `https://proceedings.mlr.press/`
 
-For 2026, before the PMLR volume is published, the scraper falls back to the
-official OpenReview invitation
-`aistats.org/AISTATS/2026/Conference/-/Submission`. OpenReview currently exposes
-complete public metadata but generally not a PDF URL, so the year remains
-provisional until PMLR publication.
+For 2026, PMLR published the proceedings as volume `v300` on August 30, 2026.
+The mapping is pinned because the volume was available before it appeared on
+the PMLR main index. If a future volume has not yet been published, the scraper
+can fall back to an explicitly configured official OpenReview invitation.
 
 Known volume mappings (others discovered dynamically from the MLR Press main page):
+- 2026: `v300`
 - 2025: `v258`
 - 1995: `r0`, 1997: `r1`, 1999: `r2`, 2001: `r3`, 2003: `r4`, 2005: `r5`
   (MLR Press "Reissue Series" — pre-dates AISTATS' regular `v`-numbered PMLR
