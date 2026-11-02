@@ -566,16 +566,25 @@ def assign_bibtex(papers):
         bk = _base_cite_key(conf, int(p["year"]), p["title"], p["authors"])
         groups[bk].append(p)
 
-    for bk, group in groups.items():
-        if len(group) == 1:
-            keyed = [(group[0], bk)]
-        else:
-            ordered = sorted(group, key=lambda p: (str(p.get("id", "")), p["title"]))
-            keyed = [(p, bk + _suffix(i)) for i, p in enumerate(ordered)]
-        for paper, key in keyed:
-            paper["bibtex"] = _build_bibtex(
-                paper["conference"].lower(), int(paper["year"]),
-                paper["title"], paper["authors"], key,
-                paper.get("bibtex_extra"))
+    # A suffixed key can equal another paper's unsuffixed base key ("M+" ->
+    # wang2025m + "a" vs "MA-LoT" -> wang2025ma), so unsuffixed keys are
+    # reserved first and suffixes skip any key already taken.
+    used = {bk for bk, group in groups.items() if len(group) == 1}
+    keyed = [(group[0], bk) for bk, group in groups.items() if len(group) == 1]
+    for bk in sorted(bk for bk, group in groups.items() if len(group) > 1):
+        ordered = sorted(groups[bk], key=lambda p: (str(p.get("id", "")), p["title"]))
+        i = 0
+        for paper in ordered:
+            while bk + _suffix(i) in used:
+                i += 1
+            used.add(bk + _suffix(i))
+            keyed.append((paper, bk + _suffix(i)))
+            i += 1
+
+    for paper, key in keyed:
+        paper["bibtex"] = _build_bibtex(
+            paper["conference"].lower(), int(paper["year"]),
+            paper["title"], paper["authors"], key,
+            paper.get("bibtex_extra"))
 
     return papers

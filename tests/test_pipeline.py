@@ -50,6 +50,23 @@ class BibtexTests(unittest.TestCase):
         self.assertIn("doi={10.1/x}", paper["bibtex"])
         self.assertEqual(paper["bibtex_extra"], {"pages": "1-21", "doi": "10.1/x"})
 
+    def test_assign_bibtex_suffix_never_collides_with_another_base_key(self):
+        # "M+" and "Memory" both give base key wang2025m, so they are
+        # suffixed; "MA-LoT" alone gives wang2025ma, which suffix "a" on the
+        # first group would otherwise duplicate (seen in ICML 2025).
+        def paper(pid, title):
+            return {"id": pid, "title": title, "authors": ["Yu Wang"],
+                    "year": 2025, "conference": "icml"}
+        papers = [paper("p1", "M+: Extending Memory"),
+                  paper("p2", "M: Memory Again"),
+                  paper("p3", "MA-LoT: Lean Proofs")]
+
+        assign_bibtex(papers)
+
+        keys = [p["bibtex"].split("{", 1)[1].split(",", 1)[0] for p in papers]
+        self.assertEqual(len(set(keys)), 3, keys)
+        self.assertEqual(keys[2], "wang2025ma")
+
     def test_merge_bibtex_extra_no_op_without_existing_bibtex(self):
         paper = {"id": "p2", "title": "No Bibtex Yet", "authors": [], "year": 2026,
                   "conference": "acl"}
