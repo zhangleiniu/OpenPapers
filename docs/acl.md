@@ -47,10 +47,8 @@ aborted with instructions to label manually.
 
 ## Known issues
 
-- **Track scope drift (pending cleanup)**: before the industry-track policy
-  was fixed (2026-11), ACL 2023 and 2025 omitted the industry track (2024
-  lists none on the Anthology); 2026 includes it. Those two years still need
-  an industry backfill.
+- **Track policy cleanup (2026-11-02)**: the industry track was added to
+  2023 and 2025 (2024 lists none on the Anthology).
 - Track classification requires Vertex AI ADC on an uncached year. If it
   fails, the generated all-false cache must be reviewed manually before rerun.
 - ACL 2026 source-page abstract gaps were recovered from GROBID and carry

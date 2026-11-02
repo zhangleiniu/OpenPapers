@@ -45,14 +45,16 @@ aborted with instructions to label manually.
 
 ## Known issues
 
-- **Track scope drift (pending cleanup)**: before the policy above was fixed
-  (2026-11), per-year model labels included Findings for 2020–2022 and 2025
-  and omitted the industry track for 2022–2025. Those canonical years still
-  reflect the old labels until they are cleaned up (drop Findings, backfill
-  industry); 2026 already follows the policy.
+- **Track policy cleanup (2026-11-02)**: Findings records were removed from
+  2020–2022 and 2025 and the industry track was added to 2022–2025, so every
+  year follows the policy above.
 - **2022, `2022.emnlp-main.804`**: ACL Anthology retains the official metadata
   but exposes no PDF URL. The paper is retained and uses arXiv `2112.10684`,
-  recorded with `pdf_source: arxiv`.
+  recorded with `pdf_source: arxiv` and `pdf_url`
+  `https://arxiv.org/pdf/2112.10684`.
+- **2024, `2024.emnlp-industry.61` and `.67`**: the Anthology page has no
+  abstract; it was copied from the PDF's first page (`abstract_source:
+  pdf_text`).
 - **Pre-~2015 years generally have no `abstract`** on the Anthology source
   page (not a scraping bug) — records are saved with `abstract: ""`. Recover
   later via `postprocessing/backfill_missing_metadata_fields.py --abstract`

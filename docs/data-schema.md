@@ -20,7 +20,8 @@ pipeline adds these common fields:
 
 Optional provenance fields are `abstract_source` and `authors_source`. Values
 such as `grobid` or `nougat` mean the source page lacked the field and it was
-recovered from processed PDF output. Venue scrapers may add fields such as
+recovered from processed PDF output; `pdf_text` means it was copied from the
+PDF's text layer by hand. Venue scrapers may add fields such as
 `keywords`, `track`, `status`, `issue`, or `section`.
 
 ## BibTeX generation
