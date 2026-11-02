@@ -9,6 +9,7 @@ from unittest.mock import Mock, patch
 
 import main
 from automation.monitor import Monitor, StateStore, load_registry, save_snapshot
+from scrapers.acl_anthology import ACLAnthologyScraper
 from scrapers.base import BaseScraper
 from scrapers.eccv import ECCVScraper
 from scrapers.icml import ICMLScraper
@@ -498,6 +499,25 @@ class SourceLifecycleTests(unittest.TestCase):
             urls = scraper.get_paper_urls(2026)
         self.assertEqual(get.call_count, 2)
         self.assertEqual(urls, ["https://eccv.ecva.net/virtual/2026/poster/4784"])
+
+    def test_acl_anthology_never_selects_findings_tracks(self):
+        with patch("scrapers.acl_anthology.create_gemini_model",
+                   return_value=None):
+            scraper = ACLAnthologyScraper("emnlp")
+        main_track = "proceedings of the 2025 conference on empirical methods"
+        industry = main_track + ": industry track"
+        findings = ("findings of the association for computational "
+                    "linguistics: emnlp 2025")
+        with tempfile.TemporaryDirectory() as tmp:
+            scraper._cache_path = Path(tmp) / "emnlp_tracks.json"
+            scraper._cache_path.write_text(json.dumps({"2025": {"tracks": [
+                {"name": main_track, "is_full_regular": True},
+                {"name": industry, "is_full_regular": True},
+                {"name": findings, "is_full_regular": True},
+            ]}}))
+            tracks = scraper._get_relevant_tracks(
+                2025, [main_track, industry, findings])
+        self.assertEqual(tracks, [main_track, industry])
 
     def test_eccv_virtual_poster_parser_uses_ecva_submission_id(self):
         html = '''<h1 class="event-title">A Useful Paper</h1>

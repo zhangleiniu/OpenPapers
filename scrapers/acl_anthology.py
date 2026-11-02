@@ -31,8 +31,8 @@ of the named conference itself.
 Mark is_full_regular as true for: main conference long papers, short papers,
 and industry track papers published as part of the named conference.
 
-Mark is_full_regular as false for: workshops, tutorials, tutorial abstracts,
-student research workshops, system demonstrations, shared
+Mark is_full_regular as false for: Findings volumes, workshops, tutorials,
+tutorial abstracts, student research workshops, system demonstrations, shared
 tasks, and co-located events not part of the named conference.
 
 Respond with a JSON object only, no explanation, no markdown fences.
@@ -52,6 +52,10 @@ class ACLAnthologyScraper(BaseScraper):
     BASE_URL = "https://aclanthology.org"
     REQUEST_DELAY = 0.15
     TIMEOUT = 45
+    # ACL Anthology serves independent static PDF files. Keep request starts
+    # rate-limited by RobustSession while allowing transfers to overlap when
+    # a metadata-only first pass is resumed for PDF download.
+    PDF_DOWNLOAD_WORKERS = 6
 
     def __init__(self, conference: str):
         super().__init__(conference)
@@ -203,10 +207,12 @@ class ACLAnthologyScraper(BaseScraper):
             labeled[year_str] = year_data
             self._save_labeled(labeled)
 
+        # Findings is a separate publication, never part of the main
+        # proceedings, whatever an older cache entry or the model says.
         return [
             t["name"]
             for t in labeled[year_str]["tracks"]
-            if t.get("is_full_regular")
+            if t.get("is_full_regular") and "findings" not in t["name"].lower()
         ]
 
     def _auto_label(self, year: int, track_names: list) -> Optional[dict]:

@@ -22,7 +22,11 @@ onward.
 
 ACL Anthology event pages list many volumes per year — main proceedings,
 workshops, tutorials, findings, system demonstrations, and co-located events.
-Only main-conference proceedings are scraped.
+Only the named conference's own proceedings are scraped: main (or
+long/short) papers plus the industry track. Findings volumes are a separate
+publication and are never included (enforced in code, regardless of the
+cached labels); system demonstrations, tutorials, student research
+workshops, workshops, and co-located events are excluded too.
 
 On first run for a given year, the full track list is sent to Gemini (via
 Vertex AI) for classification. The result is cached in

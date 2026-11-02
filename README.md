@@ -58,10 +58,10 @@ partially included where available.
 - **AISTATS** (1995, 1997, 1999, 2001, 2003, 2005, 2009–2025; provisional: 2026)
 - **IJCAI** (2017–2026)
 - **ACL** (1979–2026)
-- **EMNLP** (1996–2025)
+- **EMNLP** (1996–2026)
 - **NAACL** (2000–2001, 2003–2004, 2006–2007, 2009–2010, 2012–2013, 2015–2016, 2018–2019, 2021–2022, 2024–2025)
 - **ICCV** (2013, 2015, 2017, 2019, 2021, 2023, 2025)
-- **ECCV** (2018, 2020, 2022, 2024; provisional: 2026)
+- **ECCV** (2018, 2020, 2022, 2024, 2026)
 <!-- END GENERATED COVERAGE -->
 
 [Full coverage and quality report](./statistics.md) — regenerate with

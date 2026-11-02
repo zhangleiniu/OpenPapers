@@ -17,7 +17,11 @@ edition, confirmed by direct fetch.
 
 ACL Anthology event pages list many volumes per year — main proceedings,
 workshops, tutorials, findings, system demonstrations, and co-located events.
-Only main-conference proceedings are scraped.
+Only the named conference's own proceedings are scraped: main (or
+long/short) papers plus the industry track. Findings volumes are a separate
+publication and are never included (enforced in code, regardless of the
+cached labels); system demonstrations, tutorials, student research
+workshops, workshops, and co-located events are excluded too.
 
 On first run for a given year, the full track list is sent to Gemini (via
 Vertex AI) for classification. The result is cached in
@@ -41,6 +45,11 @@ aborted with instructions to label manually.
 
 ## Known issues
 
+- **Track scope drift (pending cleanup)**: before the policy above was fixed
+  (2026-11), per-year model labels included Findings for 2020–2022 and 2025
+  and omitted the industry track for 2022–2025. Those canonical years still
+  reflect the old labels until they are cleaned up (drop Findings, backfill
+  industry); 2026 already follows the policy.
 - **2022, `2022.emnlp-main.804`**: ACL Anthology retains the official metadata
   but exposes no PDF URL. The paper is retained and uses arXiv `2112.10684`,
   recorded with `pdf_source: arxiv`.

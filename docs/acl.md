@@ -19,7 +19,11 @@ currently covered.
 
 ACL Anthology event pages list many volumes per year — main proceedings,
 workshops, tutorials, findings, system demonstrations, and co-located events.
-**Only main-conference proceedings are scraped**.
+Only the named conference's own proceedings are scraped: main (or
+long/short) papers plus the industry track. Findings volumes are a separate
+publication and are never included (enforced in code, regardless of the
+cached labels); system demonstrations, tutorials, student research
+workshops, workshops, and co-located events are excluded too.
 
 On first run for a given year, the full track list is sent to Gemini (via
 Vertex AI) for classification. The result is cached in
@@ -43,6 +47,10 @@ aborted with instructions to label manually.
 
 ## Known issues
 
+- **Track scope drift (pending cleanup)**: before the industry-track policy
+  was fixed (2026-11), ACL 2023 and 2025 omitted the industry track (2024
+  lists none on the Anthology); 2026 includes it. Those two years still need
+  an industry backfill.
 - Track classification requires Vertex AI ADC on an uncached year. If it
   fails, the generated all-false cache must be reviewed manually before rerun.
 - ACL 2026 source-page abstract gaps were recovered from GROBID and carry
