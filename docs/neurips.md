@@ -49,3 +49,16 @@ See the generated [coverage and quality report](../statistics.md).
   is derived from the `site` field by replacing `/forum?` with `/pdf?`.
   Once papers.nips.cc publishes the proceedings for a given year, the scraper
   will automatically use that instead of papercopilot.
+- **2025 partial proceedings and Creative AI Track**: as of 2026-11-03,
+  papers.nips.cc lists only 64 NeurIPS 2025 papers, all from the Creative AI
+  Track (`{hash}-Abstract-Creative_AI_Track.html`), so the resumed scraper now
+  uses that listing instead of papercopilot. Those 64 papers are included
+  (maintainer decision, 2026-11-03) alongside the 5,811 papercopilot
+  main-track records, with hash IDs. When papers.nips.cc adds the main track,
+  its records match the existing OpenReview-ID records by title and first
+  author and are merged into them rather than duplicated.
+- **2025, `1K28gV5MeF`**: the stored PDF is truncated (no trailing `%%EOF`,
+  likely an interrupted download). As of 2026-11-03, OpenReview answers PDF
+  requests with a "Verifying your browser" challenge, which the scraper does
+  not bypass, so the file stays flagged as invalid until the proceedings PDF
+  or another verified copy is available.
