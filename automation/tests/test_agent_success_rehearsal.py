@@ -66,7 +66,7 @@ class AgentSuccessRehearsalTests(unittest.TestCase):
             metadata.mkdir(parents=True)
             papers.mkdir(parents=True)
             pdf = papers / "paper.pdf"
-            pdf.write_bytes(b"%PDF-" + b"x" * 1024)
+            pdf.write_bytes(b"%PDF-" + b"x" * 1024 + b"\n%%EOF\n")
             payload = [{
                 "id": "paper", "title": "Paper", "authors": ["Author"],
                 "year": 2011, "conference": "COLT", "url": "https://example.test",

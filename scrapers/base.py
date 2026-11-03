@@ -9,7 +9,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Dict, Optional
 import logging
 
-from utils import RobustSession, save_papers, load_papers, get_paper_filename, assign_bibtex
+from utils import (RobustSession, save_papers, load_papers, get_paper_filename,
+                   assign_bibtex, pdf_file_problem)
 from config import (DATA_ROOT, DEFAULT_REQUEST_DELAY, DEFAULT_RETRY_ATTEMPTS,
                     DEFAULT_TIMEOUT, PAPERS_DIR)
 
@@ -302,10 +303,7 @@ class BaseScraper(ABC):
         relative = pdf_path[5:] if pdf_path.startswith("data/") else pdf_path
         path = DATA_ROOT / relative
         try:
-            if path.stat().st_size < 1024:
-                return False
-            with path.open("rb") as handle:
-                return handle.read(5) == b"%PDF-"
+            return pdf_file_problem(path, min_size=1024) is None
         except OSError:
             return False
 

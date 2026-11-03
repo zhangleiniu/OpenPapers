@@ -41,3 +41,13 @@ All available years are listed on a single page at
 - **2026 source**: Springer's proceedings are subscription-gated and ECVA's
   mirror has not yet added 2026, so metadata and freely downloadable final
   camera-ready PDFs come from the official virtual site above.
+- **2026 truncated source PDFs**: some `media.eventhosts.cc` PDFs are
+  truncated at the source (no trailing `%%EOF`; the served bytes are the
+  whole file). `_PDF_URL_OVERRIDES` in `scrapers/eccv.py` points these at a
+  version-pinned replacement verified as the camera-ready (same authors and
+  abstract, ECCV/LNCS format): `7104` → arXiv `2602.23290v2` (includes the
+  supplementary) and `5826` → arXiv `2607.29463v1`. As of 2026-11-03, `189`,
+  `1507`, `4160`, `7569` and `12161` are also truncated at the source with no
+  camera-ready replacement found (arXiv has only earlier preprints of `1507`
+  and `4160`, and no copy of the others); they remain flagged as invalid PDFs
+  until ECVA publishes 2026 or a verified copy appears.

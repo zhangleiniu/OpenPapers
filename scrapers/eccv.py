@@ -50,6 +50,19 @@ _VIRTUAL_SITE_YEARS = {2026}
 _VIRTUAL_POSTER_RE = re.compile(r'^/virtual/(\d{4})/poster/\d+$')
 _SUBMISSION_PDF_RE = re.compile(r'/(\d+)\.pdf$')
 
+# Papers whose source PDF is broken (truncated, no trailing %%EOF) and whose
+# replacement was verified to be the camera-ready version: same authors and
+# abstract as the official record, ECCV/LNCS format. Version-pinned so the
+# bytes cannot silently change.
+_PDF_URL_OVERRIDES = {
+    # media.eventhosts.cc .../7104.pdf is truncated at the source; arXiv v2
+    # is the camera-ready with the supplementary appended.
+    '7104_ECCV_2026_paper': 'https://arxiv.org/pdf/2602.23290v2',
+    # media.eventhosts.cc .../5826.pdf is truncated at the source; arXiv v1
+    # is labelled "ECCV 2026" by its authors.
+    '5826_ECCV_2026_paper': 'https://arxiv.org/pdf/2607.29463v1',
+}
+
 
 class ECCVScraper(BaseScraper):
     """ECCV conference scraper using ecva.net."""
@@ -109,7 +122,30 @@ class ECCVScraper(BaseScraper):
             return []
 
     def parse_paper(self, url: str) -> Optional[Dict]:
-        """Parse a single ECCV paper from its ecva.net page."""
+        """Parse a single ECCV paper, applying any verified PDF override."""
+        paper = self._parse_paper(url)
+        if paper:
+            self._apply_pdf_override(paper)
+        return paper
+
+    def download_pdf(self, paper: Dict, year: int,
+                     overwrite: bool = False) -> bool:
+        """Download a paper's PDF, from its verified override if it has one.
+
+        Existing records are resumed without being re-parsed, so the override
+        is also applied here; their broken local file fails the PDF check
+        and is replaced by the retry pass.
+        """
+        self._apply_pdf_override(paper)
+        return super().download_pdf(paper, year, overwrite=overwrite)
+
+    @staticmethod
+    def _apply_pdf_override(paper: Dict) -> None:
+        replacement = _PDF_URL_OVERRIDES.get(paper.get('id'))
+        if replacement:
+            paper['pdf_url'] = replacement
+
+    def _parse_paper(self, url: str) -> Optional[Dict]:
         if '/virtual/' in url:
             return self._parse_virtual_poster(url)
         try:

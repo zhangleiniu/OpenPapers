@@ -464,7 +464,7 @@ def _valid_paper(venue_id, year):
 
 
 def _write_scrape_output(cwd, venue_id, year, *, include_pdf=True,
-                          pdf_bytes=b"%PDF-" + b"x" * 1024):
+                          pdf_bytes=b"%PDF-" + b"x" * 1024 + b"\n%%EOF\n"):
     metadata_dir = cwd / "data" / "metadata" / venue_id
     papers_dir = cwd / "data" / "papers" / venue_id / str(year)
     metadata_dir.mkdir(parents=True)

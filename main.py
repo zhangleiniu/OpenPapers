@@ -31,7 +31,7 @@ from scrapers.naacl import NAACLScraper
 from scrapers.iccv import ICCVScraper
 from scrapers.eccv import ECCVScraper
 from config import DATA_ROOT, LOG_FILE
-from utils import assign_bibtex, save_papers
+from utils import assign_bibtex, pdf_file_problem, save_papers
 
 # Configure logging
 logging.basicConfig(
@@ -129,9 +129,8 @@ def completeness_issues(papers, require_pdfs: bool = True,
                 missing_file += 1
                 continue
             try:
-                with path.open("rb") as handle:
-                    if handle.read(5) != b"%PDF-":
-                        invalid_pdf += 1
+                if pdf_file_problem(path) is not None:
+                    invalid_pdf += 1
             except OSError:
                 missing_file += 1
         issues.update(pdf_path=missing_path, pdf_file=missing_file,

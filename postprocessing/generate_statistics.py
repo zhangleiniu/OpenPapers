@@ -13,6 +13,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from config import DATA_ROOT, METADATA_DIR  # noqa: E402
+from utils import pdf_file_problem  # noqa: E402
 
 NAMES = {
     "neurips": "NeurIPS", "icml": "ICML", "iclr": "ICLR", "aaai": "AAAI",
@@ -61,13 +62,9 @@ def scan(metadata_root: Path, data_root: Path):
                 row["missing_pdfs"] += 1
                 continue
             try:
-                if pdf.stat().st_size < 1024:
+                if pdf_file_problem(pdf, min_size=1024) is not None:
                     row["invalid_pdfs"] += 1
                     continue
-                with pdf.open("rb") as handle:
-                    if handle.read(5) != b"%PDF-":
-                        row["invalid_pdfs"] += 1
-                        continue
                 row["pdfs"] += 1
             except OSError:
                 row["invalid_pdfs"] += 1

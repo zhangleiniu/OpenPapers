@@ -226,6 +226,17 @@ class CompletenessTests(unittest.TestCase):
 
         self.assertEqual(issues, {"abstract": 1, "invalid_pdf": 1})
 
+    def test_truncated_pdf_is_incomplete(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            pdf = root / "papers/acl/2026/p.pdf"
+            pdf.parent.mkdir(parents=True)
+            pdf.write_bytes(b"%PDF-1.7\n" + b"x" * 4096)
+            with patch.object(main, "DATA_ROOT", root):
+                issues = main.completeness_issues([self._complete_paper()])
+
+        self.assertEqual(issues, {"invalid_pdf": 1})
+
     def test_metadata_level_accepts_provisional_record_without_pdf(self):
         paper = self._complete_paper()
         paper.update(
@@ -555,6 +566,33 @@ class SourceLifecycleTests(unittest.TestCase):
             paper["pdf_url"],
             "https://media.eventhosts.cc/Conferences/ECCV2026/pdfs/7443.pdf")
 
+    def test_eccv_pdf_override_replaces_broken_source_pdf(self):
+        scraper = ECCVScraper()
+        html = b'''<h1 class="event-title">LineGraph2Road</h1>
+          <div class="event-organizers">Zhengyang Wei</div>
+          <a href="https://media.eventhosts.cc/Conferences/ECCV2026/pdfs/7104.pdf">
+            Paper PDF</a>'''
+        with patch.object(scraper.session, "get",
+                          return_value=Mock(content=html)):
+            paper = scraper.parse_paper(
+                "https://eccv.ecva.net/virtual/2026/poster/4703")
+        self.assertEqual(paper["id"], "7104_ECCV_2026_paper")
+        self.assertEqual(paper["pdf_url"], "https://arxiv.org/pdf/2602.23290v2")
+
+        # A resumed record is not re-parsed; the download still uses the
+        # override.
+        stored = {"id": "7104_ECCV_2026_paper", "title": "LineGraph2Road",
+                  "pdf_url": "https://media.eventhosts.cc/Conferences/"
+                             "ECCV2026/pdfs/7104.pdf"}
+        with tempfile.TemporaryDirectory() as temp_dir, \
+                patch("scrapers.base.PAPERS_DIR", Path(temp_dir)), \
+                patch.object(scraper.session, "download_file",
+                             return_value=True) as download:
+            self.assertTrue(scraper.download_pdf(stored, 2026))
+        self.assertEqual(download.call_args.args[0],
+                         "https://arxiv.org/pdf/2602.23290v2")
+        self.assertEqual(stored["pdf_url"], "https://arxiv.org/pdf/2602.23290v2")
+
     def test_eccv_virtual_poster_without_pdf_is_rejected(self):
         html = b'<h1 class="event-title">A Useful Paper</h1>'
         self.assertIsNone(ECCVScraper._parse_virtual_poster_html(
@@ -605,8 +643,8 @@ class SourceLifecycleTests(unittest.TestCase):
         from utils import RobustSession
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "p.pdf"
-            old = b"%PDF-1.7 provisional" + b"x" * 2048
-            new = b"%PDF-1.7 camera-ready" + b"y" * 2048
+            old = b"%PDF-1.7 provisional" + b"x" * 2048 + b"\n%%EOF\n"
+            new = b"%PDF-1.7 camera-ready" + b"y" * 2048 + b"\n%%EOF\n"
             path.write_bytes(old)
             session = RobustSession(delay=0)
             response = Mock(headers={},
@@ -621,11 +659,46 @@ class SourceLifecycleTests(unittest.TestCase):
             self.assertEqual(path.read_bytes(), new)
             self.assertFalse(path.with_name("p.pdf.part").exists())
 
+    def test_truncated_download_is_rejected_and_keeps_existing_pdf(self):
+        from utils import RobustSession
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "p.pdf"
+            old = b"%PDF-1.7 provisional" + b"x" * 2048 + b"\n%%EOF\n"
+            path.write_bytes(old)
+            truncated = b"%PDF-1.7 camera-ready" + b"y" * 4096
+            session = RobustSession(delay=0)
+            response = Mock(headers={},
+                            iter_content=Mock(return_value=[truncated]))
+            with patch.object(session, "get", return_value=response):
+                self.assertFalse(session.download_file(
+                    "https://x/p.pdf", path, overwrite=True))
+            self.assertEqual(path.read_bytes(), old)
+            self.assertFalse(path.with_name("p.pdf.part").exists())
+
+            new_path = Path(temp_dir) / "new.pdf"
+            with patch.object(session, "get", return_value=response):
+                self.assertFalse(session.download_file(
+                    "https://x/new.pdf", new_path))
+            self.assertFalse(new_path.exists())
+
+    def test_invalid_existing_pdf_is_replaced_by_valid_download(self):
+        from utils import RobustSession
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "p.pdf"
+            path.write_bytes(b"%PDF-1.7 truncated" + b"x" * 4096)
+            new = b"%PDF-1.7 camera-ready" + b"y" * 2048 + b"\n%%EOF\n"
+            session = RobustSession(delay=0)
+            response = Mock(headers={}, iter_content=Mock(return_value=[new]))
+            with patch.object(session, "get", return_value=response) as get:
+                self.assertTrue(session.download_file("https://x/p.pdf", path))
+            get.assert_called_once()
+            self.assertEqual(path.read_bytes(), new)
+
     def test_failed_overwrite_keeps_existing_pdf(self):
         from utils import RobustSession
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "p.pdf"
-            old = b"%PDF-1.7 provisional" + b"x" * 2048
+            old = b"%PDF-1.7 provisional" + b"x" * 2048 + b"\n%%EOF\n"
             path.write_bytes(old)
             session = RobustSession(delay=0)
             response = Mock(headers={}, iter_content=Mock(
@@ -645,9 +718,28 @@ class SourceLifecycleTests(unittest.TestCase):
             paper = {"pdf_path": "papers/icml/2026/p.pdf"}
             with patch("scrapers.base.DATA_ROOT", root):
                 self.assertFalse(BaseScraper._has_valid_local_pdf(paper))
-            path.write_bytes(b"%PDF-1.7\n" + b"x" * 2048)
+            path.write_bytes(b"%PDF-1.7\n" + b"x" * 2048 + b"\n%%EOF\n")
             with patch("scrapers.base.DATA_ROOT", root):
                 self.assertTrue(BaseScraper._has_valid_local_pdf(paper))
+            path.write_bytes(b"%PDF-1.7\n" + b"x" * 2048)
+            with patch("scrapers.base.DATA_ROOT", root):
+                self.assertFalse(BaseScraper._has_valid_local_pdf(paper))
+
+    def test_pdf_file_problem_requires_trailing_eof_marker(self):
+        from utils import PDF_EOF_WINDOW, pdf_file_problem
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "p.pdf"
+            path.write_bytes(b"%PDF-1.6\n" + b"x" * 2048 + b"\n%%EOF\n" +
+                             b" " * 512)
+            self.assertIsNone(pdf_file_problem(path, min_size=1024))
+            # A truncated incremental update: an earlier section's %%EOF
+            # survives, but not in the trailing window.
+            path.write_bytes(b"%PDF-1.6\n%%EOF\n" +
+                             b"x" * (PDF_EOF_WINDOW + 100))
+            self.assertEqual(pdf_file_problem(path), "missing_eof")
+            path.write_bytes(b"<html>%%EOF</html>")
+            self.assertEqual(pdf_file_problem(path), "invalid_signature")
+            self.assertEqual(pdf_file_problem(path, min_size=1024), "undersized")
 
 
 class MonitorTests(unittest.TestCase):
@@ -747,6 +839,22 @@ class IndependentValidationTests(unittest.TestCase):
         self.assertEqual(issues, {
             "duplicate_ids": 1, "invalid_pdf_signature": 2, "paper_count": 1})
 
+    def test_truncated_pdf_is_reported(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            pdf = root / "papers/icml/2026/p.pdf"
+            pdf.parent.mkdir(parents=True)
+            pdf.write_bytes(b"%PDF-1.7\n" + b"x" * 2048)
+            paper = {
+                "id": "p", "title": "T", "authors": ["A"], "abstract": "A",
+                "year": 2026, "conference": "icml", "url": "https://x",
+                "bibtex": "@x{p}", "pdf_path": "papers/icml/2026/p.pdf",
+            }
+
+            issues = validate([paper], root, level="metadata", require_pdfs=True)
+
+        self.assertEqual(issues, {"truncated_pdf": 1})
+
 
 class CliTests(unittest.TestCase):
     def test_missing_year_returns_nonzero(self):
@@ -797,7 +905,7 @@ class StatisticsTests(unittest.TestCase):
             metadata.mkdir(parents=True)
             pdf = root / "papers/acl/2026/p.pdf"
             pdf.parent.mkdir(parents=True)
-            pdf.write_bytes(b"%PDF-1.7\n" + b"x" * 1024)
+            pdf.write_bytes(b"%PDF-1.7\n" + b"x" * 1024 + b"\n%%EOF\n")
             (metadata / "acl_2026.json").write_text(
                 '[{"id":"p","title":"T","authors":["A B"],'
                 '"abstract":"A","bibtex":"@x{p}",'
@@ -808,6 +916,24 @@ class StatisticsTests(unittest.TestCase):
         self.assertEqual(row["papers"], 1)
         self.assertEqual(row["pdfs"], 1)
         self.assertEqual(row["missing_pdfs"], 0)
+
+    def test_scan_counts_truncated_pdf_as_invalid(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            metadata = root / "metadata/acl"
+            metadata.mkdir(parents=True)
+            pdf = root / "papers/acl/2026/p.pdf"
+            pdf.parent.mkdir(parents=True)
+            pdf.write_bytes(b"%PDF-1.7\n" + b"x" * 4096)
+            (metadata / "acl_2026.json").write_text(
+                '[{"id":"p","title":"T","authors":["A B"],'
+                '"abstract":"A","bibtex":"@x{p}",'
+                '"pdf_path":"papers/acl/2026/p.pdf"}]', encoding="utf-8")
+
+            row = scan(root / "metadata", root)["acl"][2026]
+
+        self.assertEqual(row["pdfs"], 0)
+        self.assertEqual(row["invalid_pdfs"], 1)
 
 
 if __name__ == "__main__":

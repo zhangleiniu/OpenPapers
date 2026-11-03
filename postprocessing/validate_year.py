@@ -8,6 +8,13 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from config import DATA_ROOT, METADATA_DIR  # noqa: E402
+from utils import pdf_file_problem  # noqa: E402
+
+_PDF_PROBLEM_ISSUES = {
+    "undersized": "undersized_pdf",
+    "invalid_signature": "invalid_pdf_signature",
+    "missing_eof": "truncated_pdf",
+}
 
 
 def validate(papers, data_root: Path, level="archival", require_pdfs=None,
@@ -46,14 +53,12 @@ def validate(papers, data_root: Path, level="archival", require_pdfs=None,
             issues["missing_pdf_file"] += 1
             continue
         try:
-            if path.stat().st_size < minimum_pdf_size:
-                issues["undersized_pdf"] += 1
-                continue
-            with path.open("rb") as handle:
-                if handle.read(5) != b"%PDF-":
-                    issues["invalid_pdf_signature"] += 1
+            problem = pdf_file_problem(path, min_size=minimum_pdf_size)
         except OSError:
             issues["unreadable_pdf"] += 1
+            continue
+        if problem is not None:
+            issues[_PDF_PROBLEM_ISSUES[problem]] += 1
     return {key: value for key, value in sorted(issues.items()) if value}
 
 

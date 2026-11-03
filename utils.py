@@ -68,6 +68,31 @@ SPECIAL = {
     "~": "\\textasciitilde{}", "^": "\\textasciicircum{}", "\\": "\\textbackslash{}",
 }
 
+# Readers accept a %%EOF marker anywhere in the last 1024 bytes (Adobe's
+# implementation note); a file without one there was truncated, even when an
+# earlier incremental-update section still carries its own %%EOF.
+PDF_EOF_WINDOW = 1024
+
+
+def pdf_file_problem(path: Path, min_size: int = 0) -> Optional[str]:
+    """Return why ``path`` is not a complete PDF, or None if it looks valid.
+
+    Problems are ``"undersized"`` (smaller than ``min_size``),
+    ``"invalid_signature"`` (no leading ``%PDF-``) and ``"missing_eof"``
+    (no ``%%EOF`` in the trailing window, i.e. a truncated file). Raises
+    OSError if the file cannot be read.
+    """
+    size = path.stat().st_size
+    if size < min_size:
+        return "undersized"
+    with path.open("rb") as handle:
+        if handle.read(5) != b"%PDF-":
+            return "invalid_signature"
+        handle.seek(max(0, size - PDF_EOF_WINDOW))
+        if b"%%EOF" not in handle.read():
+            return "missing_eof"
+    return None
+
 
 def create_gemini_model(system_prompt: str):
     """Initialize Vertex AI and return a GenerativeModel, or None if not configured.
@@ -212,23 +237,22 @@ class RobustSession:
 
         A valid existing PDF is kept unless ``overwrite`` is set. The new
         file is written beside the target and only replaces it once the
-        download completes, so a failed overwrite keeps the old file.
+        download completes and passes ``pdf_file_problem``, so a failed or
+        invalid (e.g. truncated) download never replaces the old file.
         """
         partial = filepath.with_name(filepath.name + ".part")
         try:
             # Skip if file already exists
             if filepath.exists() and not overwrite:
                 try:
-                    with filepath.open("rb") as handle:
-                        is_valid = (filepath.stat().st_size >= 1024 and
-                                    handle.read(5) == b"%PDF-")
-                except OSError:
-                    is_valid = False
-                if is_valid:
+                    problem = pdf_file_problem(filepath, min_size=1024)
+                except OSError as exc:
+                    problem = f"unreadable ({exc})"
+                if problem is None:
                     logger.debug(f"File already exists: {filepath.name}")
                     return True
-                logger.warning("Removing invalid existing PDF: %s", filepath)
-                filepath.unlink(missing_ok=True)
+                logger.warning("Replacing invalid existing PDF (%s): %s",
+                               problem, filepath)
             
             response = self.get(url, stream=True, **request_kwargs)
             if not response:
@@ -252,6 +276,14 @@ class RobustSession:
                             progress = (downloaded / total_size) * 100
                             logger.debug(f"Download progress: {progress:.1f}%")
             
+            problem = pdf_file_problem(partial, min_size=1024)
+            if problem is not None:
+                logger.warning(
+                    "Rejected downloaded PDF from %s (%s, %s bytes); "
+                    "kept existing file, if any", url, problem,
+                    f"{downloaded:,}")
+                partial.unlink(missing_ok=True)
+                return False
             partial.replace(filepath)
             logger.debug(f"Downloaded: {filepath.name} ({downloaded:,} bytes)")
             return True
