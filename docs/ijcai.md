@@ -57,3 +57,8 @@ an explicit `main-track` filter and count.
   `python main.py ijcai <year> --require-complete`, not `--no-pdfs`. The
   scraper honors the site's robots `Crawl-delay: 10`, so a full year takes a
   few hours.
+- **2023, `2023-500`**: the official proceedings PDF
+  (`proceedings/2023/0500.pdf`) is truncated at the source — the served bytes
+  are identical to the stored copy and end mid-`startxref` with no trailing
+  `%%EOF`. As of 2026-11-05 no arXiv copy exists, so the file stays flagged as
+  an invalid PDF until the source is fixed or another verified copy appears.

@@ -114,7 +114,9 @@ agent—not the discovery provider—checks actual publication readiness.
 The tracked cohort policy preserves an explicit allowlist containing every
 venue in the catalog with a reliable annual or fixed-period cadence. It does
 not infer enrollment from deterministic monitor coverage and does not force
-the continuous JMLR journal through a terminal conference-success lifecycle.
+the continuous JMLR journal through a terminal conference-success lifecycle;
+JMLR is instead enrolled through `continuous_targets.v1.json`, which skips
+event-date discovery and reschedules (never completes) on success.
 In the America/Chicago calendar, October adds the following year to
 initialization; January advances the active window to that year. Expansion
 registers all targets idempotently but still attempts at most one missing

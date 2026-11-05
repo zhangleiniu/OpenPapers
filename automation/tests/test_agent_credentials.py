@@ -1,3 +1,6 @@
+import contextlib
+import io
+import json
 import os
 import tempfile
 import unittest
@@ -89,8 +92,12 @@ class AgentCredentialTests(unittest.TestCase):
                 )), \
                 patch(
                     "automation.local_service.agent_control.replace_disabled_agent_resend"
-                ) as replace:
+                ) as replace, contextlib.redirect_stdout(io.StringIO()) as stdout:
             self.assertEqual(credential_main(arguments), 0)
+
+        self.assertEqual(
+            json.loads(stdout.getvalue()), {"resend_configuration": "installed"}
+        )
 
         replace.assert_called_once_with(
             self.internal,

@@ -22,7 +22,7 @@ Valid phase statuses are `Planned`, `In progress`, `Implemented`, and
 | Installation, activation, rollback | Private config, exact recovery, enabled gate | Implemented |
 | Post-install operations | Credentials, canaries, read-only status, dashboard, operator commands, failure alerting | Implemented |
 | State simplification | Migrate away from vestigial verification/case/job/notification schema | Deployed and verified in production (2026-07-18) |
-| JMLR enrollment | Recurring, non-terminal success semantics for a continuous journal | Planned |
+| JMLR enrollment | Recurring, non-terminal success semantics for a continuous journal | Implemented |
 
 ## Phase notes
 

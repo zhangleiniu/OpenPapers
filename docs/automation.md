@@ -77,8 +77,10 @@ The tracked cohort (`automation/config/agent_targets.v1.json`, schema 3)
 lists the 13 formulaic annual/periodic venues plus manually confirmed
 one-off editions in `extra_targets` (currently NAACL 2027). ICCV and ECCV
 carry `interval_years`/`cycle_anchor_year` so they are only scheduled for
-years they occur in. Continuous JMLR is visible but not enrolled; it needs
-recurring, non-terminal success semantics. A venue/year whose canonical
+years they occur in. Continuous JMLR is enrolled separately through
+`automation/config/continuous_targets.v1.json`: it skips event-date
+discovery, and a successful run reschedules it instead of completing it.
+A venue/year whose canonical
 scrape predates enrollment can be closed with
 `automation.agent_operations mark-completed` (see the operations runbook).
 
