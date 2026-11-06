@@ -44,7 +44,7 @@ aborted with instructions to label manually.
 | `id` | ACL Anthology paper ID (e.g. `2024.naacl-long.1`) |
 | `title` | ✓ |
 | `authors` | ✓ |
-| `abstract` | Source page; absent for most pre-~2015 years |
+| `abstract` | Source page; older years backfilled from the PDF by GROBID (`abstract_source: grobid`) |
 | `pdf_url` | ✓ |
 | `bibtex_extra` | editor/address/pages/doi/organization parsed from the Anthology's own BibTeX export block on the same page (no extra request) — see [data-schema.md](data-schema.md#bibtex-generation) |
 
@@ -52,11 +52,14 @@ aborted with instructions to label manually.
 
 - NAACL is not held every year. Do not infer missing editions from the first
   and last year shown in a range; the generated report lists actual years.
-- **Pre-~2015 years generally have no `abstract`** on the Anthology source
-  page (not a scraping bug) — records are saved with `abstract: ""`. Recover
-  later via `postprocessing/backfill_missing_metadata_fields.py --abstract`
-  once PDFs are processed by GROBID/Nougat; use `--completeness-level
-  announced` for an initial scrape of old years to avoid `--require-complete`
-  flagging them as incomplete.
+- **Years through 2012 generally have no `abstract`** on the Anthology
+  source page (not a scraping bug) — the scraper saves `abstract: ""`. In
+  the canonical corpus these gaps were backfilled from the PDFs with GROBID
+  on 2026-11-05 (`abstract_source: grobid`); the procedure, quality check,
+  and known text artifacts are described under ACL's
+  [known issues](acl.md#known-issues). Remaining gaps are mostly papers
+  without an abstract and image-only or garbled PDFs; `statistics.md` has
+  the current count. For an initial scrape of an old year use
+  `--completeness-level announced`, then backfill from GROBID output.
 - **2001, `N01-1022`**: the ACL Anthology PDF URL returns 404. Metadata is
   retained with `pdf_downloaded: false`; no alternative source identified yet.

@@ -53,13 +53,23 @@ aborted with instructions to label manually.
   fails, the generated all-false cache must be reviewed manually before rerun.
 - ACL 2026 source-page abstract gaps were recovered from GROBID and carry
   `abstract_source: grobid`.
-- **Pre-~2015 years generally have no `abstract`** on the Anthology source
-  page at all (not a scraping bug) — records are saved with `abstract: ""`.
-  Recover these later via
-  `postprocessing/backfill_missing_metadata_fields.py --abstract` once PDFs
-  are processed by GROBID/Nougat. This means `--require-complete` at the
-  default `archival`/`metadata` completeness level will flag these years as
-  incomplete until abstracts are backfilled — use `--completeness-level
-  announced` for an initial scrape of old years instead.
+- **Years through 2016 generally have no `abstract`** on the Anthology
+  source page at all (not a scraping bug) — the scraper saves
+  `abstract: ""`. In the canonical corpus these gaps were backfilled from
+  the PDFs on 2026-11-05 (GROBID 0.9.1 header parsing, then
+  `postprocessing/backfill_missing_metadata_fields.py --abstract`); those
+  records carry `abstract_source: grobid` and hold GROBID's unmodified text,
+  which can retain footnote markers or a mis-joined line-break hyphen
+  (`stateof-the-art`). GROBID abstracts that failed a check against the PDF
+  text (garbled text layer, no Abstract heading so the first body paragraph
+  was taken, truncation) were not written; their TEI is kept under
+  `grobid_output_rejected/` so the backfill cannot read it. The remaining
+  gaps are mostly papers without an abstract, image-only scans, and
+  OCR-damaged 1980s–1990s scans; `statistics.md` has the current count.
+- A fresh scrape of an old year still produces empty abstracts, so
+  `--require-complete` at the default `archival`/`metadata` completeness
+  level flags it as incomplete — use `--completeness-level announced` for
+  the initial scrape, then run GROBID over its PDFs into `grobid_output/` and
+  backfill with `--enrich-missing` or the backfill script.
 - **1979, `P79-1024`**: the ACL Anthology PDF URL returns 404. Metadata is
   retained with `pdf_downloaded: false`; no alternative source identified yet.
