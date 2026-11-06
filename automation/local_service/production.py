@@ -10,7 +10,7 @@ import smtplib
 import sqlite3
 import ssl
 import stat
-from contextlib import contextmanager
+from contextlib import closing, contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from email.message import EmailMessage
@@ -312,6 +312,45 @@ def _openreview_environment(secrets: ProductionSecrets):
                 os.environ[key] = value
 
 
+def completed_agent_targets(state_path: Path) -> frozenset[tuple[str, int]]:
+    """Return venue/years whose agent schedule is terminally completed.
+
+    Read-only: a missing control state or schedule table means nothing is
+    completed yet, so every change still notifies.
+    """
+    if not state_path.exists():
+        return frozenset()
+    try:
+        with closing(
+            sqlite3.connect(f"{state_path.resolve().as_uri()}?mode=ro", uri=True)
+        ) as connection:
+            if connection.execute(
+                "SELECT 1 FROM sqlite_master "
+                "WHERE type = 'table' AND name = 'agent_schedule'"
+            ).fetchone() is None:
+                return frozenset()
+            rows = connection.execute(
+                "SELECT venue_id, year FROM agent_schedule "
+                "WHERE status = 'completed'"
+            ).fetchall()
+    except sqlite3.Error as exc:
+        raise ProductionControlError(
+            "production agent schedule is unreadable"
+        ) from exc
+    return frozenset((str(venue), int(year)) for venue, year in rows)
+
+
+def should_notify_source_event(
+    event: Mapping[str, Any], completed: frozenset[tuple[str, int]]
+) -> bool:
+    """Errors always notify; changes notify unless the target is completed."""
+    if event.get("status") == "error":
+        return True
+    if event.get("changed") is not True:
+        return False
+    return (event.get("venue"), event.get("year")) not in completed
+
+
 def _default_monitor(registry_path: Path, state_path: Path):
     from automation.monitor import run
 
@@ -517,6 +556,9 @@ class ProductionMonitorEffect:
         journal_path = internal_root / "monitor" / "production-wakeups.sqlite3"
         monitor_state = internal_root / "monitor" / "state.sqlite3"
         _validate_monitor_state(monitor_state, configuration.expected_source_count)
+        # Read before claiming the daily slot so an unreadable schedule fails
+        # this wake cleanly instead of leaving an ambiguous active claim.
+        completed_targets = completed_agent_targets(state)
         local_now = observed_at.astimezone(_MONITOR_TIMEZONE)
         monitor_due = local_now.hour >= _MONITOR_HOUR
         run_date = local_now.date().isoformat()
@@ -571,7 +613,7 @@ class ProductionMonitorEffect:
                     "production monitor returned an incomplete set"
                 )
             for event in events:
-                if event.get("status") == "error" or event.get("changed") is True:
+                if should_notify_source_event(event, completed_targets):
                     self._notifier.send(
                         event,
                         configuration=configuration,

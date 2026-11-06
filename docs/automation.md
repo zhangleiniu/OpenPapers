@@ -17,7 +17,9 @@ production writer. It wakes hourly and exits after a bounded invocation:
 1. It validates the private production configuration, its integrity-marker
    chain, restored monitor state, and the external-volume safety gate.
 2. Once daily at or after 08:00 America/Chicago it runs the deterministic
-   source monitor and sends one TLS SMTP email per source change or error.
+   source monitor and sends one TLS SMTP email per source error, and per
+   source change unless that venue/year's agent schedule is already
+   `completed` (its changes are then silent, but still recorded).
    Exact daily replay does not repeat the monitor or its notifications.
 3. On every wakeup the agent composition reads due state under the local
    SQLite single-writer lease. When persisted work is due, it may initialize one event
@@ -49,8 +51,10 @@ python automation/monitor.py --no-write
 
 Detectors: `openreview_api` (accepted-note IDs for an invitation, filtered
 by venueid), `official_html` (CSS-selected item count on a page), and
-`pmlr_volume` (a matching proceedings listing). JMLR's entry is a loose
-continuous-volume-size proxy rather than a discrete availability signal.
+`pmlr_volume` (a proceedings-homepage `<li>` volume entry whose own text
+matches the label, so an unrelated new volume does not change the digest).
+JMLR's entry is a loose continuous-volume-size proxy rather than a discrete
+availability signal.
 
 The monitor is cheap operational coverage, not readiness authority: a change
 or a date is only a scheduling hint. A changed available source may advance

@@ -166,9 +166,14 @@ class Monitor:
         pattern = re.compile(re.escape(source["label"]), re.IGNORECASE)
         matches = []
         for link in soup.find_all("a", href=True):
-            parent_text = link.parent.get_text(" ", strip=True) if link.parent else ""
-            if pattern.search(parent_text):
-                matches.append({"text": parent_text, "href": link["href"]})
+            # Match within the link's own volume entry only: the live
+            # homepage has an unclosed <p> whose text spans every volume,
+            # which made unrelated links match and new volumes churn
+            # every PMLR venue's digest.
+            entry = link.find_parent("li")
+            entry_text = entry.get_text(" ", strip=True) if entry else ""
+            if pattern.search(entry_text):
+                matches.append({"text": entry_text, "href": link["href"]})
         return ("available" if matches else "unavailable", len(matches),
                 _digest(matches), "")
 

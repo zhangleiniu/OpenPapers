@@ -796,6 +796,75 @@ class ProductionControlTests(LocalServiceFixture):
             ).fetchall()
         self.assertEqual(hints, [("icml", 2026, "pending")])
 
+    def _complete_agent_target(self, venue, year):
+        self.config.state_path.parent.mkdir(parents=True, exist_ok=True)
+        with sqlite3.connect(self.config.state_path) as connection:
+            connection.execute(
+                "CREATE TABLE IF NOT EXISTS agent_schedule "
+                "(venue_id TEXT, year INTEGER, status TEXT)"
+            )
+            connection.execute(
+                "INSERT INTO agent_schedule VALUES (?, ?, 'completed')",
+                (venue, year),
+            )
+
+    def test_completed_target_change_is_silent_but_error_still_notifies(self):
+        self._complete_agent_target("icml", 2026)
+        notifier = FakeNotifier()
+        events = self._events()
+        events[1]["status"] = "error"
+        effect = ProductionMonitorEffect(
+            repository_root=ROOT,
+            monitor=lambda *args: events,
+            notifier=notifier,
+        )
+        effect.run(
+            state_path=self.config.state_path,
+            execution_root=self.external,
+            scheduled_for=NOW.replace(minute=17),
+            observed_at=NOW,
+        )
+        self.assertEqual(
+            [call[0]["source_key"] for call in notifier.calls], ["source:1"]
+        )
+
+    def test_change_for_other_target_still_notifies(self):
+        self._complete_agent_target("colt", 2026)
+        notifier = FakeNotifier()
+        effect = ProductionMonitorEffect(
+            repository_root=ROOT,
+            monitor=lambda *args: self._events(),
+            notifier=notifier,
+        )
+        effect.run(
+            state_path=self.config.state_path,
+            execution_root=self.external,
+            scheduled_for=NOW.replace(minute=17),
+            observed_at=NOW,
+        )
+        self.assertEqual(len(notifier.calls), 1)
+
+    def test_unreadable_schedule_fails_before_daily_claim(self):
+        self.config.state_path.parent.mkdir(parents=True, exist_ok=True)
+        self.config.state_path.write_bytes(b"not a sqlite database" * 10)
+        calls = []
+        effect = ProductionMonitorEffect(
+            repository_root=ROOT,
+            monitor=lambda *args: calls.append(args) or self._events(),
+            notifier=FakeNotifier(),
+        )
+        with self.assertRaisesRegex(ValueError, "schedule is unreadable"):
+            effect.run(
+                state_path=self.config.state_path,
+                execution_root=self.external,
+                scheduled_for=NOW.replace(minute=17),
+                observed_at=NOW,
+            )
+        self.assertEqual(calls, [])
+        self.assertFalse(
+            (self.internal / "monitor" / "production-wakeups.sqlite3").exists()
+        )
+
     def test_monitor_waits_for_daily_chicago_slot(self):
         monitor_calls = []
         effect = ProductionMonitorEffect(
