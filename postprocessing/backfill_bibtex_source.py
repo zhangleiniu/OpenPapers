@@ -157,7 +157,7 @@ def _build_fetchers(scrapers):
                                _fetch_via_page(s, p, lambda soup: s._fetch_bibtex_extra(soup, p["url"])))
         elif conf == "eccv":
             fetchers[conf] = (lambda p, s=s:
-                               _fetch_via_page(s, p, lambda soup: s._fetch_bibtex_extra(soup)))
+                               _fetch_via_page(s, p, lambda soup: s._fetch_bibtex_extra(soup, p["id"])))
         elif conf == "neurips":
             fetchers[conf] = (lambda p, s=s: s._fetch_bibtex_extra(p["id"], p["url"]))
         else:

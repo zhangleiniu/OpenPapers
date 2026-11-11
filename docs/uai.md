@@ -31,6 +31,7 @@ See the generated [coverage and quality report](../statistics.md).
 | `authors` | ✓ | ✓ |
 | `abstract` | ✓ | ✓ |
 | `pdf_url` | ✓ | ✓ |
+| `url` | The paper's own PDF on `https://www.auai.org/` (auai.org has no per-paper HTML page for these years) | MLR Press abstract page |
 | `year` | ✓ | ✓ |
 | `bibtex_extra` | — | editor/volume/series/month/pages/organization parsed from PMLR's own citation block on the same page (no extra request) — see [data-schema.md](data-schema.md#bibtex-generation) |
 

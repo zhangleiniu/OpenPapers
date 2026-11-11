@@ -44,6 +44,15 @@ python postprocessing/validate_year.py icml 2026 \
   --level metadata --require-pdfs --expected-count 6341
 ```
 
+Every paper should have its own `url` and its own DOI. Check the whole corpus
+for values shared by more than one paper (a listing page stored as `url`, a
+proceedings-volume DOI, or a DOI copied onto the wrong paper) and for Springer
+book-level DOIs; it exits 1 if any are found:
+
+```bash
+python postprocessing/check_unique_links.py
+```
+
 `statistics.md` is generated and tracked. It reports actual (including gapped)
 year coverage, valid physical PDFs, missing/invalid PDFs, missing metadata, and
 duplicate IDs. Never edit it manually:

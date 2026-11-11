@@ -7,6 +7,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
 
+from bs4 import BeautifulSoup
+
 import main
 from automation.monitor import Monitor, StateStore, load_registry, save_snapshot
 from scrapers.acl_anthology import ACLAnthologyScraper
@@ -15,7 +17,11 @@ from scrapers.eccv import ECCVScraper
 from scrapers.icml import ICMLScraper
 from scrapers.ijcai import IJCAIScraper
 from scrapers.openreview import OpenReviewClient
+from scrapers.uai import UAIScraper
 from postprocessing.backfill_missing_metadata_fields import enrich_papers
+from postprocessing.check_unique_links import (
+    find_problems, main as check_unique_links_main,
+)
 from postprocessing.generate_statistics import (
     format_years, render_readme_coverage, replace_generated_section, scan,
 )
@@ -614,6 +620,56 @@ class SourceLifecycleTests(unittest.TestCase):
         self.assertEqual(paper["metadata_source"], "ecva")
         self.assertEqual(paper["publication_status"], "archival")
 
+    def test_eccv_doi_link_with_space_keeps_chapter_suffix(self):
+        # ECVA's 2022 pages for LNCS 13694/13697 write the chapter link as
+        # ".../978-3-031-19830-4 _1"; stopping at the space yields the
+        # proceedings-volume DOI shared by every paper in the volume.
+        soup = BeautifulSoup(
+            '<a href="https://link.springer.com/chapter/'
+            '10.1007/978-3-031-19830-4 _1">DOI</a>', "html.parser")
+
+        self.assertEqual(ECCVScraper()._extract_doi(soup),
+                         "10.1007/978-3-031-19830-4_1")
+
+    def test_eccv_doi_override_replaces_wrong_source_doi(self):
+        # ECVA links 4746 (Customize-A-Video) to 4743's (SMILe) chapter DOI.
+        scraper = ECCVScraper()
+        page = Mock(content=b'''<div id="papertitle">Customize-A-Video</div>
+          <a href="../papers/04746.pdf">pdf</a>
+          <a href="https://link.springer.com/chapter/10.1007/978-3-031-73411-3_20">DOI</a>''')
+        crossref = Mock(text="@inbook{x, DOI={10.1007/978-3-031-73024-5_20}}")
+        url = ("https://www.ecva.net/papers/eccv_2024/papers_ECCV/html/"
+               "4746_ECCV_2024_paper.php")
+
+        with patch.object(scraper.session, "get",
+                          side_effect=[page, crossref]) as get:
+            paper = scraper.parse_paper(url)
+
+        self.assertEqual(get.call_args_list[1].args[0],
+                         "https://doi.org/10.1007/978-3-031-73024-5_20")
+        self.assertEqual(paper["bibtex_extra"]["doi"],
+                         "10.1007/978-3-031-73024-5_20")
+
+    def test_uai_legacy_url_is_the_papers_own_pdf(self):
+        rows = {
+            2015: '''<table><tr><td><a href="proceedings/papers/9.pdf">pdf</a>
+                     <b>ID: 9</b></td><td><div><b>Bethe Approximations</b>
+                     <i>Adrian Weller, Cambridge</i></div></td></tr></table>''',
+            2017: '''<table><tr><td><a href='http://auai.org/uai2017/proceedings/papers/65.pdf'>pdf</a></td>
+                     <td><h5>ID: 65</h5><h4>A Fast Eigensolver</h4>Ada Lovelace</td></tr></table>''',
+        }
+        expected = {
+            2015: "https://www.auai.org/uai2015/proceedings/papers/9.pdf",
+            2017: "https://www.auai.org/uai2017/proceedings/papers/65.pdf",
+        }
+        scraper = UAIScraper()
+        for year, html in rows.items():
+            with self.subTest(year=year):
+                soup = BeautifulSoup(html, "html.parser")
+                [paper] = scraper._legacy_extract_all_papers(
+                    soup, year, "https://www.auai.org/listing")
+                self.assertEqual(paper["url"], expected[year])
+
     def test_parallel_pdf_retry_checkpoints_distinct_papers(self):
         class RetryScraper:
             PDF_DOWNLOAD_WORKERS = 2
@@ -854,6 +910,34 @@ class IndependentValidationTests(unittest.TestCase):
             issues = validate([paper], root, level="metadata", require_pdfs=True)
 
         self.assertEqual(issues, {"truncated_pdf": 1})
+
+    def test_shared_urls_and_dois_are_reported_across_files(self):
+        def paper(pid, url, doi):
+            return {"id": pid, "url": url,
+                    "bibtex": f"@x{{{pid},\n  doi={{{doi}}}\n}}",
+                    "bibtex_extra": {"doi": doi}}
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / "a").mkdir()
+            (root / "b").mkdir()
+            (root / "a/a_2022.json").write_text(json.dumps([
+                paper("1", "https://x/list", "10.1007/978-3-031-19830-4"),
+                paper("2", "https://x/list", "10.1007/978-3-031-19830-4_2"),
+            ]))
+            (root / "b/b_2024.json").write_text(json.dumps([
+                paper("3", "https://x/3", "10.1007/978-3-031-19830-4_2"),
+            ]))
+
+            problems = find_problems(root)
+            clean = check_unique_links_main(["--metadata-root", str(root / "b")])
+
+        self.assertEqual(list(problems["shared url"]), ["https://x/list"])
+        self.assertEqual(problems["shared doi"]["10.1007/978-3-031-19830-4_2"],
+                         [("a_2022.json", "2"), ("b_2024.json", "3")])
+        self.assertEqual(list(problems["springer book doi"]),
+                         ["10.1007/978-3-031-19830-4"])
+        self.assertEqual(clean, 0)
 
 
 class CliTests(unittest.TestCase):

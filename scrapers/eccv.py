@@ -63,6 +63,16 @@ _PDF_URL_OVERRIDES = {
     '5826_ECCV_2026_paper': 'https://arxiv.org/pdf/2607.29463v1',
 }
 
+# Papers whose ECVA page links another paper's Springer DOI. Each value was
+# verified on doi.org/CrossRef to carry this paper's title and authors.
+_DOI_OVERRIDES = {
+    # ECVA links 4746 (Customize-A-Video) to 978-3-031-73411-3_20, which
+    # resolves to 4743 (SMILe) on the same ECVA listing.
+    '4746_ECCV_2024_paper': '10.1007/978-3-031-73024-5_20',
+    # ECVA links 12638 (DεpS) to 978-3-031-73024-5_20, which is 4746's.
+    '12638_ECCV_2024_paper': '10.1007/978-3-031-73024-5_19',
+}
+
 
 class ECCVScraper(BaseScraper):
     """ECCV conference scraper using ecva.net."""
@@ -176,7 +186,7 @@ class ECCVScraper(BaseScraper):
                 'source_ids': {'ecva': paper_id},
                 'publication_status': 'archival',
             }
-            extra = self._fetch_bibtex_extra(soup)
+            extra = self._fetch_bibtex_extra(soup, paper_id)
             if extra:
                 paper['bibtex_extra'] = extra
 
@@ -263,15 +273,17 @@ class ECCVScraper(BaseScraper):
             'publication_status': status,
         }
 
-    def _fetch_bibtex_extra(self, soup: BeautifulSoup) -> Dict[str, str]:
+    def _fetch_bibtex_extra(self, soup: BeautifulSoup,
+                            paper_id: str = "") -> Dict[str, str]:
         """ecva.net (the free mirror we scrape) doesn't publish its own
         BibTeX, but every paper links to its Springer DOI. Resolve that DOI
         via CrossRef content negotiation to get Springer's official record
         (pages/ISBN/publisher/an ECCV-edition-specific booktitle) — one
         extra request per paper. Best-effort: returns {} if CrossRef is
-        unreachable or the paper has no DOI link yet.
+        unreachable or the paper has no DOI link yet. A verified entry in
+        _DOI_OVERRIDES replaces a DOI link that ECVA got wrong.
         """
-        doi = self._extract_doi(soup)
+        doi = _DOI_OVERRIDES.get(paper_id) or self._extract_doi(soup)
         if not doi:
             return {}
         response = self.session.get(
@@ -295,10 +307,17 @@ class ECCVScraper(BaseScraper):
         return extra
 
     def _extract_doi(self, soup: BeautifulSoup) -> str:
+        """Return the Springer DOI from the page's "DOI" link.
+
+        Whitespace is removed first: ECVA's 2022 pages for two LNCS volumes
+        write ".../978-3-031-19830-4 _1", and stopping at the space would
+        leave the proceedings-volume DOI instead of the chapter DOI.
+        """
         for a in soup.find_all('a', href=True):
             if a.get_text(strip=True).lower() != 'doi':
                 continue
-            match = re.search(r'10\.\d{4,9}/\S+', a['href'])
+            href = re.sub(r'\s+|%20', '', a['href'])
+            match = re.search(r'10\.\d{4,9}/\S+', href)
             if match:
                 return match.group(0)
         return ""

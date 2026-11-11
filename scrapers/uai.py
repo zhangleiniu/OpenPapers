@@ -31,6 +31,22 @@ _LEGACY_URLS = {
 
 _LEGACY_PRE2017_YEARS = {2015, 2016}
 
+_AUAI_HOST_RE = re.compile(r'^https?://(?:www\.)?auai\.org/', re.IGNORECASE)
+
+
+def legacy_paper_url(pdf_url: str) -> str:
+    """Return the per-paper page for a 2015-2018 UAI paper.
+
+    auai.org has no per-paper HTML page for these years (the accepted-papers
+    page links only each paper's PDF and supplement), so the paper's own PDF
+    is its page. The 2017/2018 listings link ``http://auai.org/...``, which
+    redirects to ``https://www.auai.org/...``; the redirect target is used.
+    Returns "" when the PDF is not on auai.org.
+    """
+    if not _AUAI_HOST_RE.match(pdf_url or ''):
+        return ""
+    return _AUAI_HOST_RE.sub('https://www.auai.org/', pdf_url)
+
 
 class UAIScraper(BaseScraper):
     """UAI conference scraper.
@@ -202,15 +218,19 @@ class UAIScraper(BaseScraper):
             if not title:
                 return None
 
+            pdf_url = self._legacy_extract_pdf_url(tr, year)
+            paper_url = legacy_paper_url(pdf_url)
+            if not paper_url:
+                logger.warning(f"No per-paper PDF for {title!r}; url falls back to the listing page")
             return {
                 'id':         self._legacy_extract_id(tr, year),
                 'title':      title,
                 'authors':    self._legacy_extract_authors(tr, year),
                 'abstract':   self._legacy_extract_abstract(tr, year),
-                'pdf_url':    self._legacy_extract_pdf_url(tr, year),
+                'pdf_url':    pdf_url,
                 'year':       year,
                 'conference': 'UAI',
-                'url':        page_url,
+                'url':        paper_url or page_url,
             }
         except Exception as e:
             logger.error(f"Error extracting paper from row: {e}")

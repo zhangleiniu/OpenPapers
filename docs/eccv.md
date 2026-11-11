@@ -38,6 +38,15 @@ All available years are listed on a single page at
 
 ## Known issues
 
+- **ECVA DOI links**: the DOI comes from the paper page's "DOI" link. Two
+  2022 volumes (LNCS 13694 and 13697) write it with a space before the
+  chapter suffix (`.../978-3-031-19830-4 _1`); whitespace is removed before
+  matching so the chapter DOI, not the volume DOI, is kept. Some 2024 pages
+  link another paper's DOI; `_DOI_OVERRIDES` in `scrapers/eccv.py` holds the
+  corrections verified on CrossRef by title and authors (`4746`, `12638`).
+  `8774`'s link (`978-3-031-72890-7_21`) does not resolve, so it has no DOI.
+  ECCV 2018, 2020 and 2026 records carry no DOI.
+
 - **2026 source**: Springer's proceedings are subscription-gated and ECVA's
   mirror has not yet added 2026, so metadata and freely downloadable final
   camera-ready PDFs come from the official virtual site above.
