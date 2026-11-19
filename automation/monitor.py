@@ -232,6 +232,9 @@ def run(registry_path=DEFAULT_REGISTRY, state_path=DEFAULT_STATE,
                     previous["item_count"] != event["item_count"]
                 ))
             event["first_observation"] = previous is None
+            event["previous_status"] = previous["status"] if previous else None
+            event["previous_item_count"] = (
+                previous["item_count"] if previous else None)
             event["snapshot_path"] = (
                 save_snapshot(
                     state_path, event, source["type"], monitor.snapshot,

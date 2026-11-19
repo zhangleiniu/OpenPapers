@@ -39,7 +39,8 @@ For each configured `venue/year`, the flow is:
    changes: `success`, `not_ready`, `needs_human`, or `failed`.
 5. On `not_ready`, use the agent's suggested retry time or a bounded
    default. On success or human intervention, stop automatic retries. Send
-   one email per run outcome.
+   one email per reviewable run outcome (`not_ready` is recorded, not
+   sent).
 
 A wrong date estimate costs at most one contained agent run.
 

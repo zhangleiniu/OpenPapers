@@ -312,14 +312,13 @@ def _openreview_environment(secrets: ProductionSecrets):
                 os.environ[key] = value
 
 
-def completed_agent_targets(state_path: Path) -> frozenset[tuple[str, int]]:
-    """Return venue/years whose agent schedule is terminally completed.
+def agent_schedule_statuses(state_path: Path) -> dict[tuple[str, int], str]:
+    """Return every venue/year agent schedule status, read-only.
 
-    Read-only: a missing control state or schedule table means nothing is
-    completed yet, so every change still notifies.
+    A missing control state or schedule table means no schedules exist yet.
     """
     if not state_path.exists():
-        return frozenset()
+        return {}
     try:
         with closing(
             sqlite3.connect(f"{state_path.resolve().as_uri()}?mode=ro", uri=True)
@@ -328,16 +327,27 @@ def completed_agent_targets(state_path: Path) -> frozenset[tuple[str, int]]:
                 "SELECT 1 FROM sqlite_master "
                 "WHERE type = 'table' AND name = 'agent_schedule'"
             ).fetchone() is None:
-                return frozenset()
+                return {}
             rows = connection.execute(
-                "SELECT venue_id, year FROM agent_schedule "
-                "WHERE status = 'completed'"
+                "SELECT venue_id, year, status FROM agent_schedule"
             ).fetchall()
     except sqlite3.Error as exc:
         raise ProductionControlError(
             "production agent schedule is unreadable"
         ) from exc
-    return frozenset((str(venue), int(year)) for venue, year in rows)
+    return {(str(venue), int(year)): str(status) for venue, year, status in rows}
+
+
+def completed_agent_targets(state_path: Path) -> frozenset[tuple[str, int]]:
+    """Return venue/years whose agent schedule is terminally completed.
+
+    Read-only: a missing control state or schedule table means nothing is
+    completed yet, so every change still notifies.
+    """
+    return frozenset(
+        key for key, status in agent_schedule_statuses(state_path).items()
+        if status == "completed"
+    )
 
 
 def should_notify_source_event(
@@ -357,6 +367,74 @@ def _default_monitor(registry_path: Path, state_path: Path):
     return run(registry_path=registry_path, state_path=state_path, write_state=True)
 
 
+def source_event_next_action(
+    event: Mapping[str, Any], schedule_status: str | None
+) -> str:
+    """Describe, for a human, what the system does after a source event."""
+    if event.get("status") == "error":
+        return ("the daily monitor checks this source again tomorrow; a source "
+                "error never triggers an agent run.")
+    if event.get("status") != "available":
+        return "nothing automatic; the source is not currently available."
+    if schedule_status == "scheduled":
+        return ("recorded as a scheduling hint that can move this venue/year's "
+                "agent readiness check earlier (bounded by the venue cooldown). "
+                "A not_ready result is not emailed; success, needs_human, and "
+                "failed results are.")
+    if schedule_status in {"needs_human", "paused"}:
+        return (f"the agent schedule is {schedule_status}; no automatic check "
+                "runs until an operator reopens it.")
+    return "no agent schedule exists for this venue/year; nothing automatic follows."
+
+
+def _was(previous: Any, current: Any) -> str:
+    if previous is None or previous == current:
+        return ""
+    return f" (was {previous})"
+
+
+def compose_source_event_email(event: Mapping[str, Any]) -> tuple[str, str]:
+    """Return the subject and body for one monitor change/error event."""
+    is_error = event.get("status") == "error"
+    event_name = "openpapers.source.error" if is_error else "openpapers.source.changed"
+    venue = str(event.get("venue", ""))
+    year = str(event.get("year", ""))
+    status = event.get("status", "")
+    count = event.get("item_count", "")
+    previous_status = event.get("previous_status")
+    previous_count = event.get("previous_item_count")
+    summary = event.get("summary")
+    if summary:
+        subject = f"OpenPapers: {summary}"
+    elif is_error:
+        subject = f"OpenPapers: {venue.upper()} {year} source error"
+    else:
+        if previous_status is not None and previous_status != status:
+            change = f"{previous_status} -> {status}, {count} items"
+        elif previous_count is not None and previous_count != count:
+            change = f"{previous_count} -> {count} items"
+        else:
+            change = f"{count} items, content changed"
+        subject = f"OpenPapers: {venue.upper()} {year} source changed ({change})"
+    lines = [
+        f"Event: {event_name}",
+        f"Venue/year: {venue} {year}".rstrip(),
+        f"Source: {event.get('source_key', '')}",
+        f"Status: {status}{_was(previous_status, status)}",
+        f"Count: {count}{_was(previous_count, count)}",
+    ]
+    detail = str(event.get("detail", "") or "")
+    if detail:
+        lines.append(f"Detail: {detail}")
+    next_action = event.get("next_action")
+    if next_action:
+        lines.append(f"Next: {next_action}")
+    snapshot_name = Path(str(event.get("snapshot_path", "") or "")).name
+    if snapshot_name:
+        lines.append(f"Snapshot (monitor state): {snapshot_name}")
+    return subject, "\n".join(lines)
+
+
 class SmtpSourceNotifier:
     """One-request TLS SMTP adapter for existing monitor change/error events."""
 
@@ -367,30 +445,12 @@ class SmtpSourceNotifier:
         configuration: ProductionConfiguration,
         password: str,
     ) -> None:
-        event_name = (
-            "openpapers.source.error"
-            if event.get("status") == "error"
-            else "openpapers.source.changed"
-        )
+        subject, body = compose_source_event_email(event)
         message = EmailMessage()
-        message["Subject"] = f"OpenPapers: {event_name}"
+        message["Subject"] = subject
         message["From"] = configuration.email_from
         message["To"] = configuration.email_to
-        snapshot_name = Path(str(event.get("snapshot_path", ""))).name
-        message.set_content(
-            "\n".join(
-                (
-                    f"Event: {event_name}",
-                    f"Venue: {event.get('venue', '')}",
-                    f"Year: {event.get('year', '')}",
-                    f"Source: {event.get('source_key', '')}",
-                    f"Status: {event.get('status', '')}",
-                    f"Count: {event.get('item_count', '')}",
-                    f"Detail: {event.get('detail', '')}",
-                    f"Snapshot: {snapshot_name}",
-                )
-            )
-        )
+        message.set_content(body)
         with smtplib.SMTP_SSL(
             configuration.smtp_host,
             configuration.smtp_port,
@@ -460,6 +520,12 @@ def send_wake_failure_alert(
             f"category={latest_record.get('failure_category', 'unknown')}"
         ),
         "snapshot_path": "",
+        "summary": f"{consecutive} consecutive failed local-control wakes",
+        "next_action": (
+            "inspect the latest wake records and the operations guide's "
+            "failure-visibility section; this alert repeats every "
+            f"{WAKE_ALERT_REPEAT_EVERY} further failures."
+        ),
     }
     (notifier or SmtpSourceNotifier()).send(
         event, configuration=configuration, password=secrets.smtp_password
@@ -558,7 +624,11 @@ class ProductionMonitorEffect:
         _validate_monitor_state(monitor_state, configuration.expected_source_count)
         # Read before claiming the daily slot so an unreadable schedule fails
         # this wake cleanly instead of leaving an ambiguous active claim.
-        completed_targets = completed_agent_targets(state)
+        schedule_statuses = agent_schedule_statuses(state)
+        completed_targets = frozenset(
+            key for key, status in schedule_statuses.items()
+            if status == "completed"
+        )
         local_now = observed_at.astimezone(_MONITOR_TIMEZONE)
         monitor_due = local_now.hour >= _MONITOR_HOUR
         run_date = local_now.date().isoformat()
@@ -615,7 +685,15 @@ class ProductionMonitorEffect:
             for event in events:
                 if should_notify_source_event(event, completed_targets):
                     self._notifier.send(
-                        event,
+                        {
+                            **event,
+                            "next_action": source_event_next_action(
+                                event,
+                                schedule_statuses.get(
+                                    (event.get("venue"), event.get("year"))
+                                ),
+                            ),
+                        },
                         configuration=configuration,
                         password=secrets.smtp_password,
                     )

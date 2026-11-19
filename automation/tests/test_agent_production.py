@@ -331,6 +331,22 @@ class AgentProductionTests(unittest.TestCase):
         self.assertEqual(len(schedules), 25)
         self.assertEqual(len(provider.calls), 1)
 
+    def test_optional_canonical_data_root_must_be_absolute(self):
+        self.assertIsNone(self.configuration.canonical_data_root)
+        configuration = load_agent_production_configuration(
+            dict(self.payload, canonical_data_root=str(self.root / "corpus")),
+            targets_path=self.targets,
+            continuous_targets_path=self.continuous_targets,
+        )
+        self.assertEqual(configuration.canonical_data_root, self.root / "corpus")
+        for invalid in ("relative/corpus", "", 7, str(self.root) + "/a/../b"):
+            with self.assertRaises(AgentProductionConfigurationError):
+                load_agent_production_configuration(
+                    dict(self.payload, canonical_data_root=invalid),
+                    targets_path=self.targets,
+                    continuous_targets_path=self.continuous_targets,
+                )
+
     def test_configuration_accepts_legacy_single_and_v3_recipient_allowlist(self):
         self.assertEqual(self.configuration.resend_recipient_sha256s, ("a" * 64,))
         recipients = ("first@example.test", "second@example.test")

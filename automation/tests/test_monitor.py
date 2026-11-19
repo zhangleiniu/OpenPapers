@@ -58,3 +58,34 @@ class PmlrVolumeTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PreviousObservationTests(unittest.TestCase):
+    def test_event_carries_previous_status_and_count(self):
+        import json
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+
+        from automation.monitor import run
+
+        results = iter([
+            ("unavailable", 0, "h0", ""),
+            ("available", 7896, "h1", ""),
+        ])
+        with tempfile.TemporaryDirectory() as temp:
+            registry = Path(temp) / "registry.json"
+            registry.write_text(json.dumps({"version": 1, "conference_years": [{
+                "venue": "neurips", "year": 2026,
+                "sources": [{"type": "openreview_api", "invitation": "I"}],
+            }]}), encoding="utf-8")
+            state = Path(temp) / "state.sqlite3"
+            with patch("automation.monitor.Monitor.check",
+                       side_effect=lambda *args: next(results)):
+                first, = run(registry_path=registry, state_path=state)
+                second, = run(registry_path=registry, state_path=state)
+        self.assertIsNone(first["previous_status"])
+        self.assertIsNone(first["previous_item_count"])
+        self.assertTrue(second["changed"])
+        self.assertEqual(second["previous_status"], "unavailable")
+        self.assertEqual(second["previous_item_count"], 0)

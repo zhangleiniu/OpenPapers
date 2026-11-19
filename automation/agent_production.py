@@ -90,6 +90,9 @@ class AgentProductionConfiguration:
     # load_continuous_venue_ids. Never go through event-date discovery and
     # never terminate on success.
     continuous_venue_ids: frozenset[str] = frozenset()
+    # Optional absolute path of the canonical (production) corpus. Used only
+    # to compare a success report with production; never written to.
+    canonical_data_root: Path | None = None
 
     @property
     def resend_recipient_sha256(self) -> str:
@@ -343,7 +346,9 @@ def load_agent_production_configuration(
     expected = common | ({"resend_recipient_sha256"} if version == 2 else {
         "resend_recipient_sha256s"
     })
-    if not isinstance(payload, Mapping) or set(payload) != expected \
+    optional = {"canonical_data_root"}
+    if not isinstance(payload, Mapping) \
+            or not expected <= set(payload) <= expected | optional \
             or version not in {2, 3}:
         raise AgentProductionConfigurationError("agent configuration is invalid")
     try:
@@ -443,10 +448,20 @@ def load_agent_production_configuration(
     if hashlib.sha256(targets_path.read_bytes()).hexdigest() != targets_hash:
         raise AgentProductionConfigurationError("agent targets changed while loading")
     continuous_venue_ids = load_continuous_venue_ids(continuous_targets_path)
+    canonical_data_root = None
+    if "canonical_data_root" in payload:
+        raw_root = payload["canonical_data_root"]
+        if not isinstance(raw_root, str) or not raw_root \
+                or not Path(raw_root).is_absolute() \
+                or Path(os.path.normpath(raw_root)) != Path(raw_root):
+            raise AgentProductionConfigurationError(
+                "canonical data root is invalid"
+            )
+        canonical_data_root = Path(raw_root)
     return AgentProductionConfiguration(
         targets, targets_hash, project, location, model, date_limit,
         minimum_free_bytes, codex, due, retention, fingerprints,
-        cohort_venue_ids, continuous_venue_ids,
+        cohort_venue_ids, continuous_venue_ids, canonical_data_root,
     )
 
 
@@ -542,6 +557,7 @@ class AgentProductionEffect:
             delivery = deliver_agent_run_email(
                 state_path, run_id, self._transport_factory(),
                 clock=lambda: observed_at,
+                canonical_data_root=self._configuration.canonical_data_root,
             )
             actions += int(delivery.attempted)
         removed = prune_agent_worktrees(

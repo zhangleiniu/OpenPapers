@@ -122,8 +122,11 @@ class AgentRunNotificationTests(unittest.TestCase):
         self.assertEqual(key, intent.notification_id)
         for expected in (
             "icml 2026", "success", "Scraped and validated the accepted papers.",
-            "agent-change.txt", "Worktree:", "Retry state:",
-            "Promotion:", "promote-run --run-id", self.claim.run_id,
+            "agent-change.txt", "Worktree:",
+            "Schedule: completed (no further checks)",
+            "Production comparison: not configured",
+            "Promotion:", "promote-run --state", "--data-root <canonical corpus>",
+            self.claim.run_id,
         ):
             self.assertIn(expected, intent.body)
 
@@ -133,6 +136,62 @@ class AgentRunNotificationTests(unittest.TestCase):
         )
         self.assertFalse(suppressed.attempted)
         self.assertEqual(replay.calls, [])
+
+    def _write_metadata(self, root, ids):
+        path = Path(root) / "metadata" / "icml" / "icml_2026.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps([{"id": i, "title": i} for i in ids]),
+                        encoding="utf-8")
+
+    def _build(self, canonical_root):
+        with ControlStateRepository(
+            self.state, writer=Writer.LOCAL_CONTROL_PLANE, clock=lambda: NOW
+        ) as repository:
+            worktree = Path(
+                repository.get_agent_execution_artifact(self.claim.run_id)
+                .worktree_path
+            )
+            self._write_metadata(worktree / "data", ["a", "b", "c"])
+            return build_agent_run_email(
+                repository, self.claim.run_id,
+                canonical_data_root=canonical_root,
+            )
+
+    def test_success_report_compares_run_with_production(self):
+        canonical = self.root / "corpus"
+        self._write_metadata(canonical, ["a", "b"])
+        intent = self._build(canonical)
+        self.assertEqual(
+            intent.subject, "OpenPapers agent: ICML 2026 success (+1 vs production)"
+        )
+        self.assertIn(
+            "Production comparison: run 3 papers vs production 2; 1 new, "
+            "0 production ids absent from the run.", intent.body,
+        )
+        self.assertIn(f"--data-root {canonical}", intent.body)
+        self.assertNotIn("WARNING", intent.body)
+
+    def test_success_report_warns_when_production_ids_are_missing(self):
+        canonical = self.root / "corpus"
+        self._write_metadata(canonical, ["a", "x", "y"])
+        intent = self._build(canonical)
+        self.assertTrue(intent.subject.endswith("(+2/-2 vs production)"))
+        self.assertIn("WARNING: 2 existing production ids", intent.body)
+
+    def test_success_report_handles_new_matching_and_unreadable_production(self):
+        canonical = self.root / "corpus"
+        intent = self._build(canonical)
+        self.assertTrue(intent.subject.endswith("(3 new)"))
+        self.assertIn("production has no file", intent.body)
+        self._write_metadata(canonical, ["c", "b", "a"])
+        intent = self._build(canonical)
+        self.assertIn("nothing to promote", intent.body)
+        (canonical / "metadata" / "icml" / "icml_2026.json").write_text(
+            "{not json", encoding="utf-8")
+        intent = self._build(canonical)
+        self.assertIn("production metadata unreadable (JSONDecodeError)",
+                      intent.body)
+        self.assertTrue(intent.subject.endswith("success"))
 
     def test_promotion_note_is_absent_for_non_success_dispositions(self):
         needs_human_state = self.root / "needs-human.sqlite3"
@@ -148,8 +207,12 @@ class AgentRunNotificationTests(unittest.TestCase):
         with ControlStateRepository(
             needs_human_state, writer=Writer.LOCAL_CONTROL_PLANE, clock=lambda: NOW
         ) as repository:
-            intent = build_agent_run_email(repository, claim.run_id)
+            intent = build_agent_run_email(
+                repository, claim.run_id, canonical_data_root=self.root,
+            )
         self.assertNotIn("Promotion:", intent.body)
+        self.assertNotIn("Production comparison", intent.body)
+        self.assertIn("Schedule: stopped (needs_human)", intent.body)
 
     def test_not_ready_disposition_is_delivered_without_sending(self):
         not_ready_state = self.root / "not-ready.sqlite3"

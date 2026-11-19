@@ -844,6 +844,102 @@ class ProductionControlTests(LocalServiceFixture):
         )
         self.assertEqual(len(notifier.calls), 1)
 
+    def test_change_email_names_target_previous_count_and_next_action(self):
+        from automation.local_service.production import (
+            compose_source_event_email,
+        )
+
+        self.config.state_path.parent.mkdir(parents=True, exist_ok=True)
+        with sqlite3.connect(self.config.state_path) as connection:
+            connection.execute(
+                "CREATE TABLE agent_schedule "
+                "(venue_id TEXT, year INTEGER, status TEXT)"
+            )
+            connection.execute(
+                "INSERT INTO agent_schedule VALUES ('icml', 2026, 'scheduled')"
+            )
+        events = self._events()
+        events[0].update(
+            item_count=7896, previous_status="available", previous_item_count=0,
+            detail="",
+        )
+        notifier = FakeNotifier()
+        ProductionMonitorEffect(
+            repository_root=ROOT, monitor=lambda *args: events, notifier=notifier,
+        ).run(
+            state_path=self.config.state_path,
+            execution_root=self.external,
+            scheduled_for=NOW.replace(minute=17),
+            observed_at=NOW,
+        )
+        (event, _, _), = notifier.calls
+        self.assertIn("scheduling hint", event["next_action"])
+        self.assertIn("not_ready result is not emailed", event["next_action"])
+        self.assertNotIn("next_action", events[0])
+        subject, body = compose_source_event_email(event)
+        self.assertEqual(
+            subject, "OpenPapers: ICML 2026 source changed (0 -> 7896 items)"
+        )
+        self.assertIn("Event: openpapers.source.changed", body)
+        self.assertIn("Venue/year: icml 2026", body)
+        self.assertIn("Count: 7896 (was 0)", body)
+        self.assertIn("Next: recorded as a scheduling hint", body)
+        self.assertNotIn("Detail:", body)
+        self.assertNotIn(str(self.internal), body)
+        self.assertIn("Snapshot (monitor state): private.html", body)
+
+    def test_source_email_subjects_and_next_actions_cover_other_cases(self):
+        from automation.local_service.production import (
+            compose_source_event_email,
+            source_event_next_action,
+        )
+
+        base = {"venue": "neurips", "year": 2026, "source_key": "s",
+                "status": "available", "item_count": 5, "detail": "",
+                "snapshot_path": ""}
+        status_flip = dict(base, previous_status="unavailable",
+                           previous_item_count=0)
+        self.assertEqual(
+            compose_source_event_email(status_flip)[0],
+            "OpenPapers: NEURIPS 2026 source changed "
+            "(unavailable -> available, 5 items)",
+        )
+        same_count = dict(base, previous_status="available",
+                          previous_item_count=5)
+        subject, body = compose_source_event_email(same_count)
+        self.assertTrue(subject.endswith("(5 items, content changed)"))
+        self.assertIn("Count: 5\n", body + "\n")
+        self.assertNotIn("Snapshot", body)
+        error = dict(base, status="error", detail="timeout")
+        subject, body = compose_source_event_email(error)
+        self.assertEqual(subject, "OpenPapers: NEURIPS 2026 source error")
+        self.assertIn("Event: openpapers.source.error", body)
+        self.assertIn("checks this source again tomorrow",
+                      source_event_next_action(error, "scheduled"))
+        self.assertIn("is paused", source_event_next_action(base, "paused"))
+        self.assertIn("no agent schedule exists",
+                      source_event_next_action(base, None))
+        self.assertIn("not currently available", source_event_next_action(
+            dict(base, status="unavailable"), "scheduled"))
+
+    def test_wake_failure_alert_has_its_own_subject(self):
+        from automation.local_service.production import (
+            compose_source_event_email,
+            send_wake_failure_alert,
+        )
+
+        notifier = FakeNotifier()
+        send_wake_failure_alert(
+            self.internal, consecutive=3,
+            latest_record={"scheduled_for": "x", "failure_category": "y"},
+            notifier=notifier,
+        )
+        subject, body = compose_source_event_email(notifier.calls[0][0])
+        self.assertEqual(
+            subject, "OpenPapers: 3 consecutive failed local-control wakes"
+        )
+        self.assertIn("Next: inspect the latest wake records", body)
+
     def test_unreadable_schedule_fails_before_daily_claim(self):
         self.config.state_path.parent.mkdir(parents=True, exist_ok=True)
         self.config.state_path.write_bytes(b"not a sqlite database" * 10)

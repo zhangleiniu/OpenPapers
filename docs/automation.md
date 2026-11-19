@@ -19,7 +19,11 @@ production writer. It wakes hourly and exits after a bounded invocation:
 2. Once daily at or after 08:00 America/Chicago it runs the deterministic
    source monitor and sends one TLS SMTP email per source error, and per
    source change unless that venue/year's agent schedule is already
-   `completed` (its changes are then silent, but still recorded).
+   `completed` (its changes are then silent, but still recorded). The
+   subject names the venue/year and the change (for example
+   `0 -> 7896 items`); the body shows the previous status/count and what
+   the system does next (for a scheduled target: a scheduling hint that can
+   move its agent check earlier).
    Exact daily replay does not repeat the monitor or its notifications.
 3. On every wakeup the agent composition reads due state under the local
    SQLite single-writer lease. When persisted work is due, it may initialize one event
@@ -75,7 +79,13 @@ not mean venues are checked frequently. For each enrolled venue/year:
    `needs_human`, or `failed`. It never commits, pushes, merges, or deploys;
    a human reviews the worktree.
 3. Every terminal run composes one replay-safe report email through the
-   Resend adapter with durable idempotent delivery state.
+   Resend adapter with durable idempotent delivery state. A `not_ready`
+   report is marked delivered without being sent. A `success` report
+   compares the run's paper ids with the canonical corpus when the private
+   agent configuration sets the optional absolute `canonical_data_root`
+   (otherwise it says the comparison is not configured), warns when
+   existing production ids are absent from the run, and prints the
+   `promote-run` dry-run command with that data root.
 
 The tracked cohort (`automation/config/agent_targets.v1.json`, schema 3)
 lists the 13 formulaic annual/periodic venues plus manually confirmed
@@ -132,6 +142,11 @@ The monitor and the wake-failure alert use TLS SMTP. Agent-run reports use
 the Resend HTTPS adapter with a provider idempotency key and an explicit
 recipient allowlist (policy stores only address fingerprints). Notification
 failure is retryable delivery state and never changes a run outcome.
+The production comparison in a success report is read when the report is
+composed; if the canonical metadata changes between a transient send failure
+and its retry, the provider refuses the changed payload under the same
+idempotency key and the report ends `permanent_failure/protocol_error`,
+which the existing explicit protocol-error recovery can resend.
 
 ## Retired cloud rollback path
 
