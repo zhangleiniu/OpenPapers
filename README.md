@@ -237,20 +237,23 @@ Detailed logs are saved to `scraper.log` with console progress. Use
 
 ## Citation
 
-If you use this project in your research, please cite our paper, accepted at
-the 2026 SIAM International Conference on Data Mining (SDM26). The proceedings
-DOI and page numbers are not available yet; this entry links to the current
-preprint and will be updated after publication.
+If you use this project in your research, please cite our paper, published in
+the Proceedings of the 2026 SIAM International Conference on Data Mining (SDM):
 
 ```bibtex
 @inproceedings{ratul2026masterset,
   title     = {{MasterSet}: A Large-Scale Benchmark for Must-Cite Citation Recommendation in the {AI/ML} Literature},
   author    = {Ratul, Md Toyaha Rahman and Chen, Zhiqian and Fu, Kaiqun and Ji, Taoran and Zhang, Lei},
-  booktitle = {Proceedings of the 2026 SIAM International Conference on Data Mining (SDM26)},
+  booktitle = {Proceedings of the 2026 SIAM International Conference on Data Mining (SDM)},
+  pages     = {518--536},
   year      = {2026},
-  url       = {https://arxiv.org/abs/2604.17680}
+  publisher = {SIAM},
+  doi       = {10.1137/1.9781611979329.37},
+  url       = {https://doi.org/10.1137/1.9781611979329.37}
 }
 ```
+
+Open-access preprint: [arXiv:2604.17680](https://arxiv.org/abs/2604.17680).
 
 ## Acknowledgements
 
